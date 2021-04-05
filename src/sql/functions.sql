@@ -103,12 +103,23 @@ END; $function$
 ;
 
 
-
 CREATE OR REPLACE FUNCTION public.get_price(from_coin character varying, to_coin character varying default 'USD', day date default now(), OUT out_price numeric)
  RETURNS numeric
  LANGUAGE plpgsql
 AS $function$
 BEGIN
      out_price := (select price from pair_price where from_curr = from_coin and to_curr = to_coin);
+END; $function$
+;
+
+CREATE or REPLACE FUNCTION public.get_avg_purchase_price(curr character varying, cost_currency character varying default 'USD', out out_price double precision)
+ RETURNS double precision
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+     out_price := 
+     (select AVG(unit_cost) from get_trade_cost(curr, cost_currency) 
+     where quantity > 0 -- purchase trade only
+     );
 END; $function$
 ;
