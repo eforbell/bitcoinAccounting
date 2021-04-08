@@ -112,14 +112,22 @@ BEGIN
 END; $function$
 ;
 
-CREATE or REPLACE FUNCTION public.get_avg_purchase_price(curr character varying, cost_currency character varying default 'USD', out out_price double precision)
+CREATE OR REPLACE FUNCTION public.get_avg_purchase_price(curr character varying, cost_currency character varying DEFAULT 'USD'::character varying, OUT out_price double precision)
  RETURNS double precision
  LANGUAGE plpgsql
 AS $function$
 BEGIN
-     out_price := 
-     (select AVG(unit_cost) from get_trade_cost(curr, cost_currency) 
+     out_price :=
+     (select sum(
+        case
+        	when trade_curr = cost_currency then unit_cost * quantity
+     		else get_price(trade_cost.curr, cost_currency, date_trunc('day',"date")) * quantity
+     	end
+     ) / sum(quantity)
+     	from get_trade_cost(curr, cost_currency) trade_cost
      where quantity > 0 -- purchase trade only
      );
 END; $function$
 ;
+
+
