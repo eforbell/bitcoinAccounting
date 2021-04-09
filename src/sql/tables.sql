@@ -21,11 +21,11 @@ CREATE TABLE public.ledger (
 	createddate timestamp(0) NOT NULL,
 	trans_type varchar(32) NULL,
 	buy float8 NULL,
-	buy_curr varchar(5) NULL,
+	buy_curr varchar(40) NULL,
 	sell float8 NULL,
-	sell_curr varchar(5) NULL,
+	sell_curr varchar(40) NULL,
 	fee float8 NULL,
-	fee_curr varchar(5) NULL,
+	fee_curr varchar(40) NULL,
 	exchange varchar(32) NULL,
 	"group" varchar(32) NULL,
 	"comment" varchar(255) NULL,
@@ -39,8 +39,8 @@ CREATE TABLE public.ledger (
 -- DROP TABLE public.pair_price;
 
 CREATE TABLE public.pair_price (
-	to_curr varchar(5) NOT NULL,
+	to_curr varchar(40) NOT NULL,
 	price numeric NOT NULL,
-	from_curr varchar(5) NOT NULL,
+	from_curr varchar(40) NOT NULL,
 	"date" date NULL
 );

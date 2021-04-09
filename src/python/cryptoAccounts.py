@@ -47,6 +47,33 @@ class CryptoAccounts(object):
             for transaction in transactions:
                 trans_writer.writerow(transaction)
 
+    def transfer_funds(self, date, from_account, tx_coin, tx_amount, to_account, fee_coin, fee_amount):
+        if (tx_coin is None or tx_amount is None or from_account is None or to_account is None):
+            print("Invalid parameters")
+            return
+        if (from_account.__contains__(":")):
+            from_exchange, from_group = from_account.split(":")
+        else:
+            from_exchange = from_account
+            from_group = None
+
+        if (to_account.__contains__(":")):
+            to_exchange, to_group = to_account.split(":")
+        else:
+            to_exchange = to_account
+            to_group = None
+
+        withdrawQuery = "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (%s, 'Withdrawal', %s, %s, %s, %s, %s, %s)"
+        depositQuery =  "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (%s, 'Deposit', %s, %s, %s, %s)"
+        cur = self.connection.cursor()
+        cur.execute(withdrawQuery, (date, tx_amount, tx_coin, fee_amount, fee_coin, from_exchange, from_group))
+        cur.execute(depositQuery, (date, tx_amount, tx_coin, to_exchange, to_group))
+        self.connection.commit()
+
+
 
 crypto = CryptoAccounts()
-crypto.export_transactions_csv('bnb_out.csv','BNB')
+#crypto.export_transactions_csv('bnb_out.csv','BNB')
+crypto.transfer_funds('2021-03-30 20:24:47', 'Binance:Binance US', 'VET', 18663, 'Ledger', 'VET', 100)
+crypto.transfer_funds('2021-04-09 15:25:52', 'Binance:Binance US', 'VET', 3387, 'Ledger', 'VET', 100)
+crypto.close()
