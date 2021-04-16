@@ -19,30 +19,26 @@ BEGIN
 END; $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.get_trades(coin character varying)
- RETURNS TABLE(date timestamp, quantity double precision, cost double precision, currency character varying)
+CREATE OR REPLACE FUNCTION public.get_sum_of_all_transfers(coin character varying, OUT balance numeric)
+ RETURNS numeric
  LANGUAGE plpgsql
 AS $function$
-begin
-	return query 
-	select
-	l.createddate date, 
-	case 
-		when l.buy_curr = coin then l.buy
-		when l.sell_curr = coin then -l.sell 
-	end as quantity, 
-	case 
-		when l.buy_curr = coin then l.sell/l.buy
-		when l.sell_curr = coin then l.buy/l.sell 
-	end as basis, 
-	case 
-		when l.buy_curr = coin then l.sell_curr
-		when l.sell_curr = coin then l.buy_curr
-	end as basis 
-	from ledger l
-	where l.trans_type = 'Trade' and (l.buy_curr = coin or l.sell_curr = coin)
-	order by createddate;
-END; $function$
+BEGIN
+     balance :=     
+(SELECT sum(total) from 
+(select sum(buy) total
+		FROM public.ledger
+		where buy_curr = coin and (trans_type = 'Withdrawal' or trans_type = 'Deposit')
+		UNION
+select -sum(sell) total
+		from public.ledger
+		where sell_curr = coin and (trans_type = 'Withdrawal' or trans_type = 'Deposit')
+		--UNION
+--select -sum(fee) total
+--		from public.ledger
+--		where fee_curr = coin and (trans_type = 'Withdrawal' or trans_type = 'Deposit')
+) transfers);
+		END; $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.get_trades(coin character varying)
@@ -76,8 +72,53 @@ begin
 END; $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.get_trade_cost(coin character varying, cost_currency character varying default 'USD')
- RETURNS TABLE(date timestamp without time zone, curr character varying, quantity double precision, trade_curr character varying, trade_quantity double precision, cost_curr character varying, unit_cost double precision, total_cost double precision)
+CREATE OR REPLACE FUNCTION public.get_interest_income(coin character varying, cost_currency character varying DEFAULT 'USD'::character varying)
+ RETURNS TABLE(date timestamp without time zone, to_curr character varying, to_quantity double precision, cost_curr character varying, unit_cost double precision, total_cost double precision, cost_curr_quote_date timestamp without time zone)
+ LANGUAGE plpgsql
+AS $function$
+begin
+	return query 
+	select
+	l.createddate date, 
+	coin as to_curr,
+	l.buy as to_quantity, 
+	cost_currency as cost_curr,
+	case 
+		when conv.price is not null then conv.price
+		else null
+	end as unit_cost,
+	case 
+		when conv.price is not null then l.buy*conv.price
+		else null
+	end as total_cost,
+	case
+		when conv.price is not null then conv.date 
+		else null 
+	end as cost_curr_quote_date
+	from ledger l
+	left join pair_price conv on conv.from_curr = 
+				l.buy_curr and 
+				conv.to_curr = cost_currency and
+				(
+				--find closest matching price quote
+				(
+					date_trunc('minute',l.createddate) = date_trunc('minute',conv."date") 
+					or
+					date_trunc('hour',l.createddate) = date_trunc('hour',conv."date") 
+					or
+					date_trunc('day',l.createddate) = date_trunc('day',conv."date") 
+					
+				)
+				or 
+					(conv.price is not null and conv.date is null)
+				)
+	where l.trans_type in ('Interest Income') and (l.buy_curr = coin or l.sell_curr = coin)
+	order by createddate;
+END; $function$
+;
+
+CREATE OR REPLACE FUNCTION public.get_trade_cost(coin character varying, cost_currency character varying DEFAULT 'USD'::character varying)
+ RETURNS TABLE(date timestamp without time zone, curr character varying, quantity double precision, trade_curr character varying, trade_quantity double precision, cost_curr character varying, unit_cost double precision, total_cost double precision, cost_curr_quote_date timestamp without time zone)
  LANGUAGE plpgsql
 AS $function$
 begin
@@ -91,16 +132,39 @@ begin
 		cost_currency as cost_curr,
 		case 
 			when conv.price is not null then conv.price
-			else trades.price
+			when trades.from_curr = cost_currency then trades.price
+			else null
 		end as unit_cost,
 		case 
 			when conv.price is not null then trades.from_quantity*conv.price*sign(trades.to_quantity)
-			else trades.price * trades.to_quantity
-		end as total_cost
+			when trades.from_curr = cost_currency then trades.price * trades.to_quantity
+			else null
+		end as total_cost,
+		case
+			when conv.price is not null then conv.date 
+			when trades.from_curr = cost_currency then trades.date 
+			else null 
+		end as cost_curr_quote_date
 		from get_trades(coin) trades
-		left join pair_price conv on conv.from_curr = trades.from_curr and conv.to_curr = cost_currency and (date_trunc('day',trades.date) = date_trunc('day',conv."date"));
+		left join pair_price conv on conv.from_curr = 
+				trades.from_curr and 
+				conv.to_curr = cost_currency and
+				(
+				--find closest matching price quote
+				(
+					date_trunc('minute',trades.date) = date_trunc('minute',conv."date") 
+					or
+					date_trunc('hour',trades.date) = date_trunc('hour',conv."date") 
+					or
+					date_trunc('day',trades.date) = date_trunc('day',conv."date") 
+					
+				)
+				or 
+					(conv.price is not null and conv.date is null)
+				);
 END; $function$
 ;
+
 
 
 CREATE OR REPLACE FUNCTION public.get_price(from_coin character varying, to_coin character varying default 'USD', day date default now(), OUT out_price numeric)
