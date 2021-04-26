@@ -39,6 +39,8 @@ class CryptoAccounts(object):
                 transaction[colname] = row[i]
             transactions.append(transaction)
         return colnames, transactions
+
+
     def export_transactions_csv(self, out_file, coin = None):
         colnames, transactions = self.get_transactions(coin)
         with open(out_file, 'w') as csv_out:
@@ -46,6 +48,47 @@ class CryptoAccounts(object):
             trans_writer.writeheader()
             for transaction in transactions:
                 trans_writer.writerow(transaction)
+
+    def import_transactions(self, colnames, transactions):
+        cur = self.connection.cursor()
+        for transaction in transactions:
+            if transaction['trans_type'] == "Interest Income" or transaction['trans_type'] == "Interest":
+                query = self.getInterestIncomeQuery()
+                transaction['trans_type'] = "Interest Income"
+                cur.execute(query, (transaction['created_date'], transaction['buy'], transaction['buy_curr'], transaction['exchange'], transaction['group'],transaction['comment']))
+                price_query = self.getPricePairQuery()
+                usd_equiv = transaction['usd_equivalent']
+                try:
+                    usd_equiv = float(usd_equiv)
+                except(ValueError):
+                    usd_equiv = float(usd_equiv[1:])
+
+                conv_price = float(usd_equiv)/float(transaction['buy'])
+                cur.execute(price_query, ('USD', conv_price, transaction['buy_curr'], transaction['created_date']));
+            elif transaction['trans_type'] == "Deposit":
+                query = self.getDepositQuery()
+            elif transaction['trans_type'] == "Withdrawal":
+                query = self.getWithdrawQuery()
+        self.connection.commit()
+
+
+    def import_transactions_nexo_csv(self, in_file):
+        colnames = ['transactionId','trans_type','buy_curr','buy','usd_equivalent','comment','Outstanding Loan', 'created_date']
+        with open(in_file, 'r') as csv_in:
+            nexo_input = csv.DictReader(csv_in, fieldnames=colnames)
+            transactions = []
+            rowNum = 0
+            for row in nexo_input:
+                rowNum += 1
+                transaction = {}
+                if rowNum == 1:
+                    continue
+                for i, colname in enumerate(colnames):
+                    transaction[colname] = row[colname]
+                transaction['exchange'] = 'Nexo'
+                transaction['group'] = None
+                transactions.append(transaction)
+        return colnames, transactions
 
     def transfer_funds(self, date, from_account, tx_coin, tx_amount, to_account, fee_coin, fee_amount):
         if (tx_coin is None or tx_amount is None or from_account is None or to_account is None):
@@ -63,17 +106,31 @@ class CryptoAccounts(object):
             to_exchange = to_account
             to_group = None
 
-        withdrawQuery = "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (%s, 'Withdrawal', %s, %s, %s, %s, %s, %s)"
-        depositQuery =  "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (%s, 'Deposit', %s, %s, %s, %s)"
+        withdrawQuery = self.getDepositQuery()
+        depositQuery =  self.getWithdrawQuery()
         cur = self.connection.cursor()
         cur.execute(withdrawQuery, (date, tx_amount, tx_coin, fee_amount, fee_coin, from_exchange, from_group))
         cur.execute(depositQuery, (date, tx_amount, tx_coin, to_exchange, to_group))
         self.connection.commit()
 
+    def getDepositQuery(self):
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (%s, 'Deposit', %s, %s, %s, %s)"
 
+    def getWithdrawQuery(self):
+        return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (%s, 'Withdrawal', %s, %s, %s, %s, %s, %s)"
+
+    def getInterestIncomeQuery(self):
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", \"comment\") values (%s, 'Interest Income', %s, %s, %s, %s, %s)"
+
+    def getTradeQuery(self):
+        return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (%s, 'Withdrawal', %s, %s, %s, %s, %s, %s)"
+
+    def getPricePairQuery(self):
+        return "insert into pair_price (to_curr, price, from_curr, date) values (%s, %s, %s, %s)"
 
 crypto = CryptoAccounts()
-#crypto.export_transactions_csv('bnb_out.csv','BNB')
-crypto.transfer_funds('2021-03-30 20:24:47', 'Binance:Binance US', 'VET', 18663, 'Ledger', 'VET', 100)
-crypto.transfer_funds('2021-04-09 15:25:52', 'Binance:Binance US', 'VET', 3387, 'Ledger', 'VET', 100)
+#crypto.export_transactions_csv('transactions_04222021.csv')
+#crypto.transfer_funds('2021-04-08 16:40:00', 'Nexo', 'BNB', 3.72395346, 'Ledger', 'BNB', 0.0)
+colnames, transactions = crypto.import_transactions_nexo_csv('/Users/forbell/Desktop/financial-dump/nexo_transactions_20210425.csv')
+crypto.import_transactions(colnames, transactions)
 crypto.close()
