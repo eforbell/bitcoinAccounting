@@ -131,48 +131,105 @@ begin
 		trades.from_quantity as trade_quantity,
 		cost_currency as cost_curr,
 		case 
-			when conv.price is not null then conv.price
+			when conv.price is not null then trades.from_quantity*conv.price*sign(trades.to_quantity)/trades.to_quantity
 			when trades.from_curr = cost_currency then trades.price
 			else null
 		end as unit_cost,
-		case 
+		case
 			when conv.price is not null then trades.from_quantity*conv.price*sign(trades.to_quantity)
 			when trades.from_curr = cost_currency then trades.price * trades.to_quantity
 			else null
 		end as total_cost,
 		case
-			when conv.price is not null then conv.date 
-			when trades.from_curr = cost_currency then trades.date 
-			else null 
+			when conv.price is not null then conv.date
+			when trades.from_curr = cost_currency then trades.date
+			else null
 		end as cost_curr_quote_date
 		from get_trades(coin) trades
-		left join pair_price conv on conv.from_curr = 
-				trades.from_curr and 
-				conv.to_curr = cost_currency and
-				(
+		left join pair_price conv on conv.from_curr =
+				trades.from_curr and
+				conv.to_curr = cost_currency and get_price(conv.from_curr, cost_currency)
 				--find closest matching price quote
-				(
-					date_trunc('minute',trades.date) = date_trunc('minute',conv."date") 
-					or
-					date_trunc('hour',trades.date) = date_trunc('hour',conv."date") 
-					or
-					date_trunc('day',trades.date) = date_trunc('day',conv."date") 
-					
-				)
-				or 
-					(conv.price is not null and conv.date is null)
-				);
+					date_trunc('year',trades."date") = date_trunc('year',conv."date")
+					and
+					date_trunc('month',trades."date") = date_trunc('month',conv."date")
+					and
+					date_trunc('day',trades."date") = date_trunc('day',conv."date");
+END; $function$
+;
+
+CREATE OR REPLACE FUNCTION public.get_trade_cost_new(coin character varying, cost_currency character varying DEFAULT 'USD'::character varying)
+ RETURNS TABLE(date timestamp without time zone, curr character varying, quantity double precision, trade_curr character varying, trade_quantity double precision, cost_curr character varying, unit_cost double precision, total_cost double precision, cost_curr_quote_date timestamp without time zone)
+ LANGUAGE plpgsql
+AS $function$
+begin
+	return query
+	select
+		trades.date as "date",
+		coin as trade_curr,
+		trades.to_quantity as quantity,
+		trades.from_curr as trade_curr,
+		trades.from_quantity as trade_quantity,
+		cost_currency as cost_curr,
+		case
+			when trades.from_curr = cost_currency then trades.price
+			else trades.from_quantity * get_price(trades.from_curr, cost_currency,trades.date)*sign(trades.to_quantity)/trades.to_quantity
+		end as unit_cost,
+		case
+			when trades.from_curr = cost_currency then trades.price * trades.to_quantity
+			else trades.from_quantity * get_price(trades.from_curr, cost_currency,trades.date)*sign(trades.to_quantity)
+		end as total_cost,
+		--case
+			trades.date as cost_curr_quote_date
+		--	else null
+		--end
+		from get_trades(coin) trades;
 END; $function$
 ;
 
 
 
-CREATE OR REPLACE FUNCTION public.get_price(from_coin character varying, to_coin character varying default 'USD', day date default now(), OUT out_price numeric)
+
+CREATE OR REPLACE FUNCTION public.get_price(from_coin character varying, to_coin character varying DEFAULT 'USD'::character varying, price_date timestamp without time zone DEFAULT now(), OUT out_price numeric)
  RETURNS numeric
  LANGUAGE plpgsql
 AS $function$
 BEGIN
-     out_price := (select price from pair_price where from_curr = from_coin and to_curr = to_coin);
+     out_price := (
+
+
+     select price from pair_price
+    	where from_curr = from_coin and to_curr = to_coin and
+    	extract('year' from date) = extract('year' from price_date)
+		and
+		extract('month' from date) = extract('month' from price_date)
+		and
+		extract('day' from date) = extract('day' from price_date)
+     order by
+     abs( (DATE_PART('day', date - price_date) * 24 +
+               DATE_PART('hour', date - price_date)) * 60 +
+               DATE_PART('minute', date - price_date)) limit 1);
+END; $function$
+;
+
+CREATE OR REPLACE FUNCTION public.get_price_date(from_coin character varying, to_coin character varying DEFAULT 'USD'::character varying, price_date timestamp DEFAULT now(), OUT out_price_date timestamp)
+ RETURNS timestamp
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+     out_price_date := (
+
+     select date from pair_price
+    	where from_curr = from_coin and to_curr = to_coin and
+    	extract('year' from date) = extract('year' from price_date)
+		and
+		extract('month' from date) = extract('month' from price_date)
+		and
+		extract('day' from date) = extract('day' from price_date)
+     order by
+     abs( (DATE_PART('day', date - price_date) * 24 +
+               DATE_PART('hour', date - price_date)) * 60 +
+               DATE_PART('minute', date - price_date)) limit 1);
 END; $function$
 ;
 

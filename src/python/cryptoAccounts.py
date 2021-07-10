@@ -85,10 +85,46 @@ class CryptoAccounts(object):
                     continue
                 for i, colname in enumerate(colnames):
                     transaction[colname] = row[colname]
+                if (transaction['buy_curr'] == 'NEXOBNB'):
+                    transaction['buy_curr'] = 'BNB'
+                elif (transaction['buy_curr'] == 'NEXONEXO'):
+                    transaction['buy_curr'] = 'NEXO'
+                elif (transaction['buy_curr'] == 'BNBN'):
+                    transaction['buy_curr'] = 'BNB'
+                elif (transaction['buy_curr'] == 'NEXOBEP2'):
+                    transaction['buy_curr'] = 'NEXO'
                 transaction['exchange'] = 'Nexo'
                 transaction['group'] = None
                 transactions.append(transaction)
         return colnames, transactions
+
+
+    def import_transactions_ledger_csv(self, in_file):
+        colnames = ['created_date','curr','op_type','value','fee','hash','account name','xpub','cost_currency','cost','cost_at_export']
+        with open(in_file, 'r') as csv_in:
+            ledger_live_input = csv.DictReader(csv_in, fieldnames=colnames)
+            transactions = []
+            rowNum = 0
+            for row in ledger_live_input:
+                rowNum += 1
+                transaction = {}
+                if rowNum == 1:
+                    continue
+                #for i, colname in enumerate(colnames):
+                if (row['op_type'] == 'IN' and row['curr'] == 'ALGO' and row['fee'] == '0' and row['value'] != '0'): #reward
+                    transaction['buy_curr'] = row['curr']
+                    transaction['buy'] = row['value']
+                    transaction['trans_type'] = 'Interest Income'
+                    transaction['created_date'] = row['created_date']
+                    transaction['comment'] = 'Reward'
+                    transaction['usd_equivalent'] = row['cost']
+                else:
+                    continue
+                transaction['exchange'] = 'Ledger'
+                transaction['group'] = None
+                transactions.append(transaction)
+        return colnames, transactions
+
 
     def transfer_funds(self, date, from_account, tx_coin, tx_amount, to_account, fee_coin, fee_amount):
         if (tx_coin is None or tx_amount is None or from_account is None or to_account is None):
@@ -106,8 +142,8 @@ class CryptoAccounts(object):
             to_exchange = to_account
             to_group = None
 
-        withdrawQuery = self.getDepositQuery()
-        depositQuery =  self.getWithdrawQuery()
+        withdrawQuery = self.getWithdrawQuery()
+        depositQuery =  self.getDepositQuery()
         cur = self.connection.cursor()
         cur.execute(withdrawQuery, (date, tx_amount, tx_coin, fee_amount, fee_coin, from_exchange, from_group))
         cur.execute(depositQuery, (date, tx_amount, tx_coin, to_exchange, to_group))
@@ -129,8 +165,10 @@ class CryptoAccounts(object):
         return "insert into pair_price (to_curr, price, from_curr, date) values (%s, %s, %s, %s)"
 
 crypto = CryptoAccounts()
-#crypto.export_transactions_csv('transactions_04222021.csv')
-#crypto.transfer_funds('2021-04-08 16:40:00', 'Nexo', 'BNB', 3.72395346, 'Ledger', 'BNB', 0.0)
-colnames, transactions = crypto.import_transactions_nexo_csv('/Users/forbell/Desktop/financial-dump/nexo_transactions_20210425.csv')
-crypto.import_transactions(colnames, transactions)
+#crypto.transfer_funds('2021-07-02 18:12:28', 'Nexo','BNB', 2.0, 'TrustWallet', 'BNB', 0.0);
+crypto.export_transactions_csv('transactions_07022021.csv')
+#crypto.transfer_funds('2021-05-27 16:52:00', 'TrustWallet','RUNE', 100, 'Ledger', 'BNB', 0.000075)
+#colnames, transactions = crypto.import_transactions_nexo_csv('/Users/forbell/Desktop/cointracking/nexo_transactions_062021.csv')
+#colnames, transactions = crypto.import_transactions_ledger_csv('/Users/forbell/Desktop/cointracking/ledgerlive-operations-2021.06.02.csv')
+#crypto.import_transactions(colnames, transactions)
 crypto.close()
