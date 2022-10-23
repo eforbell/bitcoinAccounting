@@ -179,10 +179,10 @@ begin
 			when trades.from_curr = cost_currency then trades.price * trades.to_quantity
 			else trades.from_quantity * get_price(trades.from_curr, cost_currency,trades.date)*sign(trades.to_quantity)
 		end as total_cost,
-		--case
-			trades.date as cost_curr_quote_date
-		--	else null
-		--end
+		case
+			when trades.from_curr = cost_currency then trades.date
+			else get_price_date(trades.from_curr, cost_currency, trades.date)
+		end as cost_curr_quote_date
 		from get_trades(coin) trades;
 END; $function$
 ;
@@ -251,4 +251,22 @@ BEGIN
 END; $function$
 ;
 
-
+CREATE OR REPLACE FUNCTION public.get_dividend_cost(coin character varying, cost_currency character varying DEFAULT 'USD'::character varying)
+ RETURNS TABLE(date timestamp without time zone, curr character varying, quantity double precision, cost_curr character varying, unit_cost numeric, total_cost double precision, cost_curr_quote_date timestamp without time zone)
+ LANGUAGE plpgsql
+AS $function$
+begin
+	return query
+	select
+		dividends.date as "date",
+		coin as dividend_curr,
+		dividends.to_quantity as quantity,
+		cost_currency as cost_curr,
+		get_price(coin, cost_currency,dividends.date) as unit_cost,
+		dividends.to_quantity * get_price(coin, cost_currency,dividends.date) as total_cost,
+		get_price_date(coin, cost_currency,dividends.date) as cost_curr_quote_date
+		from (select createddate as "date", buy as to_quantity, buy_curr as to_curr from ledger l
+		where l.trans_type in ('Interest Income') and l.buy_curr = coin
+		order by createddate) as dividends;
+END; $function$
+;

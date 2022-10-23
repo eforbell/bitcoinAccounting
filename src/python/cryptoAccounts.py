@@ -5,7 +5,7 @@ import csv
 class CryptoAccounts(object):
 
     def __init__(self):
-        self.connection = psycopg2.connect(database="crypto", user="forbell", password="", host="127.0.0.1", port="5432")
+        self.connection = psycopg2.connect(database="crypto2", user="bitcoin_accounting", password="bitcoin_accounting", host="127.0.0.1", port="5432")
 
 
     def close(self):
@@ -40,10 +40,9 @@ class CryptoAccounts(object):
             transactions.append(transaction)
         return colnames, transactions
 
-
     def export_transactions_csv(self, out_file, coin = None):
         colnames, transactions = self.get_transactions(coin)
-        with open(out_file, 'w') as csv_out:
+        with open(out_file, 'w', newline='') as csv_out:
             trans_writer = csv.DictWriter(csv_out, fieldnames=colnames)
             trans_writer.writeheader()
             for transaction in transactions:
@@ -52,25 +51,51 @@ class CryptoAccounts(object):
     def import_transactions(self, colnames, transactions):
         cur = self.connection.cursor()
         for transaction in transactions:
-            if transaction['trans_type'] == "Interest Income" or transaction['trans_type'] == "Interest":
+            if transaction['trans_type'] == "Interest Income" or transaction['trans_type'] == "Interest" or transaction['trans_type'] == 'Staking':
                 query = self.getInterestIncomeQuery()
                 transaction['trans_type'] = "Interest Income"
                 cur.execute(query, (transaction['created_date'], transaction['buy'], transaction['buy_curr'], transaction['exchange'], transaction['group'],transaction['comment']))
                 price_query = self.getPricePairQuery()
-                usd_equiv = transaction['usd_equivalent']
-                try:
-                    usd_equiv = float(usd_equiv)
-                except(ValueError):
-                    usd_equiv = float(usd_equiv[1:])
-
-                conv_price = float(usd_equiv)/float(transaction['buy'])
-                cur.execute(price_query, ('USD', conv_price, transaction['buy_curr'], transaction['created_date']));
+                if 'usd_equivalent' in transaction:
+                    usd_equiv = transaction['usd_equivalent']
+                    try:
+                        usd_equiv = float(usd_equiv)
+                    except(ValueError):
+                        usd_equiv = float(usd_equiv[1:])
+                    conv_price = float(usd_equiv)/float(transaction['buy'])
+                    cur.execute(price_query, ('USD', conv_price, transaction['buy_curr'], transaction['created_date']));
+            elif transaction['trans_type'] == "Mining":
+                query = self.getMiningQuery()
+                cur.execute(query, (transaction['created_date'], transaction['buy'], transaction['buy_curr'], transaction['exchange'], transaction['group'], transaction['transactionid']))
             elif transaction['trans_type'] == "Deposit":
                 query = self.getDepositQuery()
             elif transaction['trans_type'] == "Withdrawal":
                 query = self.getWithdrawQuery()
         self.connection.commit()
 
+    def import_transactions_rvn_mining(self, in_file):
+        colnames = ['Confirmed','Date','Type','Label','Address','Amount (RVN)','Asset','ID']
+        with open(in_file, 'r') as csv_in:
+            rvn_input = csv.DictReader(csv_in, fieldnames=colnames)
+            transactions = []
+            rowNum = 0
+            for row in rvn_input:
+                rowNum += 1
+                transaction = {}
+                if rowNum == 1:
+                    continue
+                transaction['exchange'] = 'RVNMiningWallet'
+                if row['Label'] == 'Mining':
+                    transaction['trans_type'] = "Mining"
+                    transaction['created_date'] = row['Date']
+                    transaction['buy_curr'] = 'RVN'
+                    transaction['buy'] = row['Amount (RVN)']
+                    transaction['transactionid'] = row['ID']
+                    transaction['group'] = 'Ravenminer'
+                else:
+                    continue
+                transactions.append(transaction)
+        return colnames, transactions
 
     def import_transactions_nexo_csv(self, in_file):
         colnames = ['transactionId','trans_type','buy_curr','buy','usd_equivalent','comment','Outstanding Loan', 'created_date']
@@ -98,6 +123,21 @@ class CryptoAccounts(object):
                 transactions.append(transaction)
         return colnames, transactions
 
+    def import_transactions_ada_csv(self, in_file):
+        colnames = ['trans_type','buy','buy_curr','sell','sell_cur','fee','fee_curr', 'exchange','group','comment','created_date']
+        with open(in_file, 'r') as csv_in:
+            ada_input = csv.DictReader(csv_in, fieldnames=colnames)
+            transactions = []
+            rowNum = 0
+            for row in ada_input:
+                if row['exchange'] == 'Cardano Protocol':
+                    row['exchange'] = 'Ledger'
+                rowNum += 1
+                if rowNum == 1:
+                    continue
+                transactions.append(row)
+
+        return colnames, transactions
 
     def import_transactions_ledger_csv(self, in_file):
         colnames = ['created_date','curr','op_type','value','fee','hash','account name','xpub','cost_currency','cost','cost_at_export']
@@ -126,7 +166,7 @@ class CryptoAccounts(object):
         return colnames, transactions
 
 
-    def transfer_funds(self, date, from_account, tx_coin, tx_amount, to_account, fee_coin, fee_amount):
+    def transfer_funds(self, withdraw_date, deposit_date, from_account, tx_coin, tx_amount, to_account, fee_coin, fee_amount):
         if (tx_coin is None or tx_amount is None or from_account is None or to_account is None):
             print("Invalid parameters")
             return
@@ -145,8 +185,8 @@ class CryptoAccounts(object):
         withdrawQuery = self.getWithdrawQuery()
         depositQuery =  self.getDepositQuery()
         cur = self.connection.cursor()
-        cur.execute(withdrawQuery, (date, tx_amount, tx_coin, fee_amount, fee_coin, from_exchange, from_group))
-        cur.execute(depositQuery, (date, tx_amount, tx_coin, to_exchange, to_group))
+        cur.execute(withdrawQuery, (withdraw_date, tx_amount+fee_amount, tx_coin, fee_amount, fee_coin, from_exchange, from_group))
+        cur.execute(depositQuery, (deposit_date, tx_amount, tx_coin, to_exchange, to_group))
         self.connection.commit()
 
     def getDepositQuery(self):
@@ -158,6 +198,9 @@ class CryptoAccounts(object):
     def getInterestIncomeQuery(self):
         return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", \"comment\") values (%s, 'Interest Income', %s, %s, %s, %s, %s)"
 
+    def getMiningQuery(self):
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", transactionid) values (%s, 'Mining', %s, %s, %s, %s, %s)"
+
     def getTradeQuery(self):
         return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (%s, 'Withdrawal', %s, %s, %s, %s, %s, %s)"
 
@@ -165,10 +208,14 @@ class CryptoAccounts(object):
         return "insert into pair_price (to_curr, price, from_curr, date) values (%s, %s, %s, %s)"
 
 crypto = CryptoAccounts()
-#crypto.transfer_funds('2021-07-02 18:12:28', 'Nexo','BNB', 2.0, 'TrustWallet', 'BNB', 0.0);
-crypto.export_transactions_csv('transactions_07022021.csv')
-#crypto.transfer_funds('2021-05-27 16:52:00', 'TrustWallet','RUNE', 100, 'Ledger', 'BNB', 0.000075)
-#colnames, transactions = crypto.import_transactions_nexo_csv('/Users/forbell/Desktop/cointracking/nexo_transactions_062021.csv')
-#colnames, transactions = crypto.import_transactions_ledger_csv('/Users/forbell/Desktop/cointracking/ledgerlive-operations-2021.06.02.csv')
+#crypto.transfer_funds('2022-04-01 09:59:00', '2022-03-18 10:20:00', 'Swan Bitcoin','BTC', 0.01239033,'Ledger-2', 'BTC', 0.0);
+#crypto.transfer_funds('2022-02-22 09:50:00', '2022-02-20 09:50:30', 'LN','BTC', 0.00120000,'Muun', 'BTC', 0.00000242);
+#crypto.transfer_funds('2022-01-16 09:25:00', '2022-01-16 09:35:00','Strike (Val)','BTC', 0.02312012, 'Ledger', 'BTC', 0.0);
+#colnames, transactions = crypto.import_transactions_nexo_csv('/Users/forbell/Desktop/cointracking/nexo_transactions_final.csv')
+#colnames, transactions = crypto.import_transactions_ledger_csv('/Users/forbell/Desktop/cointracking/ALGO-rewards.csv')
+#colnames, transactions = crypto.import_transactions_rvn_mining('/Users/forbell/Desktop/cointracking/rvn-mining-01-29-2022.csv')
+#colnames, transactions = crypto.import_transactions_ada_csv('/Users/forbell/Desktop/cointracking/rewards_9ab0a58f72b459260c20d98ef1dee2ec7882e6ec825b91c1a663fca6_usd_cointracking_2021-12-02_2022-01-16.csv')
 #crypto.import_transactions(colnames, transactions)
+
+crypto.export_transactions_csv('C:/Users/eric/OneDrive/Desktop/tx_export/transactions_08122022.csv')
 crypto.close()
