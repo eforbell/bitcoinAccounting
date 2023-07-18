@@ -43,7 +43,7 @@ class TickerData:
         return z_from_mean
 
 
-connection = psycopg2.connect(database="crypto2", user="bitcoin_accounting", password="bitcoin_accounting", host="127.0.0.1", port="5432")
+connection = psycopg2.connect(database="postgres", user="bitcoin_accounting", password="bitcoin_accounting", host="numenor.local", port="5432")
 cursor = connection.cursor()
 #cursor.execute("delete from pair_price");
 #connection.commit()
@@ -63,11 +63,11 @@ cursor.execute("select DATE(max(date)) as start_date, DATE(now()) as end_date fr
 dates = cursor.fetchone()
 startDate = str(dates[0])
 endDate = str(dates[1])
-startDate = '2022-06-29'
-endDate = '2022-06-30'
+startDate = '2022-01-01'
+endDate = '2023-03-31'
 if startDate != endDate:
     #coins = get_coins()
-    myCoins = ['BTC-USD','ADA-USD','ALGO-USD','BNB-USD','ETH-USD','USDC-USD','LTC-USD','RUNE-USD','RVN-USD','BAT-USD']
+    myCoins = ['BTC-USD','ADA-USD','ALGO-USD','RUNE-USD']
     #myCoins = ['BTC-USD']
     for coin in myCoins:
         history = get_history(coin,startDate,endDate)
@@ -78,7 +78,8 @@ if startDate != endDate:
             cursor.execute("insert into pair_price (to_curr, price, from_curr,date) values ('USD', %s, %s, %s)",(closePrice,coinOnly,date))
         connection.commit()
     coins = get_coins()
-    myLegacyCoins = ['GUSD','BUSD','ALGO']
+    #myLegacyCoins = ['GUSD','BUSD','ALGO']
+    myLegacyCoins = []
     for coin in myLegacyCoins:
         history = get_history_legacy(coins[coin],startDate,endDate)
         for price_history in history:
