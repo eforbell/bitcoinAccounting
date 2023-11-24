@@ -7,24 +7,27 @@ now = datetime.now()
 class CryptoAccounts(object):
 
     def __init__(self):
-        self.connection = psycopg2.connect(database="postgres", user="bitcoin_accounting", password="bitcoin_accounting", host="numenor.local", port="5432")
+        self.connection = psycopg2.connect(database="postgres", user="bitcoin_accounting", password="bitcoin_accounting", host="numenor", port="5432")
 
 
     def close(self):
         self.connection.close()
 
-
-    def get_balances(self, coin):
+    def get_balance(self, coin = 'BTC'):
         cur = self.connection.cursor()
-        cur.execute('''
-        select c.name \"coin\", get_balance(c.name) as balance from coins c 
-            where get_balance(c.name) is not null
-            order by balance desc;
-        ''')
+        query = "select get_balance('" + coin + "')"
+        cur.execute(query)
         rows = cur.fetchall()
         for row in rows:
-            print(row[0])
-            print(row[1])
+            return row[0]
+    def get_basis(self, coin = 'BTC'):
+        cur = self.connection.cursor()
+        query = "select get_avg_purchase_price('" + coin + "')"
+        cur.execute(query)
+        rows = cur.fetchall()
+        for row in rows:
+            return row[0]
+            
     def get_transactions(self, coin = None):
         cur = self.connection.cursor()
         baseQuery = "select l.trans_type \"Type\", l.buy \"Buy\", l.buy_curr \"Buy Cur.\", l.sell \"Sell\", l.sell_curr \"Sell Cur.\", l.fee \"Fee\", l.fee_curr \"Fee Cur.\", l.exchange \"Exchange\", l.\"group\" \"Group\", l.\"comment\" \"Comment\", l.createddate \"Date\" from ledger l"
@@ -41,7 +44,25 @@ class CryptoAccounts(object):
                 transaction[colname] = row[i]
             transactions.append(transaction)
         return colnames, transactions
-
+    def print_trades(self, coin = 'BTC'):
+        cur = self.connection.cursor()
+        baseQuery = "select date, quantity, unit_cost, total_cost, exchange from get_trade_cost_new(%s, %s)  order by date desc"
+        cur.execute(baseQuery, (coin, 'USD'))
+        rows = cur.fetchall()
+        cols = [desc[0] for desc in cur.description]
+        #for col in colnames:
+        #    print(col, end=" ")
+        #print()
+        print(str(cols[0])+"\t\t",cols[1],cols[2],cols[3],cols[4],sep="\t")
+        for row in rows:
+           quantity = "{:.8f}".format(row[1])
+           cost = "{:.2f}".format(row[2])
+           total_cost = "{:.2f}".format(row[3])+"\t"
+           if len(row) > 4:
+               exchange = row[4]
+           else:
+               exchange = "(Unknown)"
+           print(str(row[0]),quantity,cost,total_cost,exchange,sep="\t")
     def export_transactions_csv(self, out_file, coin = None):
         colnames, transactions = self.get_transactions(coin)
         with open(out_file, 'w', newline='') as csv_out:
@@ -227,7 +248,7 @@ class CryptoAccounts(object):
     def getPricePairQuery(self):
         return "insert into pair_price (to_curr, price, from_curr, date) values (%s, %s, %s, %s)"
 
-crypto = CryptoAccounts()
+#crypto = CryptoAccounts()
 #crypto.transfer_funds('2022-04-01 09:59:00', 'Swan Bitcoin','BTC', 0.01239033,'Ledger-2', 'BTC', 0.0);
 #crypto.transfer_funds('2022-02-22 09:50:00', 'LN','BTC', 0.00120000,'Muun', 'BTC', 0.00000242);
 #crypto.transfer_funds('2022-01-16 09:25:00', ,'Strike (Val)','BTC', 0.02312012, 'Ledger', 'BTC', 0.0);
@@ -236,12 +257,12 @@ crypto = CryptoAccounts()
 #colnames, transactions = crypto.import_transactions_rvn_mining('/Users/forbell/Desktop/cointracking/rvn-mining-01-29-2022.csv')
 #colnames, transactions = crypto.import_transactions_ada_csv('/Users/forbell/Desktop/cointracking/rewards_9ab0a58f72b459260c20d98ef1dee2ec7882e6ec825b91c1a663fca6_usd_cointracking_2021-12-02_2022-01-16.csv')
 #crypto.import_transactions(colnames, transactions)
-satsBought = 0.00800784
-dollarsSold = 250.0
-tx_date = datetime.strptime("2023-07-04 14:36:00", '%Y-%m-%d %H:%M:%S')
+#satsBought = 0.01013919
+#dollarsSold = 300.0
+#tx_date = datetime.strptime("2023-07-26 13:05:00", '%Y-%m-%d %H:%M:%S')
 #crypto.deposit(deposit_date=tx_date,buy=dollarsSold)
 #crypto.execute_trade(trade_date=tx_date, buy=satsBought,sell=dollarsSold)
-withdraw_date = tx_date + timedelta(minutes=60)
-crypto.transfer_funds(withdraw_date=tx_date,deposit_date=withdraw_date, tx_amount=satsBought)
-crypto.export_transactions_csv("t://Wallets/tx_export/transactions_2023-07-04.csv")
-crypto.close()
+#withdraw_date = tx_date + timedelta(minutes=60)
+#crypto.transfer_funds(withdraw_date=tx_date,deposit_date=withdraw_date, tx_amount=satsBought)
+#crypto.export_transactions_csv("t://Wallets/tx_export/transactions_2023-08-08.csv")
+#crypto.close()

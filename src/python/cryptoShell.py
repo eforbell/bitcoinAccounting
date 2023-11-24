@@ -46,6 +46,7 @@ def main():
                 withdraw_date = tx_date + timedelta(minutes=int(withdraw_delay_minutes))
                 crypto.transfer_funds(withdraw_date=tx_date, deposit_date=withdraw_date, tx_amount=satsBought)
                 print("Recorded transaction.")
+                print("Current balance : " + str(crypto.get_balance("BTC")) + " : " + str(crypto.get_basis("BTC")))
                 crypto.close()
                 break
         except KeyboardInterrupt:

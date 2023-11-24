@@ -1,0 +1,10 @@
+#!/usr/bin/python3
+import sys
+from cryptoAccounts import CryptoAccounts
+crypto = CryptoAccounts()
+if len(sys.argv) > 1:
+	filename = sys.argv[1]
+else:
+        filename = ""
+filename = "tx_" + filename + ".csv"
+crypto.export_transactions_csv(filename)

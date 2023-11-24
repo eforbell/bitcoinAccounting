@@ -1,0 +1,9 @@
+#!/usr/bin/python3
+import sys
+from cryptoAccounts import CryptoAccounts
+crypto = CryptoAccounts()
+if len(sys.argv) > 1:
+	coin = sys.argv[1]
+else:
+	coin = "BTC"
+print(coin + " : " + str(crypto.get_balance(coin)) + " : " + str(crypto.get_basis(coin)))
