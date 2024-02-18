@@ -26,7 +26,7 @@ def main():
             dollarsSold = float(session.prompt("Enter dollars paid: ", validator=None))
             tx_date = None
             while tx_date is None:
-                tx_data_raw = session.prompt("Enter datetime: ", validator=None)
+                tx_data_raw = session.prompt("Enter datetime: ", validator=None, default=now.strftime("%Y-%m-%d %H:%M:%S"))
                 try:
                     tx_date = datetime.strptime(tx_data_raw, '%Y-%m-%d %H:%M:%S')
                 except ValueError:
