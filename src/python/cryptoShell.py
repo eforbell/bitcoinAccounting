@@ -21,6 +21,7 @@ def main():
 
     while True:
         try :
+            satsSource = session.prompt("Enter exchange: ", default="Strike")
             satsBought = float(session.prompt("Enter sats bought: ", validator=None))
             dollarsSold = float(session.prompt("Enter dollars paid: ", validator=None))
             tx_date = None
@@ -30,8 +31,8 @@ def main():
                     tx_date = datetime.strptime(tx_data_raw, '%Y-%m-%d %H:%M:%S')
                 except ValueError:
                     print("%s is not a datetime: (YY-mm-dd HH:MM:SS)" % tx_data_raw)
-
-            withdraw_delay_minutes = session.prompt("Withdraw delay (min): ")
+            withdraw_wallet = session.prompt("Withdraw wallet: ", default="Ledger-2")
+            withdraw_delay_minutes = session.prompt("Withdraw delay (min): ", default="700")
 
             print("Sats purchased: %s" % satsBought)
             print("Dollar cost: %s" % dollarsSold)
@@ -39,12 +40,12 @@ def main():
             record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
             if record_tx == 'Y' or record_tx == 'y':
                 crypto = CryptoAccounts()
-                crypto.deposit(deposit_date=tx_date, buy=dollarsSold)
+                crypto.deposit(exchange=satsSource, deposit_date=tx_date, buy=dollarsSold)
                 tx_date = tx_date + timedelta(seconds=30)
-                crypto.execute_trade(trade_date=tx_date, buy=satsBought, sell=dollarsSold)
+                crypto.execute_trade(exchange=satsSource, trade_date=tx_date, buy=satsBought, sell=dollarsSold)
                 tx_date = tx_date + timedelta(seconds=30)
                 withdraw_date = tx_date + timedelta(minutes=int(withdraw_delay_minutes))
-                crypto.transfer_funds(withdraw_date=tx_date, deposit_date=withdraw_date, tx_amount=satsBought)
+                crypto.transfer_funds(from_account=satsSource, to_account=withdraw_wallet, withdraw_date=tx_date, deposit_date=withdraw_date, tx_amount=satsBought)
                 print("Recorded transaction.")
                 print("Current balance : " + str(crypto.get_balance("BTC")) + " : " + str(crypto.get_basis("BTC")))
                 crypto.close()
