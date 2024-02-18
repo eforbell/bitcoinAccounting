@@ -6,4 +6,16 @@ if len(sys.argv) > 1:
 	coin = sys.argv[1]
 else:
 	coin = "BTC"
-print(coin + " : " + str(crypto.get_balance(coin)) + " : " + str(crypto.get_basis(coin)))
+
+print("*********************************************************************")
+print("Accounts")
+print("---------------------------------------------------------------------")
+print("Vault\t" + str(crypto.get_balance_by_account(coin, 'Vault')))
+print("CC\t" + str(crypto.get_balance_by_account(coin, 'CC')))
+print("Ledger\t" + str(crypto.get_balance_by_account(coin, 'Ledger-2')))
+print("Jade\t" + str(crypto.get_balance_by_account(coin, 'Jade')))
+print("---------------------------------------------------------------------")
+print("Total\t" + str(crypto.get_balance(coin)))
+print("Basis\t" + str(crypto.get_basis(coin)))
+print("*********************************************************************")
+print()

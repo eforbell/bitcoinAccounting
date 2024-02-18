@@ -20,6 +20,15 @@ class CryptoAccounts(object):
         rows = cur.fetchall()
         for row in rows:
             return row[0]
+
+    def get_balance_by_account(self, coin = 'BTC', account = 'Vault'):
+        cur = self.connection.cursor()
+        query = "select get_balance_by_account('" + coin + "', '" + account + "')"
+        cur.execute(query)
+        rows = cur.fetchall()
+        for row in rows:
+            return row[0]
+
     def get_basis(self, coin = 'BTC'):
         cur = self.connection.cursor()
         query = "select get_avg_purchase_price('" + coin + "')"
