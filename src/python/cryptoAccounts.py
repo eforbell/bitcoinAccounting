@@ -7,7 +7,7 @@ now = datetime.now()
 class CryptoAccounts(object):
 
     def __init__(self):
-        self.connection = psycopg2.connect(database="postgres", user="bitcoin_accounting", password="bitcoin_accounting", host="numenor", port="5432")
+        self.connection = psycopg2.connect(database="postgres", user="bitcoin_accounting", password="REDACTED-ROTATED", host="numenor", port="5432")
 
 
     def close(self):

@@ -1,0 +1,43 @@
+#!/usr/bin/python3
+import sys
+from prompt_toolkit import print_formatted_text as print
+from prompt_toolkit import HTML, PromptSession
+from prompt_toolkit.validation import Validator, ValidationError
+from datetime import datetime, timedelta
+from prompt_toolkit.shortcuts import yes_no_dialog
+from cryptoAccounts import CryptoAccounts
+now = datetime.now()
+session = PromptSession()
+while True:
+	try :
+		from_wallet = session.prompt("From wallet: ", default="Ledger-2")
+		to_wallet = session.prompt("To wallet: ", default="Vault")
+		amount = session.prompt("Received amount (after fee):")
+		fee = session.prompt("Fee: ", default="0.00001500")
+		tx_date = None
+		while tx_date is None:
+			tx_data_raw = session.prompt("Enter tx time: ", validator=None, default=now.strftime("%Y-%m-%d %H:%M:%S"))
+			try:
+				tx_date = datetime.strptime(tx_data_raw, '%Y-%m-%d %H:%M:%S')
+			except ValueError:
+				print("%s is not a datetime: (YY-mm-dd HH:MM:SS)" % tx_data_raw)
+		print("Amount to transfer: %s" % amount)
+		print("Destination wallet: %s" % to_wallet)
+		print("Source wallet: %s" % from_wallet)
+		print("TX time: %s" % tx_date)
+		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
+		if record_tx == 'Y' or record_tx == 'y':
+			crypto = CryptoAccounts()
+			crypto.transfer_funds(withdraw_date=tx_date, deposit_date=None, from_account=from_wallet,tx_coin='BTC', tx_amount=float(amount), to_account=to_wallet, fee_coin='BTC', fee_amount=float(fee));
+			print("Recorded transaction.")
+			print("New balance (Destination): " + str(crypto.get_balance_by_account("BTC", to_wallet)))
+			print("New balance (Source): " + str(crypto.get_balance_by_account("BTC", from_wallet)))
+			crypto.close()
+			break
+	except KeyboardInterrupt:
+		break
+	except EOFError:
+		break
+print("Exiting...")
+
+
