@@ -231,12 +231,25 @@ class CryptoAccounts(object):
             (deposit_date, buy, buy_curr, exchange, group))
         self.connection.commit()
 
+    def interest(self, interest_date=now, buy=0.0, buy_curr="USD", exchange="River", group=""):
+        cur = self.connection.cursor()
+        cur.execute(
+            self.getInterestIncomeQuery(),
+            (interest_date, buy, buy_curr, exchange, group))
+        self.connection.commit()
+
     def execute_trade(self, trade_date=now, buy=0.0, buy_curr="BTC", sell=0.0, sell_curr="USD", fee=0.0, fee_curr="USD",
                       exchange="Strike", group=""):
         cur = self.connection.cursor()
         cur.execute(
             self.getTradeQuery(),
             (trade_date, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, group))
+        self.connection.commit()
+
+    def add_price_pair(self, pair_date=now, to_curr="BTC", from_curr="USD", price=0.0):
+        cur = self.connection.cursor()
+        price_query = self.getPricePairQuery()
+        cur.execute(price_query, (from_curr, price, to_curr, pair_date));
         self.connection.commit()
 
     def getDepositQuery(self):
@@ -256,4 +269,9 @@ class CryptoAccounts(object):
 
     def getPricePairQuery(self):
         return "insert into pair_price (to_curr, price, from_curr, date) values (%s, %s, %s, %s)"
+
+    def getInterestIncomeQuery(self):
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (%s, 'Interest Income', %s, %s, %s, %s)"
+
+   
 

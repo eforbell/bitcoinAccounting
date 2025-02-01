@@ -1,0 +1,46 @@
+#!/usr/bin/python3
+import sys
+from prompt_toolkit import print_formatted_text as print
+from prompt_toolkit import HTML, PromptSession
+from prompt_toolkit.validation import Validator, ValidationError
+from datetime import datetime, timedelta
+from prompt_toolkit.shortcuts import yes_no_dialog
+from cryptoAccounts import CryptoAccounts
+now = datetime.now()
+session = PromptSession()
+while True:
+	try :
+		wallet = session.prompt("Wallet: ", default="River")
+		satsEarned = session.prompt("Received amount (sats):")
+		bitcoinPrice = session.prompt("Bitcoin price:")
+		tx_date = None
+		while tx_date is None:
+			tx_data_raw = session.prompt("Enter tx time: ", validator=None, default=now.strftime("%Y-%m-%d %H:%M:%S"))
+			try:
+				tx_date = datetime.strptime(tx_data_raw, '%Y-%m-%d %H:%M:%S')
+			except ValueError:
+				print("%s is not a datetime: (YY-mm-dd HH:MM:SS)" % tx_data_raw)
+
+		earnedInUSD = float(satsEarned) * float(bitcoinPrice)
+		print("USD interest earned: %s" % earnedInUSD)
+		print("Bitcoin exchanged: %s" % satsEarned)
+		print("Wallet: %s" % wallet)
+		print("TX time: %s" % tx_date)
+		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
+		if record_tx == 'Y' or record_tx == 'y':
+			crypto = CryptoAccounts()
+			crypto.interest(interest_date=tx_date, buy=earnedInUSD, buy_curr='USD', exchange=wallet)
+			tx_date = tx_date + timedelta(seconds=30)
+			crypto.execute_trade(exchange=wallet, trade_date=tx_date, buy=satsEarned, sell=earnedInUSD)
+			crypto.add_price_pair(pair_date=tx_date, to_curr="BTC", from_curr="USD", price=bitcoinPrice)
+			print("Recorded transaction.")
+			print("New balance (Destination): " + str(crypto.get_balance_by_account("BTC", wallet)))
+			print("New balance (Source): " + str(crypto.get_balance_by_account("BTC", wallet)))
+			crypto.close()
+			break
+	except KeyboardInterrupt:
+		break
+	except EOFError:
+		break
+print("Exiting...")
+
