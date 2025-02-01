@@ -257,21 +257,3 @@ class CryptoAccounts(object):
     def getPricePairQuery(self):
         return "insert into pair_price (to_curr, price, from_curr, date) values (%s, %s, %s, %s)"
 
-#crypto = CryptoAccounts()
-#crypto.transfer_funds('2022-04-01 09:59:00', 'Swan Bitcoin','BTC', 0.01239033,'Ledger-2', 'BTC', 0.0);
-#crypto.transfer_funds('2022-02-22 09:50:00', 'LN','BTC', 0.00120000,'Muun', 'BTC', 0.00000242);
-#crypto.transfer_funds('2022-01-16 09:25:00', ,'Strike (Val)','BTC', 0.02312012, 'Ledger', 'BTC', 0.0);
-#colnames, transactions = crypto.import_transactions_nexo_csv('/Users/forbell/Desktop/cointracking/nexo_transactions_final.csv')
-#colnames, transactions = crypto.import_transactions_ledger_csv('/Users/forbell/Desktop/cointracking/ALGO-rewards.csv')
-#colnames, transactions = crypto.import_transactions_rvn_mining('/Users/forbell/Desktop/cointracking/rvn-mining-01-29-2022.csv')
-#colnames, transactions = crypto.import_transactions_ada_csv('/Users/forbell/Desktop/cointracking/rewards_9ab0a58f72b459260c20d98ef1dee2ec7882e6ec825b91c1a663fca6_usd_cointracking_2021-12-02_2022-01-16.csv')
-#crypto.import_transactions(colnames, transactions)
-#satsBought = 0.01013919
-#dollarsSold = 300.0
-#tx_date = datetime.strptime("2023-07-26 13:05:00", '%Y-%m-%d %H:%M:%S')
-#crypto.deposit(deposit_date=tx_date,buy=dollarsSold)
-#crypto.execute_trade(trade_date=tx_date, buy=satsBought,sell=dollarsSold)
-#withdraw_date = tx_date + timedelta(minutes=60)
-#crypto.transfer_funds(withdraw_date=tx_date,deposit_date=withdraw_date, tx_amount=satsBought)
-#crypto.export_transactions_csv("t://Wallets/tx_export/transactions_2023-08-08.csv")
-#crypto.close()
