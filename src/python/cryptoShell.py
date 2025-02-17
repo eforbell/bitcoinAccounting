@@ -31,8 +31,7 @@ def main():
                     tx_date = datetime.strptime(tx_data_raw, '%Y-%m-%d %H:%M:%S')
                 except ValueError:
                     print("%s is not a datetime: (YY-mm-dd HH:MM:SS)" % tx_data_raw)
-            withdraw_wallet = session.prompt("Withdraw wallet: ", default="Ledger-2")
-            withdraw_delay_minutes = session.prompt("Withdraw delay (min): ", default="700")
+            
 
             print("Sats purchased: %s" % satsBought)
             print("Dollar cost: %s" % dollarsSold)
@@ -44,8 +43,13 @@ def main():
                 tx_date = tx_date + timedelta(seconds=30)
                 crypto.execute_trade(exchange=satsSource, trade_date=tx_date, buy=satsBought, sell=dollarsSold)
                 tx_date = tx_date + timedelta(seconds=30)
-                withdraw_date = tx_date + timedelta(minutes=int(withdraw_delay_minutes))
-                crypto.transfer_funds(from_account=satsSource, to_account=withdraw_wallet, withdraw_date=tx_date, deposit_date=withdraw_date, tx_amount=satsBought)
+
+                withdrawing = session.prompt("Do you want to withdraw? (Y/N) ")
+                if withdrawing == 'Y' or withdrawing == 'y':
+                    withdraw_wallet = session.prompt("Withdraw wallet: ", default="Ledger-2")
+                    withdraw_delay_minutes = session.prompt("Withdraw delay (min): ", default="700")
+                    withdraw_date = tx_date + timedelta(minutes=int(withdraw_delay_minutes))
+                    crypto.transfer_funds(from_account=satsSource, to_account=withdraw_wallet, withdraw_date=tx_date, deposit_date=withdraw_date, tx_amount=satsBought)
                 print("Recorded transaction.")
                 print("Current balance : " + str(crypto.get_balance("BTC")) + " : " + str(crypto.get_basis("BTC")))
                 crypto.close()
