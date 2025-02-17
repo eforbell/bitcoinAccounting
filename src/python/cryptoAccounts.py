@@ -19,7 +19,11 @@ class CryptoAccounts(object):
         cur.execute(query)
         rows = cur.fetchall()
         for row in rows:
-            return row[0]
+            returnVal = row[0]
+            if abs(float(returnVal))-0.0000000000001 > 0:
+                return returnVal
+            else:
+                return 0
 
     def get_balance_by_account(self, coin = 'BTC', account = 'Vault'):
         cur = self.connection.cursor()
@@ -27,7 +31,11 @@ class CryptoAccounts(object):
         cur.execute(query)
         rows = cur.fetchall()
         for row in rows:
-            return row[0]
+            returnVal = row[0]
+            if abs(float(returnVal))-0.0000000000001 > 0:
+                return returnVal
+            else:
+                return 0
 
     def get_basis(self, coin = 'BTC'):
         cur = self.connection.cursor()
