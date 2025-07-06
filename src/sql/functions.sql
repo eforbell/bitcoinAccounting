@@ -270,3 +270,16 @@ begin
 		order by createddate) as dividends;
 END; $function$
 ;
+
+CREATE OR REPLACE FUNCTION public.get_avg_purchase_price_new(curr character varying, cost_currency character varying DEFAULT 'USD'::character varying, OUT out_price double precision)
+ RETURNS double precision
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+     out_price := 
+     (select sum(unit_cost*quantity)/sum(quantity)
+        from get_trade_cost_new(curr, cost_currency)
+		where quantity > 0 -- purchase trade only
+     );
+END; $function$
+;
