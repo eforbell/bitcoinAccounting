@@ -28,10 +28,11 @@ CREATE TABLE public.ledger (
 	fee_curr varchar(40) NULL,
 	exchange varchar(32) NULL,
 	"group" varchar(32) NULL,
-	"comment" varchar(255) NULL,
-	transactionid varchar(255) NULL
+	"comment" varchar(5000) NULL,
+	transactionid varchar(5000) NULL,
+	id serial4 NOT NULL,
+	CONSTRAINT ledger_pkey PRIMARY KEY (id)
 );
-
 -- public.pair_price definition
 
 -- Drop table
@@ -44,3 +45,9 @@ CREATE TABLE public.pair_price (
 	from_curr varchar(40) NOT NULL,
 	"date" date NULL
 );
+
+
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.coins TO "bitcoin_accounting";
+GRANT UPDATE, SELECT, INSERT ON TABLE public.ledger TO "bitcoin_accounting";
+GRANT SELECT, USAGE ON SEQUENCE public.ledger_id_seq TO "bitcoin_accounting";
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.pair_price TO "bitcoin_accounting";
