@@ -6,13 +6,6 @@ from prompt_toolkit.shortcuts import yes_no_dialog
 
 from cryptoAccounts import CryptoAccounts
 
-class NumericValidator(Validator):
-    def validate(self, document):
-        text = document.text
-
-        if text and not text.isnumeric():
-            raise ValidationError(message='This input is not numeric')
-
 def main():
     # Create prompt object.
     session = PromptSession()
@@ -21,9 +14,10 @@ def main():
 
     while True:
         try :
-            satsSource = session.prompt("Enter exchange: ", default="Strike")
-            satsBought = float(session.prompt("Enter sats bought: ", validator=None))
-            dollarsSold = float(session.prompt("Enter dollars paid: ", validator=None))
+            satsSource = session.prompt("Enter wallet source: ", default="CC")
+            exchange = session.prompt("Enter bitcion exchange: ", default="Strike")
+            sats = float(session.prompt("Enter sats sold: ", validator=None))
+            dollars = float(session.prompt("Enter dollars proceeds: ", validator=None))
             tx_date = None
             while tx_date is None:
                 tx_data_raw = session.prompt("Enter datetime: ", validator=None, default=now.strftime("%Y-%m-%d %H:%M:%S"))
@@ -33,23 +27,22 @@ def main():
                     print("%s is not a datetime: (YY-mm-dd HH:MM:SS)" % tx_data_raw)
             
 
-            print("Sats purchased: %s" % satsBought)
-            print("Dollar cost: %s" % dollarsSold)
+            print("Sats sold: %s" % sats)
+            print("Dollars proceeds: %s" % dollars)
             print("Transaction date: %s" % tx_date)
             record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
             if record_tx == 'Y' or record_tx == 'y':
                 crypto = CryptoAccounts()
-                crypto.deposit(exchange=satsSource, deposit_date=tx_date, buy=dollarsSold)
+                withdraw_date = tx_date - timedelta(minutes=int(70))
+                deposit_date = tx_date - timedelta(minutes=int(10))
+                crypto.transfer_funds(from_account=satsSource, to_account=exchange, withdraw_date=withdraw_date, deposit_date=deposit_date, tx_amount=sats)
+                crypto.execute_trade(exchange=exchange, trade_date=tx_date, buy_curr="USD", buy=dollars, sell_curr="BTC", sell=sats)
                 tx_date = tx_date + timedelta(seconds=30)
-                crypto.execute_trade(exchange=satsSource, trade_date=tx_date, buy=satsBought, sell=dollarsSold)
-                tx_date = tx_date + timedelta(seconds=30)
-
                 withdrawing = session.prompt("Do you want to withdraw? (Y/N) ")
                 if withdrawing == 'Y' or withdrawing == 'y':
-                    withdraw_wallet = session.prompt("Withdraw wallet: ", default="Ledger-2")
-                    withdraw_delay_minutes = session.prompt("Withdraw delay (min): ", default="700")
+                    withdraw_delay_minutes = session.prompt("Withdraw delay (min): ", default="0")
                     withdraw_date = tx_date + timedelta(minutes=int(withdraw_delay_minutes))
-                    crypto.transfer_funds(from_account=satsSource, to_account=withdraw_wallet, withdraw_date=tx_date, deposit_date=withdraw_date, tx_amount=satsBought)
+                    crypto.withdraw(withdraw_date=withdraw_date, sell=dollars, sell_curr="USD", exchange=satsSource)
                 print("Recorded transaction.")
                 print("Current balance : " + str(crypto.get_balance("BTC")) + " : " + str(crypto.get_basis("BTC")))
                 crypto.close()

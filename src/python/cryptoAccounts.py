@@ -44,6 +44,28 @@ class CryptoAccounts(object):
         rows = cur.fetchall()
         for row in rows:
             return row[0]
+
+    def get_bitcoin_price(self):
+        import requests
+
+        try:
+            # API endpoint for Coingecko to get Bitcoin price in USD
+            url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+            
+            # Make the API request
+            response = requests.get(url)
+            response.raise_for_status()  # Raise an exception for bad status codes
+            
+            # Parse the JSON response
+            data = response.json()
+            
+            # Extract Bitcoin price
+            btc_price = data['bitcoin']['usd']
+            
+            return btc_price
+        
+        except requests.exceptions.RequestException as e:
+            return f"Error fetching price: {e}"
             
     def get_transactions(self, coin = None):
         cur = self.connection.cursor()
@@ -237,6 +259,13 @@ class CryptoAccounts(object):
         cur.execute(
             self.getDepositQuery(),
             (deposit_date, buy, buy_curr, exchange, group))
+        self.connection.commit()
+
+    def withdraw(self, withdraw_date=now, sell=0, sell_curr="USD", fee=0.0, fee_curr="USD", exchange="Strike", group=""):
+        cur = self.connection.cursor()
+        cur.execute(
+            self.getWithdrawQuery(),
+            (withdraw_date, sell, sell_curr, fee, fee_curr, exchange, group))
         self.connection.commit()
 
     def interest(self, interest_date=now, buy=0.0, buy_curr="USD", exchange="River", group=""):
