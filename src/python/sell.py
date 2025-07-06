@@ -1,6 +1,5 @@
 from prompt_toolkit import print_formatted_text as print
 from prompt_toolkit import HTML, PromptSession
-from prompt_toolkit.validation import Validator, ValidationError
 from datetime import datetime, timedelta
 from prompt_toolkit.shortcuts import yes_no_dialog
 

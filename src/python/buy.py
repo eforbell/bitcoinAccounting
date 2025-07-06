@@ -1,17 +1,9 @@
 from prompt_toolkit import print_formatted_text as print
 from prompt_toolkit import HTML, PromptSession
-from prompt_toolkit.validation import Validator, ValidationError
 from datetime import datetime, timedelta
 from prompt_toolkit.shortcuts import yes_no_dialog
 
 from cryptoAccounts import CryptoAccounts
-
-class NumericValidator(Validator):
-    def validate(self, document):
-        text = document.text
-
-        if text and not text.isnumeric():
-            raise ValidationError(message='This input is not numeric')
 
 def main():
     # Create prompt object.
