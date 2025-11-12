@@ -52,12 +52,17 @@ while True:
 		print(f"Fee: {fee} BTC")
 		print(f"Date: {tx_date}")
 		
-	    # ask for confirmation (prompt returns a string)
-        record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
-	    if record_tx.lower() in ('y', 'yes'):
+		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
+		if record_tx.lower() in ('y', 'yes'):
 			crypto = CryptoAccounts()
 			try:
+				# Step 1: Deposit USD to exchange
+				crypto.deposit(exchange=exchange, deposit_date=tx_date, buy=total_usd)
+				tx_date = tx_date + timedelta(seconds=30)
+				
+				# Step 2: Execute trade (USD -> BTC)
 				crypto.execute_trade(
+					exchange=exchange,
 					trade_date=tx_date,
 					buy=float(quantity),
 					buy_curr="BTC",
@@ -65,10 +70,27 @@ while True:
 					sell_curr="USD",
 					fee=float(fee),
 					fee_curr="BTC",
-					exchange=exchange,
 					group=group if group else None
 				)
-				print(f"Transaction recorded. New balance: {crypto.get_balance('BTC'):.8f} BTC")
+				tx_date = tx_date + timedelta(seconds=30)
+				
+				# Step 3: Optional withdrawal to cold storage/wallet
+				withdrawing = session.prompt("Do you want to withdraw BTC? (Y/N) ")
+				if withdrawing.lower() in ('y', 'yes'):
+					withdraw_wallet = session.prompt("Withdraw to wallet: ", default="Ledger-2")
+					withdraw_delay_minutes = session.prompt("Withdraw delay (min): ", default="700")
+					withdraw_date = tx_date + timedelta(minutes=int(withdraw_delay_minutes))
+					crypto.transfer_funds(
+						from_account=exchange,
+						to_account=withdraw_wallet,
+						withdraw_date=tx_date,
+						deposit_date=withdraw_date,
+						tx_amount=float(quantity),
+						tx_coin="BTC"
+					)
+				
+				print("Transaction recorded.")
+				print(f"Current balance: {crypto.get_balance('BTC'):.8f} BTC @ ${crypto.get_basis('BTC'):.2f}/BTC")
 				crypto.close()
 				break
 			except Exception as e:

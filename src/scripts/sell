@@ -21,18 +21,18 @@ except ImportError as e:
 	sys.exit(1)
 
 from prompt_toolkit import PromptSession
-from datetime import datetime
+from datetime import datetime, timedelta
 
 now = datetime.now()
 session = PromptSession()
 
 while True:
 	try:
+		wallet_source = session.prompt("Bitcoin wallet source: ", default="CC")
 		exchange = session.prompt("Exchange: ", default="Strike")
 		quantity = session.prompt("Quantity (BTC) sold: ")
 		price = session.prompt("Sale price per BTC (USD): ")
 		fee = session.prompt("Fee (USD): ", default="0")
-		group = session.prompt("Group (optional): ", default="")
 
 		tx_date = None
 		while tx_date is None:
@@ -43,6 +43,7 @@ while True:
 				print("Invalid date format. Use YYYY-MM-DD HH:MM:SS")
 
 		total_usd = float(quantity) * float(price)
+		print(f"Wallet source: {wallet_source}")
 		print(f"Exchange: {exchange}")
 		print(f"Quantity: {quantity} BTC")
 		print(f"Price: ${price}/BTC")
@@ -55,18 +56,48 @@ while True:
 		if record_tx == 'Y' or record_tx == 'y':
 			crypto = CryptoAccounts()
 			try:
+				# Step 1: Transfer BTC from wallet to exchange
+				# (done before the trade, with slight time delays)
+				withdraw_date = tx_date - timedelta(minutes=70)
+				deposit_date = tx_date - timedelta(minutes=10)
+				crypto.transfer_funds(
+					from_account=wallet_source,
+					to_account=exchange,
+					withdraw_date=withdraw_date,
+					deposit_date=deposit_date,
+					tx_amount=float(quantity),
+					tx_coin="BTC"
+				)
+				
+				# Step 2: Execute trade (BTC -> USD)
 				crypto.execute_trade(
+					exchange=exchange,
 					trade_date=tx_date,
 					buy=total_usd,
 					buy_curr="USD",
 					sell=float(quantity),
 					sell_curr="BTC",
 					fee=float(fee),
-					fee_curr="USD",
-					exchange=exchange,
-					group=group if group else None
+					fee_curr="USD"
 				)
-				print(f"Sale recorded. New balance: {crypto.get_balance('BTC'):.8f} BTC")
+				tx_date = tx_date + timedelta(seconds=30)
+				
+				# Step 3: Optional withdrawal of USD back to wallet
+				withdrawing = session.prompt("Do you want to withdraw USD? (Y/N) ")
+				if withdrawing == 'Y' or withdrawing == 'y':
+					withdraw_delay_minutes = session.prompt("Withdraw delay (min): ", default="0")
+					withdraw_date = tx_date + timedelta(minutes=int(withdraw_delay_minutes))
+					crypto.withdraw(
+						withdraw_date=withdraw_date,
+						sell=total_usd,
+						sell_curr="USD",
+						fee=float(fee),
+						fee_curr="USD",
+						exchange=wallet_source
+					)
+				
+				print("Transaction recorded.")
+				print(f"Current balance: {crypto.get_balance('BTC'):.8f} BTC @ ${crypto.get_basis('BTC'):.2f}/BTC")
 				crypto.close()
 				break
 			except Exception as e:
