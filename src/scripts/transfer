@@ -1,15 +1,34 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+"""Transfer funds between accounts. See SCRIPTS_DEPLOYMENT.md for setup."""
+
 import sys
+import os
+
+# Establish Python module root from environment variables
+module_root = os.getenv('CRYPTO_ACCOUNTING_PYTHONPATH')
+if not module_root:
+	repo_root = os.getenv('REPO_ROOT')
+	if repo_root:
+		module_root = os.path.join(repo_root, 'src', 'python')
+
+if module_root and module_root not in sys.path:
+	sys.path.insert(0, module_root)
+
+try:
+	from cryptoAccounts import CryptoAccounts
+except ImportError as e:
+	print("ERROR: Could not import cryptoAccounts. Please set REPO_ROOT or CRYPTO_ACCOUNTING_PYTHONPATH", file=sys.stderr)
+	sys.exit(1)
+
 from prompt_toolkit import print_formatted_text as print
 from prompt_toolkit import HTML, PromptSession
 from prompt_toolkit.validation import Validator, ValidationError
 from datetime import datetime, timedelta
 from prompt_toolkit.shortcuts import yes_no_dialog
-from cryptoAccounts import CryptoAccounts
 now = datetime.now()
 session = PromptSession()
 while True:
-	try :
+	try:
 		from_wallet = session.prompt("From wallet: ", default="Ledger-2")
 		to_wallet = session.prompt("To wallet: ", default="Vault")
 		amount = session.prompt("Received amount (after fee):")
@@ -28,7 +47,7 @@ while True:
 		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
 		if record_tx == 'Y' or record_tx == 'y':
 			crypto = CryptoAccounts()
-			crypto.transfer_funds(withdraw_date=tx_date, deposit_date=None, from_account=from_wallet,tx_coin='BTC', tx_amount=float(amount), to_account=to_wallet, fee_coin='BTC', fee_amount=float(fee));
+			crypto.transfer_funds(withdraw_date=tx_date, deposit_date=None, from_account=from_wallet, tx_coin='BTC', tx_amount=float(amount), to_account=to_wallet, fee_coin='BTC', fee_amount=float(fee))
 			print("Recorded transaction.")
 			print("New balance (Destination): " + str(crypto.get_balance_by_account("BTC", to_wallet)))
 			print("New balance (Source): " + str(crypto.get_balance_by_account("BTC", from_wallet)))

@@ -1,23 +1,45 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+"""Balance reporting script for cryptoAccounting. See SCRIPTS_DEPLOYMENT.md for setup."""
+
 import sys
-from cryptoAccounts import CryptoAccounts
+import os
+
+# Establish Python module root from environment variables
+module_root = os.getenv('CRYPTO_ACCOUNTING_PYTHONPATH')
+if not module_root:
+	repo_root = os.getenv('REPO_ROOT')
+	if repo_root:
+		module_root = os.path.join(repo_root, 'src', 'python')
+
+if module_root and module_root not in sys.path:
+	sys.path.insert(0, module_root)
+
+try:
+	from cryptoAccounts import CryptoAccounts
+except ImportError as e:
+	print("ERROR: Could not import cryptoAccounts. Please set REPO_ROOT or CRYPTO_ACCOUNTING_PYTHONPATH", file=sys.stderr)
+	sys.exit(1)
+
 crypto = CryptoAccounts()
 if len(sys.argv) > 1:
 	coin = sys.argv[1]
 else:
 	coin = "BTC"
 
-print("*********************************************************************")
-print("Accounts")
-print("---------------------------------------------------------------------")
-print("Vault\t" + f"{(crypto.get_balance_by_account(coin, 'Vault')):.8f}")
-print("CC\t" + f"{(crypto.get_balance_by_account(coin, 'CC')):.8f}")
-print("Strike\t" + f"{(crypto.get_balance_by_account(coin, 'Strike')):.8f}")
-print("River\t" + f"{(crypto.get_balance_by_account(coin, 'River')):.8f}")
-print("Kraken\t" + f"{(crypto.get_balance_by_account(coin, 'Kraken')):.8f}")
-print("Ledger\t" + f"{(crypto.get_balance_by_account(coin, 'Ledger-2')):.8f}")
-print("---------------------------------------------------------------------")
-print("Total\t" + f"{(crypto.get_balance(coin)):.8f}")
-print("Basis\t" + f"{(crypto.get_basis(coin)):.2f}")
-print("*********************************************************************")
-print()
+try:
+	print("*" * 65)
+	print("Accounts")
+	print("-" * 65)
+	print("Vault\t" + f"{(crypto.get_balance_by_account(coin, 'Vault')):.8f}")
+	print("CC\t" + f"{(crypto.get_balance_by_account(coin, 'CC')):.8f}")
+	print("Strike\t" + f"{(crypto.get_balance_by_account(coin, 'Strike')):.8f}")
+	print("River\t" + f"{(crypto.get_balance_by_account(coin, 'River')):.8f}")
+	print("Kraken\t" + f"{(crypto.get_balance_by_account(coin, 'Kraken')):.8f}")
+	print("Ledger\t" + f"{(crypto.get_balance_by_account(coin, 'Ledger-2')):.8f}")
+	print("-" * 65)
+	print("Total\t" + f"{(crypto.get_balance(coin)):.8f}")
+	print("Basis\t" + f"{(crypto.get_basis(coin)):.2f}")
+	print("*" * 65)
+	print()
+finally:
+	crypto.close()

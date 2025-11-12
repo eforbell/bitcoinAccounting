@@ -1,4 +1,52 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+"""Export transaction ledger to CSV. See SCRIPTS_DEPLOYMENT.md for setup."""
+
+import sys
+import os
+
+# Establish Python module root from environment variables
+module_root = os.getenv('CRYPTO_ACCOUNTING_PYTHONPATH')
+if not module_root:
+    repo_root = os.getenv('REPO_ROOT')
+    if repo_root:
+        module_root = os.path.join(repo_root, 'src', 'python')
+
+if module_root and module_root not in sys.path:
+    sys.path.insert(0, module_root)
+
+try:
+    from cryptoAccounts import CryptoAccounts
+except ImportError as e:
+    print("ERROR: Could not import cryptoAccounts. Please set REPO_ROOT or CRYPTO_ACCOUNTING_PYTHONPATH", file=sys.stderr)
+    sys.exit(1)
+
+
+def main():
+    crypto = CryptoAccounts()
+    
+    if len(sys.argv) > 1:
+        output_file = sys.argv[1]
+    else:
+        output_file = "ledger_export.csv"
+    
+    if len(sys.argv) > 2:
+        coin = sys.argv[2]
+    else:
+        coin = None
+
+    try:
+        print(f"Exporting transactions to {output_file}...")
+        crypto.export_transactions_csv(output_file, coin)
+        print(f"Export complete: {output_file}")
+    except Exception as e:
+        print(f"Error exporting transactions: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        crypto.close()
+
+
+if __name__ == '__main__':
+    main()#!/usr/bin/python3
 import sys
 from cryptoAccounts import CryptoAccounts
 crypto = CryptoAccounts()

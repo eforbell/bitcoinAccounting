@@ -1,3 +1,80 @@
-#!/usr/bin/python3 /home/forbell/bin/sell.py
+﻿#!/usr/bin/env python3
+"""Record Bitcoin sale transaction. See SCRIPTS_DEPLOYMENT.md for setup."""
 
+import sys
+import os
 
+# Establish Python module root from environment variables
+module_root = os.getenv('CRYPTO_ACCOUNTING_PYTHONPATH')
+if not module_root:
+	repo_root = os.getenv('REPO_ROOT')
+	if repo_root:
+		module_root = os.path.join(repo_root, 'src', 'python')
+
+if module_root and module_root not in sys.path:
+	sys.path.insert(0, module_root)
+
+try:
+	from cryptoAccounts import CryptoAccounts
+except ImportError as e:
+	print("ERROR: Could not import cryptoAccounts. Please set REPO_ROOT or CRYPTO_ACCOUNTING_PYTHONPATH", file=sys.stderr)
+	sys.exit(1)
+
+from prompt_toolkit import PromptSession
+from datetime import datetime
+
+now = datetime.now()
+session = PromptSession()
+
+while True:
+	try:
+		exchange = session.prompt("Exchange: ", default="Strike")
+		quantity = session.prompt("Quantity (BTC) sold: ")
+		price = session.prompt("Sale price per BTC (USD): ")
+		fee = session.prompt("Fee (USD): ", default="0")
+		group = session.prompt("Group (optional): ", default="")
+
+		tx_date = None
+		while tx_date is None:
+			tx_data_raw = session.prompt("Sale date (YYYY-MM-DD HH:MM:SS): ", default=now.strftime("%Y-%m-%d %H:%M:%S"))
+			try:
+				tx_date = datetime.strptime(tx_data_raw, '%Y-%m-%d %H:%M:%S')
+			except ValueError:
+				print("Invalid date format. Use YYYY-MM-DD HH:MM:SS")
+
+		total_usd = float(quantity) * float(price)
+		print(f"Exchange: {exchange}")
+		print(f"Quantity: {quantity} BTC")
+		print(f"Price: ${price}/BTC")
+		print(f"Total: ${total_usd:.2f}")
+		print(f"Fee: ${fee}")
+		print(f"Net: ${total_usd - float(fee):.2f}")
+		print(f"Date: {tx_date}")
+
+		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
+		if record_tx == 'Y' or record_tx == 'y':
+			crypto = CryptoAccounts()
+			try:
+				crypto.execute_trade(
+					trade_date=tx_date,
+					buy=total_usd,
+					buy_curr="USD",
+					sell=float(quantity),
+					sell_curr="BTC",
+					fee=float(fee),
+					fee_curr="USD",
+					exchange=exchange,
+					group=group if group else None
+				)
+				print(f"Sale recorded. New balance: {crypto.get_balance('BTC'):.8f} BTC")
+				crypto.close()
+				break
+			except Exception as e:
+				print(f"Error recording sale: {e}")
+				crypto.close()
+	except KeyboardInterrupt:
+		break
+	except EOFError:
+		break
+
+print("Exiting...")

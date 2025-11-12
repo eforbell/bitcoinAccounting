@@ -1,3 +1,84 @@
-#!/usr/bin/python3 /home/forbell/bin/cryptoShell.py
+#!/usr/bin/env python3
+"""Record Bitcoin purchase transaction. See SCRIPTS_DEPLOYMENT.md for setup."""
+
+import sys
+import os
+
+# Establish Python module root from environment variables
+module_root = os.getenv('CRYPTO_ACCOUNTING_PYTHONPATH')
+if not module_root:
+	repo_root = os.getenv('REPO_ROOT')
+	if repo_root:
+		module_root = os.path.join(repo_root, 'src', 'python')
+
+if module_root and module_root not in sys.path:
+	sys.path.insert(0, module_root)
+
+try:
+	from cryptoAccounts import CryptoAccounts
+except ImportError as e:
+	print("ERROR: Could not import cryptoAccounts. Please set REPO_ROOT or CRYPTO_ACCOUNTING_PYTHONPATH", file=sys.stderr)
+	sys.exit(1)
+
+from prompt_toolkit import print_formatted_text as print
+from prompt_toolkit import HTML, PromptSession
+from prompt_toolkit.shortcuts import yes_no_dialog
+from datetime import datetime, timedelta
+
+now = datetime.now()
+session = PromptSession()
+
+while True:
+	try:
+		exchange = session.prompt("Exchange: ", default="Strike")
+		quantity = session.prompt("Quantity (BTC): ")
+		price = session.prompt("Price per BTC (USD): ")
+		fee = session.prompt("Fee (BTC): ", default="0")
+		group = session.prompt("Group (optional): ", default="")
+		
+		tx_date = None
+		while tx_date is None:
+			tx_data_raw = session.prompt("Purchase date (YYYY-MM-DD HH:MM:SS): ", default=now.strftime("%Y-%m-%d %H:%M:%S"))
+			try:
+				tx_date = datetime.strptime(tx_data_raw, '%Y-%m-%d %H:%M:%S')
+			except ValueError:
+				print("Invalid date format. Use YYYY-MM-DD HH:MM:SS")
+		
+		total_usd = float(quantity) * float(price)
+		print(f"Exchange: {exchange}")
+		print(f"Quantity: {quantity} BTC")
+		print(f"Price: ${price}/BTC")
+		print(f"Total: ${total_usd:.2f}")
+		print(f"Fee: {fee} BTC")
+		print(f"Date: {tx_date}")
+		
+	    # ask for confirmation (prompt returns a string)
+        record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
+	    if record_tx.lower() in ('y', 'yes'):
+			crypto = CryptoAccounts()
+			try:
+				crypto.execute_trade(
+					trade_date=tx_date,
+					buy=float(quantity),
+					buy_curr="BTC",
+					sell=total_usd,
+					sell_curr="USD",
+					fee=float(fee),
+					fee_curr="BTC",
+					exchange=exchange,
+					group=group if group else None
+				)
+				print(f"Transaction recorded. New balance: {crypto.get_balance('BTC'):.8f} BTC")
+				crypto.close()
+				break
+			except Exception as e:
+				print(f"Error recording transaction: {e}")
+				crypto.close()
+	except KeyboardInterrupt:
+		break
+	except EOFError:
+		break
+
+print("Exiting...")
 
 

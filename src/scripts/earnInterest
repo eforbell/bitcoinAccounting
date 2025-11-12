@@ -1,46 +1,76 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+"""Record interest or staking income. See SCRIPTS_DEPLOYMENT.md for setup."""
+
 import sys
+import os
+
+# Establish Python module root from environment variables
+module_root = os.getenv('CRYPTO_ACCOUNTING_PYTHONPATH')
+if not module_root:
+    repo_root = os.getenv('REPO_ROOT')
+    if repo_root:
+        module_root = os.path.join(repo_root, 'src', 'python')
+
+if module_root and module_root not in sys.path:
+    sys.path.insert(0, module_root)
+
+try:
+    from cryptoAccounts import CryptoAccounts
+except ImportError as e:
+    print("ERROR: Could not import cryptoAccounts. Please set REPO_ROOT or CRYPTO_ACCOUNTING_PYTHONPATH", file=sys.stderr)
+    sys.exit(1)
+
 from prompt_toolkit import print_formatted_text as print
-from prompt_toolkit import HTML, PromptSession
-from prompt_toolkit.validation import Validator, ValidationError
-from datetime import datetime, timedelta
+from prompt_toolkit import PromptSession
 from prompt_toolkit.shortcuts import yes_no_dialog
-from cryptoAccounts import CryptoAccounts
+from datetime import datetime
+
 now = datetime.now()
 session = PromptSession()
-while True:
-	try :
-		wallet = session.prompt("Wallet: ", default="River")
-		satsEarned = session.prompt("Received amount (sats):")
-		bitcoinPrice = session.prompt("Bitcoin price:")
-		tx_date = None
-		while tx_date is None:
-			tx_data_raw = session.prompt("Enter tx time: ", validator=None, default=now.strftime("%Y-%m-%d %H:%M:%S"))
-			try:
-				tx_date = datetime.strptime(tx_data_raw, '%Y-%m-%d %H:%M:%S')
-			except ValueError:
-				print("%s is not a datetime: (YY-mm-dd HH:MM:SS)" % tx_data_raw)
 
-		earnedInUSD = float(satsEarned) * float(bitcoinPrice)
-		print("USD interest earned: %s" % earnedInUSD)
-		print("Bitcoin exchanged: %s" % satsEarned)
-		print("Wallet: %s" % wallet)
-		print("TX time: %s" % tx_date)
-		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
-		if record_tx == 'Y' or record_tx == 'y':
-			crypto = CryptoAccounts()
-			crypto.interest(interest_date=tx_date, buy=earnedInUSD, buy_curr='USD', exchange=wallet)
-			tx_date = tx_date + timedelta(seconds=30)
-			crypto.execute_trade(exchange=wallet, trade_date=tx_date, buy=satsEarned, sell=earnedInUSD)
-			crypto.add_price_pair(pair_date=tx_date, to_curr="BTC", from_curr="USD", price=bitcoinPrice)
-			print("Recorded transaction.")
-			print("New balance (Destination): " + str(crypto.get_balance_by_account("BTC", wallet)))
-			print("New balance (Source): " + str(crypto.get_balance_by_account("BTC", wallet)))
-			crypto.close()
-			break
-	except KeyboardInterrupt:
-		break
-	except EOFError:
-		break
+while True:
+    try:
+        exchange = session.prompt("Exchange/Source: ", default="River")
+        currency = session.prompt("Currency: ", default="BTC")
+        amount = session.prompt(f"Amount ({currency}): ")
+        interest_type = session.prompt("Type (Interest/Staking/Yield): ", default="Interest Income")
+        
+        tx_date = None
+        while tx_date is None:
+            tx_data_raw = session.prompt("Date (YYYY-MM-DD HH:MM:SS): ", default=now.strftime("%Y-%m-%d %H:%M:%S"))
+            try:
+                tx_date = datetime.strptime(tx_data_raw, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                print("Invalid date format. Use YYYY-MM-DD HH:MM:SS")
+        
+        print(f"Exchange: {exchange}")
+        print(f"Currency: {currency}")
+        print(f"Amount: {amount}")
+        print(f"Type: {interest_type}")
+        print(f"Date: {tx_date}")
+        
+    confirm = yes_no_dialog(title="Record Income", text="Is this correct?").run()
+
+    if confirm:
+            crypto = CryptoAccounts()
+            try:
+                crypto.interest(
+                    interest_date=tx_date,
+                    buy=float(amount),
+                    buy_curr=currency,
+                    exchange=exchange,
+                    group=""
+                )
+                print(f"Income recorded. New balance: {crypto.get_balance(currency):.8f} {currency}")
+                crypto.close()
+                break
+            except Exception as e:
+                print(f"Error recording income: {e}")
+                crypto.close()
+    except KeyboardInterrupt:
+        break
+    except EOFError:
+        break
+
 print("Exiting...")
 

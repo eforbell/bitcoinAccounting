@@ -7,7 +7,9 @@ now = datetime.now()
 class CryptoAccounts(object):
 
     def __init__(self):
-        self.connection = psycopg2.connect(database="postgres", user="bitcoin_accounting", password="", host="numenor", port="5432", sslmode='require')
+        # Use config.connect() to centralize DB credentials and allow environment overrides
+        from config import connect
+        self.connection = connect()
 
 
     def close(self):
