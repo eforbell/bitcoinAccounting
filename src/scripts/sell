@@ -31,7 +31,9 @@ while True:
 		wallet_source = session.prompt("Bitcoin wallet source: ", default="CC")
 		exchange = session.prompt("Exchange: ", default="Strike")
 		quantity = session.prompt("Quantity (BTC) sold: ")
-		price = session.prompt("Sale price per BTC (USD): ")
+		# Prompt for total proceeds in USD rather than per-BTC price. The
+		# per-BTC price is computed for informational/display purposes.
+		total_usd_input = session.prompt("Total proceeds (USD): ")
 		fee = session.prompt("Fee (USD): ", default="0")
 
 		tx_date = None
@@ -42,11 +44,15 @@ while True:
 			except ValueError:
 				print("Invalid date format. Use YYYY-MM-DD HH:MM:SS")
 
-		total_usd = float(quantity) * float(price)
+		quantity_f = float(quantity)
+		total_usd = float(total_usd_input)
+		# Compute per-BTC price for display if quantity non-zero
+		computed_price = (total_usd / quantity_f) if quantity_f != 0 else None
 		print(f"Wallet source: {wallet_source}")
 		print(f"Exchange: {exchange}")
 		print(f"Quantity: {quantity} BTC")
-		print(f"Price: ${price}/BTC")
+		if computed_price is not None:
+			print(f"Price (computed): ${computed_price:.2f}/BTC")
 		print(f"Total: ${total_usd:.2f}")
 		print(f"Fee: ${fee}")
 		print(f"Net: ${total_usd - float(fee):.2f}")

@@ -32,7 +32,10 @@ while True:
 	try:
 		exchange = session.prompt("Exchange: ", default="Strike")
 		quantity = session.prompt("Quantity (BTC): ")
-		price = session.prompt("Price per BTC (USD): ")
+		# Instead of asking for price per BTC, ask for the total USD cost
+		# (the recorded value you care about). The per-BTC price is
+		# computed for informational purposes only.
+		total_usd_input = session.prompt("Total cost (USD): ")
 		fee = session.prompt("Fee (BTC): ", default="0")
 		group = session.prompt("Group (optional): ", default="")
 		
@@ -44,10 +47,15 @@ while True:
 			except ValueError:
 				print("Invalid date format. Use YYYY-MM-DD HH:MM:SS")
 		
-		total_usd = float(quantity) * float(price)
+		# Convert numeric inputs
+		quantity_f = float(quantity)
+		total_usd = float(total_usd_input)
+		# Compute per-BTC price for display if quantity is non-zero
+		computed_price = (total_usd / quantity_f) if quantity_f != 0 else None
 		print(f"Exchange: {exchange}")
 		print(f"Quantity: {quantity} BTC")
-		print(f"Price: ${price}/BTC")
+		if computed_price is not None:
+			print(f"Price (computed): ${computed_price:.2f}/BTC")
 		print(f"Total: ${total_usd:.2f}")
 		print(f"Fee: {fee} BTC")
 		print(f"Date: {tx_date}")
