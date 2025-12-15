@@ -21,11 +21,12 @@ conn = connect()
 
 def connect():
     params = {
-        'host': os.getenv('PGHOST', '127.0.0.1'),
+        'host': os.getenv('PGHOST', '192.0.2.10'),
         'port': os.getenv('PGPORT', '5432'),
         'user': os.getenv('PGUSER', 'bitcoin_accounting'),
-        'password': os.getenv('PGPASSWORD', ''),
-        'database': os.getenv('PGDATABASE', 'crypto')
+        'password': os.getenv('PGPASSWORD', 'REDACTED-ROTATED'),
+        'database': os.getenv('PGDATABASE', 'postgres'),
+        'connect_timeout': 5
     }
     sslmode = os.getenv('PGSSLMODE')
     if sslmode:
