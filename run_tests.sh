@@ -48,8 +48,15 @@ cd "$SCRIPT_DIR"
 # Print header
 echo -e "\n${CYAN}=== cryptoAccounting Test Runner ===${NC}"
 
+# Check for local virtualenv and prefer it if available
+if [ -f "$SCRIPT_DIR/.venv/bin/python" ]; then
+    PYTHON_CMD="$SCRIPT_DIR/.venv/bin/python"
+    echo -e "${GREEN}Using local virtualenv: .venv${NC}"
+elif [ -f "$SCRIPT_DIR/venv/bin/python" ]; then
+    PYTHON_CMD="$SCRIPT_DIR/venv/bin/python"
+    echo -e "${GREEN}Using local virtualenv: venv${NC}"
 # Check if Python is available
-if ! command -v python3 &> /dev/null; then
+elif ! command -v python3 &> /dev/null; then
     if ! command -v python &> /dev/null; then
         echo -e "${RED}ERROR: Python is not installed or not in PATH${NC}"
         exit 1
