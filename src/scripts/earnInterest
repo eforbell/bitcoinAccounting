@@ -2,23 +2,8 @@
 """Record interest or staking income. See SCRIPTS_DEPLOYMENT.md for setup."""
 
 import sys
-import os
-
-# Establish Python module root from environment variables
-module_root = os.getenv('CRYPTO_ACCOUNTING_PYTHONPATH')
-if not module_root:
-    repo_root = os.getenv('REPO_ROOT')
-    if repo_root:
-        module_root = os.path.join(repo_root, 'src', 'python')
-
-if module_root and module_root not in sys.path:
-    sys.path.insert(0, module_root)
-
-try:
-    from cryptoAccounts import CryptoAccounts
-except ImportError as e:
-    print("ERROR: Could not import cryptoAccounts. Please set REPO_ROOT or CRYPTO_ACCOUNTING_PYTHONPATH", file=sys.stderr)
-    sys.exit(1)
+import _bootstrap
+from cryptoAccounts import CryptoAccounts
 
 from prompt_toolkit import print_formatted_text as print
 from prompt_toolkit import PromptSession
