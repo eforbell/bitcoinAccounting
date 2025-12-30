@@ -312,5 +312,211 @@ class CryptoAccounts(object):
     def getInterestIncomeQuery(self):
         return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (%s, 'Interest Income', %s, %s, %s, %s)"
 
-   
+    def get_sales_for_1099b(self, coin='BTC', tax_year=2024):
+        """
+        Generate 1099-B data for sales of a coin in a given tax year using FIFO cost basis.
+        
+        Returns:
+            tuple: (sales_list, worksheet_list)
+            - sales_list: list of dicts formatted for TaxAct 1099-B CSV import
+            - worksheet_list: list of dicts with detailed calculation breakdown
+        """
+        from datetime import datetime
+        from decimal import Decimal
+        
+        cur = self.connection.cursor()
+        
+        # Get all purchases (trades) with cost basis calculated using get_trade_cost_new
+        trade_purchase_query = """
+            SELECT date, quantity, unit_cost, total_cost, exchange
+            FROM get_trade_cost_new(%s, 'USD')
+            WHERE quantity > 0
+            ORDER BY date ASC
+        """
+        
+        # Get interest income separately (not included in get_trade_cost_new)
+        interest_purchase_query = """
+            SELECT l.createddate as date, l.buy as quantity, 
+                   COALESCE(pp.price, 0) as unit_cost,
+                   COALESCE(l.buy * pp.price, 0) as total_cost,
+                   l.exchange
+            FROM ledger l
+            LEFT JOIN pair_price pp ON pp.from_curr = l.buy_curr 
+                AND pp.to_curr = 'USD' 
+                AND pp.date::date = l.createddate::date
+            WHERE l.buy_curr = %s 
+                AND l.trans_type = 'Interest Income'
+                AND l.buy > 0
+            ORDER BY l.createddate ASC
+        """
+        
+        # Get ALL sales through the end of the tax year (not just sales IN the tax year)
+        # This is critical for FIFO: we must account for all prior year sales that
+        # consumed the purchase queue before we calculate basis for the current tax year
+        sale_query = """
+            SELECT createddate, sell as quantity, exchange, id
+            FROM ledger
+            WHERE sell_curr = %s 
+                AND trans_type = 'Trade'
+                AND sell > 0
+                AND createddate <= %s
+            ORDER BY createddate ASC
+        """
+        
+        cur.execute(trade_purchase_query, (coin,))
+        trade_purchases = cur.fetchall()
+        
+        cur.execute(interest_purchase_query, (coin,))
+        interest_purchases = cur.fetchall()
+        
+        # Combine and sort all purchases by date
+        all_purchases = list(trade_purchases) + list(interest_purchases)
+        all_purchases.sort(key=lambda x: x[0])  # Sort by date
+        
+        # Get sales through end of tax year
+        tax_year_end = datetime(tax_year, 12, 31, 23, 59, 59)
+        cur.execute(sale_query, (coin, tax_year_end))
+        sales = cur.fetchall()
+        
+        if not sales:
+            return [], []
+        
+        # Build purchase queue for FIFO matching
+        purchase_queue = []
+        for purchase in all_purchases:
+            purchase_date, quantity, unit_cost, total_cost, exchange = purchase
+            
+            # unit_cost and total_cost are already calculated
+            unit_cost_val = float(unit_cost) if unit_cost else 0.0
+            
+            purchase_queue.append({
+                'date': purchase_date,
+                'quantity_remaining': float(quantity),
+                'unit_cost': unit_cost_val,
+                'exchange': exchange
+            })
+        
+        # Process each sale using FIFO
+        # We process ALL sales chronologically to properly consume the FIFO queue,
+        # but only output 1099-B entries for sales within the specific tax year
+        results = []
+        worksheet = []
+        tax_year_start = datetime(tax_year, 1, 1, 0, 0, 0)
+        
+        for sale in sales:
+            sale_date, sale_quantity, sale_exchange, sale_id = sale
+            sale_quantity = float(sale_quantity)
+            
+            # Check if this sale is within the tax year we're reporting
+            sale_in_tax_year = (sale_date >= tax_year_start and sale_date <= tax_year_end)
+            
+            # Get proceeds only if we need to report this sale
+            if sale_in_tax_year:
+                # Get proceeds (what we sold the coin for in USD)
+                proceeds_query = """
+                    SELECT unit_cost, total_cost
+                    FROM get_trade_cost_new(%s, 'USD')
+                    WHERE date = %s AND quantity < 0
+                    LIMIT 1
+                """
+                cur.execute(proceeds_query, (coin, sale_date))
+                proceeds_result = cur.fetchone()
+                
+                if proceeds_result and proceeds_result[1]:
+                    proceeds_total = abs(float(proceeds_result[1]))
+                    proceeds_per_unit = abs(float(proceeds_result[0]))
+                else:
+                    # Try pair_price as fallback
+                    price_query = """
+                        SELECT price FROM pair_price
+                        WHERE to_curr = 'USD' AND from_curr = %s
+                            AND date::date = %s::date
+                        LIMIT 1
+                    """
+                    cur.execute(price_query, (coin, sale_date))
+                    price_result = cur.fetchone()
+                    proceeds_per_unit = float(price_result[0]) if price_result else 0.0
+                    proceeds_total = sale_quantity * proceeds_per_unit
+            
+            # Match this sale with purchases using FIFO
+            quantity_to_match = sale_quantity
+            matched_purchases = []
+            
+            for purchase in purchase_queue:
+                if quantity_to_match <= 0:
+                    break
+                
+                if purchase['quantity_remaining'] > 0:
+                    # Determine how much of this purchase applies to this sale
+                    match_quantity = min(quantity_to_match, purchase['quantity_remaining'])
+                    
+                    matched_purchases.append({
+                        'acquire_date': purchase['date'],
+                        'quantity': match_quantity,
+                        'unit_cost': purchase['unit_cost'],
+                        'cost_basis': match_quantity * purchase['unit_cost']
+                    })
+                    
+                    purchase['quantity_remaining'] -= match_quantity
+                    quantity_to_match -= match_quantity
+            
+            # Check if there's unmatched quantity (missing basis)
+            if quantity_to_match > 0.00000001:  # Allow for floating point precision
+                # Add entry for unmatched quantity with $0 basis
+                matched_purchases.append({
+                    'acquire_date': None,  # Unknown acquisition date
+                    'quantity': quantity_to_match,
+                    'unit_cost': 0.0,
+                    'cost_basis': 0.0
+                })
+            
+            # Create 1099-B entries (one per purchase lot matched)
+            # But only for sales within the tax year we're reporting
+            if sale_in_tax_year:
+                for match in matched_purchases:
+                    # Handle missing basis (no acquisition date)
+                    if match['acquire_date'] is None:
+                        acquire_date_str = 'UNKNOWN'
+                        holding_days = 0
+                        term = 'Short'  # Conservative: report as short-term
+                    else:
+                        acquire_date_str = match['acquire_date'].strftime('%m/%d/%Y')
+                        holding_days = (sale_date - match['acquire_date']).days
+                        term = 'Long' if holding_days >= 365 else 'Short'
+                    
+                    # Calculate proportional proceeds for this lot
+                    lot_proceeds = (match['quantity'] / sale_quantity) * proceeds_total
+                    gain_loss = lot_proceeds - match['cost_basis']
+                    
+                    # Add to 1099-B form output
+                    result = {
+                        'Description': f"{match['quantity']:.8f} {coin}",
+                        'Date Acquired': acquire_date_str,
+                        'Date Sold': sale_date.strftime('%m/%d/%Y'),
+                        'Proceeds': f"{lot_proceeds:.2f}",
+                        'Cost Basis': f"{match['cost_basis']:.2f}",
+                        'Adjustment Code': '',
+                        'Adjustment Amount': '',
+                        'Wash Sale Loss': '',
+                        'Form': '8949',
+                        'Term': term
+                    }
+                    results.append(result)
+                    
+                    # Add to detailed worksheet
+                    worksheet_entry = {
+                        'Sale Date': sale_date.strftime('%m/%d/%Y'),
+                        'Sale Quantity': f"{sale_quantity:.8f}",
+                        'Proceeds': f"{lot_proceeds:.2f}",
+                        'Acquire Date': acquire_date_str,
+                        'Lot Quantity': f"{match['quantity']:.8f}",
+                        'Unit Cost Basis': f"{match['unit_cost']:.2f}",
+                        'Total Cost Basis': f"{match['cost_basis']:.2f}",
+                        'Holding Days': str(holding_days) if match['acquire_date'] else 'UNKNOWN',
+                        'Term': term,
+                        'Gain/Loss': f"{gain_loss:.2f}"
+                    }
+                    worksheet.append(worksheet_entry)
+        
+        return results, worksheet
 

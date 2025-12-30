@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Export 1099-B tax form data for TaxAct import.
+
+Exports capital gains/losses from cryptocurrency sales for the specified tax year.
+Uses FIFO (First-In-First-Out) method for cost basis calculation.
+
+Usage:
+    export_1099b <TAX_YEAR> [OUTPUT_FILE] [COIN]
+    
+Examples:
+    export_1099b 2024
+    export_1099b 2024 tax_2024.csv
+    export_1099b 2024 tax_2024.csv BTC
+"""
+
+import sys
+import csv
+from datetime import datetime, timedelta
+import _bootstrap
+from cryptoAccounts import CryptoAccounts
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: export_1099b <TAX_YEAR> [OUTPUT_FILE] [COIN]")
+        print("Example: export_1099b 2024 tax_2024.csv BTC")
+        sys.exit(1)
+    
+    try:
+        tax_year = int(sys.argv[1])
+    except ValueError:
+        print(f"ERROR: Invalid tax year '{sys.argv[1]}'. Must be a 4-digit year.", file=sys.stderr)
+        sys.exit(1)
+    
+    # Validate tax year
+    if tax_year < 2009 or tax_year > datetime.now().year:
+        print(f"ERROR: Tax year {tax_year} is out of valid range (2009-{datetime.now().year})", file=sys.stderr)
+        sys.exit(1)
+    
+    if len(sys.argv) > 2:
+        output_file = sys.argv[2]
+    else:
+        output_file = f"1099b_{tax_year}.csv"
+    
+    if len(sys.argv) > 3:
+        coin = sys.argv[3]
+    else:
+        coin = "BTC"
+    
+    crypto = CryptoAccounts()
+    
+    try:
+        print(f"Generating 1099-B for {coin} sales in tax year {tax_year}...")
+        print(f"Date range: 01/01/{tax_year} - 12/31/{tax_year}")
+        
+        sales, worksheet = crypto.get_sales_for_1099b(coin, tax_year)
+        
+        if not sales:
+            print(f"No {coin} sales found for tax year {tax_year}")
+            sys.exit(0)
+        
+        # Write detailed calculation worksheet
+        worksheet_file = output_file.replace('.csv', '_worksheet.csv')
+        with open(worksheet_file, 'w', newline='') as csvfile:
+            fieldnames = [
+                'Sale Date',
+                'Sale Quantity',
+                'Proceeds',
+                'Acquire Date',
+                'Lot Quantity',
+                'Unit Cost Basis',
+                'Total Cost Basis',
+                'Holding Days',
+                'Term',
+                'Gain/Loss'
+            ]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(worksheet)
+        
+        # Write TaxAct CSV format
+        with open(output_file, 'w', newline='') as csvfile:
+            fieldnames = [
+                'Description',
+                'Date Acquired',
+                'Date Sold',
+                'Proceeds',
+                'Cost Basis',
+                'Adjustment Code',
+                'Adjustment Amount',
+                'Wash Sale Loss',
+                'Form',
+                'Term'
+            ]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            total_proceeds = 0
+            total_cost_basis = 0
+            short_term_count = 0
+            long_term_count = 0
+            missing_basis_count = 0
+            missing_basis_quantity = 0.0
+            
+            for sale in sales:
+                writer.writerow(sale)
+                total_proceeds += float(sale['Proceeds'])
+                total_cost_basis += float(sale['Cost Basis'])
+                if sale['Term'] == 'Short':
+                    short_term_count += 1
+                else:
+                    long_term_count += 1
+                
+                # Track missing basis entries
+                if sale['Date Acquired'] == 'UNKNOWN':
+                    missing_basis_count += 1
+                    missing_basis_quantity += float(sale['Description'].split()[0])
+            
+            total_gain = total_proceeds - total_cost_basis
+        
+        print(f"\n{'=' * 70}")
+        print(f"1099-B Export Summary for {tax_year}")
+        print(f"{'=' * 70}")
+        print(f"Total sales: {short_term_count + long_term_count}")
+        print(f"  Short-term (<1 year): {short_term_count}")
+        print(f"  Long-term (≥1 year):  {long_term_count}")
+        print(f"\nTotal proceeds:    ${total_proceeds:,.2f}")
+        print(f"Total cost basis:  ${total_cost_basis:,.2f}")
+        print(f"Net gain/(loss):   ${total_gain:,.2f}")
+        
+        if missing_basis_count > 0:
+            print(f"\n{'!' * 70}")
+            print(f"WARNING: Missing cost basis detected!")
+            print(f"  {missing_basis_count} lot(s) with UNKNOWN acquisition date")
+            print(f"  Total quantity with missing basis: {missing_basis_quantity:.8f} {coin}")
+            print(f"  These entries show $0.00 cost basis (maximizes tax liability)")
+            print(f"  Review your transaction history to find missing purchase records")
+            print(f"{'!' * 70}")
+        
+        print(f"{'=' * 70}")
+        print(f"\nExported files:")
+        print(f"  1099-B form:     {output_file}")
+        print(f"  Calc worksheet:  {worksheet_file}")
+        print(f"\nImport {output_file} into TaxAct under:")
+        print(f"  Federal Taxes > Income > Investment Income > Stocks, Mutual Funds...")
+        print(f"  > Import 1099-B from CSV")
+        
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        crypto.close()
+
+
+if __name__ == '__main__':
+    main()
