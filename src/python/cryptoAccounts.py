@@ -749,8 +749,12 @@ class CryptoAccounts(object):
         
         return lots, summary
 
-    def get_wallets(self):
-        """Get list of all wallets with metadata (if wallets table exists)."""
+    def get_wallets(self, active_only=False):
+        """Get list of all wallets with metadata (if wallets table exists).
+        
+        Args:
+            active_only: If True, only return active wallets. Default False returns all.
+        """
         cur = self.connection.cursor()
         
         # Check if wallets table exists
@@ -765,12 +769,14 @@ class CryptoAccounts(object):
         
         if wallets_table_exists:
             # Get wallet metadata from wallets table
-            cur.execute("""
+            active_filter = "WHERE active = true" if active_only else ""
+            query = f"""
                 SELECT wallet_id, wallet_type, custody, description, active
                 FROM wallets
-                WHERE active = true
+                {active_filter}
                 ORDER BY wallet_id
-            """)
+            """
+            cur.execute(query)
             return [{'wallet_id': row[0], 'type': row[1], 'custody': row[2], 
                     'description': row[3], 'active': row[4]} 
                    for row in cur.fetchall()]

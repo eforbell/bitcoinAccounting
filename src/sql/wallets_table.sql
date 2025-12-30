@@ -16,15 +16,6 @@ CREATE TABLE public.wallets (
 INSERT INTO public.wallets (wallet_id, wallet_type, custody, description) VALUES
     ('Strike', 'exchange', 'custodial', 'Strike account - custodial exchange wallet'),
     ('River', 'exchange', 'custodial', 'River Financial account - custodial exchange wallet'),
-    ('Vault', 'hardware', 'self-custodied', 'Cold storage hardware wallet (main seed)'),
-    ('Ledger-2', 'hardware', 'self-custodied', 'Ledger hardware wallet (secondary seed)'),
-    ('CC', 'software', 'self-custodied', 'Casa Connect wallet'),
-    ('LN', 'lightning', 'self-custodied', 'Lightning Network node wallet'),
-    ('Kraken', 'exchange', 'custodial', 'Kraken exchange account'),
-    ('Coinbase Pro', 'exchange', 'custodial', 'Coinbase Pro trading account'),
-    ('Swan Bitcoin', 'exchange', 'custodial', 'Swan Bitcoin DCA account'),
-    ('Muun', 'software', 'self-custodied', 'Muun mobile wallet'),
-    ('Bitkey', 'hardware', 'multisig', 'Bitkey 2-of-3 multisig wallet');
 
 -- Grant permissions
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.wallets TO "bitcoin_accounting";

@@ -5,10 +5,11 @@ Helps understand your holdings distribution across different wallets/exchanges.
 Useful for understanding IRS "per-wallet" accounting requirements (2025+).
 
 Usage:
-    wallet_balances [COIN]
+    wallet_balances [COIN] [--all]
     
 Examples:
     wallet_balances BTC
+    wallet_balances BTC --all    # Include inactive wallets
     wallet_balances ALGO
 """
 
@@ -18,10 +19,15 @@ from cryptoAccounts import CryptoAccounts
 
 
 def main():
-    if len(sys.argv) > 1:
-        coin = sys.argv[1].upper()
-    else:
-        coin = 'BTC'
+    # Parse arguments
+    show_all = False
+    coin = 'BTC'
+    
+    for arg in sys.argv[1:]:
+        if arg == '--all':
+            show_all = True
+        else:
+            coin = arg.upper()
     
     crypto = CryptoAccounts()
     
@@ -36,40 +42,48 @@ def main():
             print(f"No {coin} holdings found")
             sys.exit(0)
         
-        # Get wallet metadata if available
-        wallets_metadata = {w['wallet_id']: w for w in crypto.get_wallets()}
+        # Get wallet metadata (include inactive wallets)
+        wallets_metadata = {w['wallet_id']: w for w in crypto.get_wallets(active_only=False)}
         
-        print(f"\n{'=' * 80}")
+        print(f"\n{'=' * 90}")
         print(f"{coin} Holdings by Wallet/Account")
-        print(f"{'=' * 80}")
+        if not show_all:
+            print(f"(Active wallets only - use --all to show inactive)")
+        print(f"{'=' * 90}")
         print(f"Total balance: {total_balance:.8f} {coin}\n")
         
         # Sort by balance (largest first)
         sorted_wallets = sorted(wallet_balances.items(), key=lambda x: x[1], reverse=True)
         
-        print(f"{'Wallet/Account':<20} {'Balance':>15} {'%':>8} {'Type':<12} {'Custody':<15}")
-        print(f"{'-' * 80}")
+        print(f"{'Wallet/Account':<20} {'Balance':>15} {'%':>8} {'Type':<12} {'Custody':<15} {'Status':<8}")
+        print(f"{'-' * 90}")
         
         for wallet_id, balance in sorted_wallets:
             if abs(balance) < 0.00000001:  # Skip dust
                 continue
-            
-            percentage = (balance / total_balance * 100) if total_balance > 0 else 0
             
             # Get metadata if available
             if wallet_id in wallets_metadata:
                 meta = wallets_metadata[wallet_id]
                 wallet_type = meta['type']
                 custody = meta['custody']
+                status = 'Active' if meta['active'] else 'Inactive'
+                
+                # Skip inactive wallets unless --all flag is set
+                if not show_all and not meta['active']:
+                    continue
             else:
                 wallet_type = 'unknown'
                 custody = 'unknown'
+                status = 'Unknown'
             
-            print(f"{wallet_id:<20} {balance:>15.8f} {percentage:>7.2f}% {wallet_type:<12} {custody:<15}")
+            percentage = (balance / total_balance * 100) if total_balance > 0 else 0
+            
+            print(f"{wallet_id:<20} {balance:>15.8f} {percentage:>7.2f}% {wallet_type:<12} {custody:<15} {status:<8}")
         
-        print(f"{'-' * 80}")
+        print(f"{'-' * 90}")
         print(f"{'TOTAL':<20} {total_balance:>15.8f} {'100.00%':>8}")
-        print(f"{'=' * 80}\n")
+        print(f"{'=' * 90}\n")
         
         # Summary by custody type
         custodial_balance = 0
@@ -93,7 +107,7 @@ def main():
         
         if custodial_balance > 0 or self_custodied_balance > 0:
             print("Custody Breakdown:")
-            print(f"{'-' * 80}")
+            print(f"{'-' * 90}")
             if custodial_balance > 0:
                 pct = (custodial_balance / total_balance * 100) if total_balance > 0 else 0
                 print(f"  Custodial (exchanges):  {custodial_balance:>12.8f} {coin} ({pct:>6.2f}%)")
@@ -106,7 +120,7 @@ def main():
             if unknown_balance > 0:
                 pct = (unknown_balance / total_balance * 100) if total_balance > 0 else 0
                 print(f"  Unknown:                {unknown_balance:>12.8f} {coin} ({pct:>6.2f}%)")
-            print(f"{'=' * 80}\n")
+            print(f"{'=' * 90}\n")
         
         # Note about 2025 IRS rules
         print("Note: For 2025+ tax reporting, each wallet/account maintains separate")
