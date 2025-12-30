@@ -5,12 +5,14 @@ Exports capital gains/losses from cryptocurrency sales for the specified tax yea
 Uses FIFO (First-In-First-Out) method for cost basis calculation.
 
 Usage:
-    export_1099b <TAX_YEAR> [OUTPUT_FILE] [COIN]
+    export_1099b <TAX_YEAR> [OUTPUT_FILE] [COIN] [--wallet=WALLET_ID]
     
 Examples:
     export_1099b 2024
     export_1099b 2024 tax_2024.csv
     export_1099b 2024 tax_2024.csv BTC
+    export_1099b 2024 tax_2024.csv BTC --wallet=Strike
+    export_1099b 2024 tax_2024.csv BTC --wallet=CC
 """
 
 import sys
@@ -22,14 +24,23 @@ from cryptoAccounts import CryptoAccounts
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: export_1099b <TAX_YEAR> [OUTPUT_FILE] [COIN]")
-        print("Example: export_1099b 2024 tax_2024.csv BTC")
+        print("Usage: export_1099b <TAX_YEAR> [OUTPUT_FILE] [COIN] [--wallet=WALLET_ID]")
+        print("Example: export_1099b 2024 tax_2024.csv BTC --wallet=Strike")
         sys.exit(1)
     
+    # Parse arguments
+    wallet = None
+    args = []
+    for arg in sys.argv[1:]:
+        if arg.startswith('--wallet='):
+            wallet = arg.split('=', 1)[1]
+        else:
+            args.append(arg)
+    
     try:
-        tax_year = int(sys.argv[1])
+        tax_year = int(args[0])
     except ValueError:
-        print(f"ERROR: Invalid tax year '{sys.argv[1]}'. Must be a 4-digit year.", file=sys.stderr)
+        print(f"ERROR: Invalid tax year '{args[0]}'. Must be a 4-digit year.", file=sys.stderr)
         sys.exit(1)
     
     # Validate tax year
@@ -37,23 +48,53 @@ def main():
         print(f"ERROR: Tax year {tax_year} is out of valid range (2009-{datetime.now().year})", file=sys.stderr)
         sys.exit(1)
     
-    if len(sys.argv) > 2:
-        output_file = sys.argv[2]
+    if len(args) > 1:
+        output_file = args[1]
     else:
-        output_file = f"1099b_{tax_year}.csv"
+        wallet_suffix = f"_{wallet}" if wallet else ""
+        output_file = f"1099b_{tax_year}{wallet_suffix}.csv"
     
-    if len(sys.argv) > 3:
-        coin = sys.argv[3]
+    if len(args) > 2:
+        coin = args[2]
     else:
         coin = "BTC"
     
     crypto = CryptoAccounts()
     
     try:
-        print(f"Generating 1099-B for {coin} sales in tax year {tax_year}...")
-        print(f"Date range: 01/01/{tax_year} - 12/31/{tax_year}")
+        wallet_label = f" from {wallet} wallet" if wallet else ""
         
-        sales, worksheet = crypto.get_sales_for_1099b(coin, tax_year)
+        # Warn if using global FIFO for 2025+ (non-compliant)
+        if tax_year >= 2025 and wallet is None:
+            print(f"\n{'!' * 70}")
+            print(f"WARNING: Tax year {tax_year} requires per-wallet accounting")
+            print(f"(IRS Revenue Procedure 2024-28, effective 2025)")
+            print(f"")
+            print(f"Using global FIFO may not be IRS compliant.")
+            print(f"Consider running separate reports per wallet:")
+            print(f"  export_1099b {tax_year} output.csv {coin} --wallet=Vault")
+            print(f"  export_1099b {tax_year} output.csv {coin} --wallet=Strike")
+            print(f"  etc.")
+            print(f"{'!' * 70}\n")
+            response = input("Continue with global FIFO? (y/n): ")
+            if response.lower() != 'y':
+                print("Aborted.")
+                sys.exit(0)
+        
+        print(f"Generating 1099-B for {coin} sales{wallet_label} in tax year {tax_year}...")
+        print(f"Date range: 01/01/{tax_year} - 12/31/{tax_year}")
+        if tax_year < 2025:
+            print(f"Method: Universal FIFO (pre-2025 rules)")
+        else:
+            print(f"Method: {'Per-wallet' if wallet else 'Global'} FIFO (2025+ rules)")
+        print()
+        
+        if wallet:
+            # Verify wallet exists
+            wallet_balance = crypto.get_wallet_balance(coin, wallet)
+            print(f"Wallet balance: {wallet_balance:.8f} {coin}")
+        
+        sales, worksheet = crypto.get_sales_for_1099b(coin, tax_year, wallet=wallet)
         
         if not sales:
             print(f"No {coin} sales found for tax year {tax_year}")

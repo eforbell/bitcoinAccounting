@@ -312,9 +312,20 @@ class CryptoAccounts(object):
     def getInterestIncomeQuery(self):
         return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (%s, 'Interest Income', %s, %s, %s, %s)"
 
-    def get_sales_for_1099b(self, coin='BTC', tax_year=2024):
+    def get_sales_for_1099b(self, coin='BTC', tax_year=2024, wallet=None):
         """
         Generate 1099-B data for sales of a coin in a given tax year using FIFO cost basis.
+        
+        Tax year determines accounting method:
+        - Pre-2025: Universal FIFO (wallet parameter optional for user preference)
+        - 2025+: Per-wallet FIFO (wallet parameter should be specified for compliance)
+        
+        Args:
+            coin: Cryptocurrency symbol
+            tax_year: Tax year for reporting  
+            wallet: Optional wallet filter
+                    - Pre-2025: Optional (can use global FIFO)
+                    - 2025+: Recommended (IRS requires per-wallet accounting)
         
         Returns:
             tuple: (sales_list, worksheet_list)
@@ -324,18 +335,29 @@ class CryptoAccounts(object):
         from datetime import datetime
         from decimal import Decimal
         
+        # Validate wallet requirement for 2025+
+        if tax_year >= 2025 and wallet is None:
+            import warnings
+            warnings.warn(
+                f"Per-wallet accounting is required for tax year {tax_year} (IRS Rev. Proc. 2024-28). "
+                f"Using global FIFO may not be compliant. Consider specifying --wallet parameter.",
+                UserWarning
+            )
+        
         cur = self.connection.cursor()
         
         # Get all purchases (trades) with cost basis calculated using get_trade_cost_new
-        trade_purchase_query = """
+        # Filter by wallet if specified for per-wallet FIFO
+        wallet_filter_sql = "AND exchange = %s" if wallet else ""
+        trade_purchase_query = f"""
             SELECT date, quantity, unit_cost, total_cost, exchange
             FROM get_trade_cost_new(%s, 'USD')
-            WHERE quantity > 0
+            WHERE quantity > 0 {wallet_filter_sql}
             ORDER BY date ASC
         """
         
         # Get interest income separately (not included in get_trade_cost_new)
-        interest_purchase_query = """
+        interest_purchase_query = f"""
             SELECT l.createddate as date, l.buy as quantity, 
                    COALESCE(pp.price, 0) as unit_cost,
                    COALESCE(l.buy * pp.price, 0) as total_cost,
@@ -347,27 +369,37 @@ class CryptoAccounts(object):
             WHERE l.buy_curr = %s 
                 AND l.trans_type = 'Interest Income'
                 AND l.buy > 0
+                {wallet_filter_sql}
             ORDER BY l.createddate ASC
         """
         
         # Get ALL sales through the end of the tax year (not just sales IN the tax year)
         # This is critical for FIFO: we must account for all prior year sales that
         # consumed the purchase queue before we calculate basis for the current tax year
-        sale_query = """
+        sale_query = f"""
             SELECT createddate, sell as quantity, exchange, id
             FROM ledger
             WHERE sell_curr = %s 
                 AND trans_type = 'Trade'
                 AND sell > 0
                 AND createddate <= %s
+                {wallet_filter_sql}
             ORDER BY createddate ASC
         """
         
-        cur.execute(trade_purchase_query, (coin,))
-        trade_purchases = cur.fetchall()
-        
-        cur.execute(interest_purchase_query, (coin,))
-        interest_purchases = cur.fetchall()
+        # Execute queries with wallet parameter if specified
+        if wallet:
+            cur.execute(trade_purchase_query, (coin, wallet))
+            trade_purchases = cur.fetchall()
+            
+            cur.execute(interest_purchase_query, (coin, wallet))
+            interest_purchases = cur.fetchall()
+        else:
+            cur.execute(trade_purchase_query, (coin,))
+            trade_purchases = cur.fetchall()
+            
+            cur.execute(interest_purchase_query, (coin,))
+            interest_purchases = cur.fetchall()
         
         # Combine and sort all purchases by date
         all_purchases = list(trade_purchases) + list(interest_purchases)
@@ -375,7 +407,10 @@ class CryptoAccounts(object):
         
         # Get sales through end of tax year
         tax_year_end = datetime(tax_year, 12, 31, 23, 59, 59)
-        cur.execute(sale_query, (coin, tax_year_end))
+        if wallet:
+            cur.execute(sale_query, (coin, tax_year_end, wallet))
+        else:
+            cur.execute(sale_query, (coin, tax_year_end))
         sales = cur.fetchall()
         
         if not sales:
@@ -519,4 +554,279 @@ class CryptoAccounts(object):
                     worksheet.append(worksheet_entry)
         
         return results, worksheet
+
+    def forecast_capital_gains_fifo(self, coin='BTC', quantity=1.0, sale_price_usd=None, wallet=None):
+        """
+        Forecast capital gains for a hypothetical sale using FIFO basis.
+        
+        Does not record any transactions - for planning purposes only.
+        
+        Args:
+            coin: The cryptocurrency to simulate selling
+            quantity: How much to sell
+            sale_price_usd: Sale price per unit in USD (if None, uses current market)
+            wallet: Optional wallet filter for per-wallet FIFO (2025+ compliance)
+        
+        Returns:
+            tuple: (lots_list, summary_dict)
+            - lots_list: List of lots that would be sold (FIFO order)
+            - summary_dict: Summary statistics (totals, short/long breakdown)
+        """
+        from datetime import datetime
+        
+        cur = self.connection.cursor()
+        
+        # Build wallet filter clause
+        wallet_filter_sql = "AND exchange = %s" if wallet else ""
+        
+        # Get all purchases (same logic as 1099-B export)
+        trade_purchase_query = f"""
+            SELECT date, quantity, unit_cost, total_cost, exchange
+            FROM get_trade_cost_new(%s, 'USD')
+            WHERE quantity > 0 {wallet_filter_sql}
+            ORDER BY date ASC
+        """
+        
+        interest_purchase_query = f"""
+            SELECT l.createddate as date, l.buy as quantity, 
+                   COALESCE(pp.price, 0) as unit_cost,
+                   COALESCE(l.buy * pp.price, 0) as total_cost,
+                   l.exchange
+            FROM ledger l
+            LEFT JOIN pair_price pp ON pp.from_curr = l.buy_curr 
+                AND pp.to_curr = 'USD' 
+                AND pp.date::date = l.createddate::date
+            WHERE l.buy_curr = %s 
+                AND l.trans_type = 'Interest Income'
+                AND l.buy > 0
+                {wallet_filter_sql}
+            ORDER BY l.createddate ASC
+        """
+        
+        if wallet:
+            cur.execute(trade_purchase_query, (coin, wallet))
+            trade_purchases = cur.fetchall()
+            
+            cur.execute(interest_purchase_query, (coin, wallet))
+            interest_purchases = cur.fetchall()
+        else:
+            cur.execute(trade_purchase_query, (coin,))
+            trade_purchases = cur.fetchall()
+            
+            cur.execute(interest_purchase_query, (coin,))
+            interest_purchases = cur.fetchall()
+        
+        # Combine and sort all purchases by date
+        all_purchases = list(trade_purchases) + list(interest_purchases)
+        all_purchases.sort(key=lambda x: x[0])
+        
+        if not all_purchases:
+            return [], {}
+        
+        # Get all sales through today to consume FIFO queue properly
+        # Filter by wallet if specified
+        sale_query = f"""
+            SELECT createddate, sell as quantity, exchange, id
+            FROM ledger
+            WHERE sell_curr = %s 
+                AND trans_type = 'Trade'
+                AND sell > 0
+                {wallet_filter_sql}
+            ORDER BY createddate ASC
+        """
+        
+        if wallet:
+            cur.execute(sale_query, (coin, wallet))
+        else:
+            cur.execute(sale_query, (coin,))
+        historical_sales = cur.fetchall()
+        
+        # Build purchase queue
+        purchase_queue = []
+        for purchase in all_purchases:
+            purchase_date, qty, unit_cost, total_cost, exchange = purchase
+            unit_cost_val = float(unit_cost) if unit_cost else 0.0
+            
+            purchase_queue.append({
+                'date': purchase_date,
+                'quantity_remaining': float(qty),
+                'unit_cost': unit_cost_val,
+                'exchange': exchange
+            })
+        
+        # Process historical sales to consume the queue
+        for sale in historical_sales:
+            sale_date, sale_quantity, sale_exchange, sale_id = sale
+            sale_quantity = float(sale_quantity)
+            quantity_to_match = sale_quantity
+            
+            for purchase in purchase_queue:
+                if quantity_to_match <= 0:
+                    break
+                
+                if purchase['quantity_remaining'] > 0:
+                    match_quantity = min(quantity_to_match, purchase['quantity_remaining'])
+                    purchase['quantity_remaining'] -= match_quantity
+                    quantity_to_match -= match_quantity
+        
+        # Now simulate the hypothetical sale
+        sale_date = datetime.now()
+        quantity_to_sell = float(quantity)
+        quantity_remaining = quantity_to_sell
+        lots = []
+        
+        for purchase in purchase_queue:
+            if quantity_remaining <= 0:
+                break
+            
+            if purchase['quantity_remaining'] > 0:
+                match_quantity = min(quantity_remaining, purchase['quantity_remaining'])
+                holding_days = (sale_date - purchase['date']).days
+                term = 'Long' if holding_days >= 365 else 'Short'
+                
+                lots.append({
+                    'acquire_date': purchase['date'],
+                    'quantity': match_quantity,
+                    'unit_cost': purchase['unit_cost'],
+                    'cost_basis': match_quantity * purchase['unit_cost'],
+                    'holding_days': holding_days,
+                    'term': term
+                })
+                
+                quantity_remaining -= match_quantity
+        
+        # Handle missing basis
+        if quantity_remaining > 0.00000001:
+            lots.append({
+                'acquire_date': None,
+                'quantity': quantity_remaining,
+                'unit_cost': 0.0,
+                'cost_basis': 0.0,
+                'holding_days': 0,
+                'term': 'Short'
+            })
+        
+        # Calculate summary statistics
+        total_cost_basis = sum(lot['cost_basis'] for lot in lots)
+        total_quantity = sum(lot['quantity'] for lot in lots)
+        
+        short_term_lots = [lot for lot in lots if lot['term'] == 'Short']
+        long_term_lots = [lot for lot in lots if lot['term'] == 'Long']
+        missing_basis_lots = [lot for lot in lots if lot['acquire_date'] is None]
+        
+        short_term_quantity = sum(lot['quantity'] for lot in short_term_lots)
+        long_term_quantity = sum(lot['quantity'] for lot in long_term_lots)
+        missing_basis_quantity = sum(lot['quantity'] for lot in missing_basis_lots)
+        
+        short_term_cost = sum(lot['cost_basis'] for lot in short_term_lots)
+        long_term_cost = sum(lot['cost_basis'] for lot in long_term_lots)
+        
+        # Calculate proportional proceeds
+        if sale_price_usd:
+            total_proceeds = quantity_to_sell * sale_price_usd
+            short_term_proceeds = short_term_quantity * sale_price_usd
+            long_term_proceeds = long_term_quantity * sale_price_usd
+        else:
+            total_proceeds = 0
+            short_term_proceeds = 0
+            long_term_proceeds = 0
+        
+        summary = {
+            'total_quantity': total_quantity,
+            'total_cost_basis': total_cost_basis,
+            'total_proceeds': total_proceeds,
+            'short_term_count': len(short_term_lots),
+            'short_term_quantity': short_term_quantity,
+            'short_term_cost': short_term_cost,
+            'short_term_proceeds': short_term_proceeds,
+            'long_term_count': len(long_term_lots),
+            'long_term_quantity': long_term_quantity,
+            'long_term_cost': long_term_cost,
+            'long_term_proceeds': long_term_proceeds,
+            'missing_basis_count': len(missing_basis_lots),
+            'missing_basis_quantity': missing_basis_quantity
+        }
+        
+        return lots, summary
+
+    def get_wallets(self):
+        """Get list of all wallets with metadata (if wallets table exists)."""
+        cur = self.connection.cursor()
+        
+        # Check if wallets table exists
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'wallets'
+            )
+        """)
+        wallets_table_exists = cur.fetchone()[0]
+        
+        if wallets_table_exists:
+            # Get wallet metadata from wallets table
+            cur.execute("""
+                SELECT wallet_id, wallet_type, custody, description, active
+                FROM wallets
+                WHERE active = true
+                ORDER BY wallet_id
+            """)
+            return [{'wallet_id': row[0], 'type': row[1], 'custody': row[2], 
+                    'description': row[3], 'active': row[4]} 
+                   for row in cur.fetchall()]
+        else:
+            # Fallback: get distinct exchange values from ledger
+            cur.execute("""
+                SELECT DISTINCT exchange 
+                FROM ledger 
+                WHERE exchange IS NOT NULL
+                ORDER BY exchange
+            """)
+            return [{'wallet_id': row[0], 'type': 'unknown', 'custody': 'unknown',
+                    'description': None, 'active': True}
+                   for row in cur.fetchall()]
+    
+    def get_wallet_balance(self, coin='BTC', wallet=None):
+        """
+        Get balance for a specific wallet, or all wallets if wallet=None.
+        
+        Returns:
+            If wallet specified: float (balance)
+            If wallet=None: dict {wallet_id: balance}
+        """
+        cur = self.connection.cursor()
+        
+        if wallet:
+            # Balance for specific wallet
+            query = """
+                SELECT 
+                    COALESCE(SUM(buy), 0) - COALESCE(SUM(sell), 0) - COALESCE(SUM(fee), 0)
+                FROM ledger
+                WHERE 
+                    (buy_curr = %s OR sell_curr = %s OR fee_curr = %s)
+                    AND exchange = %s
+            """
+            cur.execute(query, (coin, coin, coin, wallet))
+            result = cur.fetchone()[0]
+            return float(result) if result else 0.0
+        else:
+            # Balance for all wallets
+            query = """
+                SELECT 
+                    exchange,
+                    COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
+                    COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0) -
+                    COALESCE(SUM(CASE WHEN fee_curr = %s THEN fee ELSE 0 END), 0) as balance
+                FROM ledger
+                WHERE exchange IS NOT NULL
+                GROUP BY exchange
+                HAVING COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
+                       COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0) -
+                       COALESCE(SUM(CASE WHEN fee_curr = %s THEN fee ELSE 0 END), 0) != 0
+                ORDER BY exchange
+            """
+            cur.execute(query, (coin, coin, coin, coin, coin, coin))
+            return {row[0]: float(row[1]) for row in cur.fetchall()}
+
+
 

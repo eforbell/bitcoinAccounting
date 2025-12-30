@@ -6,6 +6,16 @@ __pycache__/
 # C extensions
 *.so
 
+# Tax export files (temporary/personal data)
+# Generated CSV files should not be committed (except examples)
+1099b_*.csv
+*_worksheet.csv
+forecast_*.csv
+wallet_balance_*.csv
+
+# Allow example files in docs
+!docs/examples/*.csv
+
 # Distribution / packaging
 build/
 dist/
