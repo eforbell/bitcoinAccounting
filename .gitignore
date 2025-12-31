@@ -6,6 +6,20 @@ __pycache__/
 # C extensions
 *.so
 
+# Tax export files (temporary/personal data)
+# Generated CSV files should not be committed (except examples)
+1099b_*.csv
+*_worksheet.csv
+forecast_*.csv
+wallet_balance_*.csv
+
+# Allow example files in docs
+!docs/examples/*.csv
+
+# Personal wallet configuration (keep generic template only)
+src/sql/wallets_table_missing.sql
+src/sql/wallets_table_personal.sql
+
 # Distribution / packaging
 build/
 dist/
@@ -97,3 +111,9 @@ venv.bak/
 # Allow adding this repo's README and other top-level config
 !README.md
 !requirements.txt
+# Sensitive transaction data
+*.csv
+*-transactions.csv
+
+# Database credentials
+src/python/config.py

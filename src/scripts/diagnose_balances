@@ -1,0 +1,263 @@
+#!/usr/bin/env python3
+"""Diagnose and report issues in wallet balances and transaction records.
+
+Identifies problems like:
+- Negative balances (where they shouldn't exist)
+- Unmatched transfers (withdrawals without deposits)
+- Missing transfer pairs
+- Fee inconsistencies
+
+Usage:
+    diagnose_balances [COIN]
+    
+Examples:
+    diagnose_balances BTC
+    diagnose_balances ALGO
+"""
+
+import sys
+import _bootstrap
+from cryptoAccounts import CryptoAccounts
+from datetime import datetime, timedelta
+
+
+def main():
+    coin = sys.argv[1].upper() if len(sys.argv) > 1 else 'BTC'
+    
+    crypto = CryptoAccounts()
+    
+    try:
+        print(f"\n{'=' * 80}")
+        print(f"Balance Diagnostics for {coin}")
+        print(f"{'=' * 80}\n")
+        
+        # Get all wallet balances
+        wallet_balances = crypto.get_wallet_balance(coin, wallet=None)
+        
+        # Find wallets with negative balances
+        negative_wallets = {w: b for w, b in wallet_balances.items() if b < -0.00000001}
+        
+        if negative_wallets:
+            print(f"⚠️  NEGATIVE BALANCES DETECTED ({len(negative_wallets)} wallets)")
+            print(f"{'-' * 80}\n")
+            
+            for wallet, balance in sorted(negative_wallets.items(), key=lambda x: x[1]):
+                print(f"Wallet: {wallet}")
+                print(f"Balance: {balance:.8f} {coin}")
+                print(f"\nRecent transactions:")
+                
+                # Get recent transactions for this wallet
+                cur = crypto.connection.cursor()
+                query = """
+                    SELECT createddate, trans_type, 
+                           buy, buy_curr, sell, sell_curr, fee, fee_curr, 
+                           id, comment
+                    FROM ledger
+                    WHERE exchange = %s 
+                        AND (buy_curr = %s OR sell_curr = %s OR fee_curr = %s)
+                    ORDER BY createddate DESC
+                    LIMIT 10
+                """
+                cur.execute(query, (wallet, coin, coin, coin))
+                transactions = cur.fetchall()
+                
+                for tx in transactions:
+                    date, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, tx_id, comment = tx
+                    
+                    parts = []
+                    if buy and buy_curr == coin:
+                        parts.append(f"+{float(buy):.8f} {coin}")
+                    if sell and sell_curr == coin:
+                        parts.append(f"-{float(sell):.8f} {coin}")
+                    if fee and fee_curr == coin:
+                        parts.append(f"(fee: {float(fee):.8f})")
+                    
+                    tx_summary = " ".join(parts)
+                    print(f"  {date.strftime('%Y-%m-%d')} | {trans_type:<15} | {tx_summary}")
+                
+                # Calculate what balance should be
+                balance_query = """
+                    SELECT 
+                        COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) as total_buy,
+                        COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0) as total_sell,
+                        COALESCE(SUM(CASE WHEN fee_curr = %s THEN fee ELSE 0 END), 0) as total_fee
+                    FROM ledger
+                    WHERE exchange = %s
+                """
+                cur.execute(balance_query, (coin, coin, coin, wallet))
+                result = cur.fetchone()
+                total_buy = float(result[0]) if result[0] else 0.0
+                total_sell = float(result[1]) if result[1] else 0.0
+                total_fee = float(result[2]) if result[2] else 0.0
+                
+                print(f"\n  Components:")
+                print(f"    Total deposits/buys:     +{total_buy:.8f}")
+                print(f"    Total withdrawals/sells: -{total_sell:.8f}")
+                print(f"    Total fees (tracking):    {total_fee:.8f}")
+                print(f"    Net balance:             {(total_buy - total_sell):.8f}")
+                
+                # Suggest fixes
+                print(f"\n  💡 Possible causes:")
+                if abs(balance) < 0.001:
+                    print(f"    • Rounding/dust - likely safe to ignore")
+                else:
+                    print(f"    • Missing deposit transaction (check if withdrawal has matching deposit)")
+                    print(f"    • Incorrect fee attribution")
+                    print(f"    • Transfer recorded in wrong wallet")
+                
+                print(f"\n{'-' * 80}\n")
+        else:
+            print(f"✅ No negative balances detected\n")
+        
+        # Check for orphaned withdrawals/deposits
+        print(f"Checking for unmatched transfers...")
+        print(f"{'-' * 80}\n")
+        
+        cur = crypto.connection.cursor()
+        
+        # Get all withdrawals (with fees since sell includes fee)
+        withdrawal_query = """
+            SELECT id, createddate, sell, sell_curr, fee, fee_curr, exchange, comment
+            FROM ledger
+            WHERE trans_type = 'Withdrawal' 
+                AND sell_curr = %s
+            ORDER BY createddate DESC
+        """
+        cur.execute(withdrawal_query, (coin,))
+        withdrawals = cur.fetchall()
+        
+        # Get all deposits
+        deposit_query = """
+            SELECT id, createddate, buy, buy_curr, exchange, comment
+            FROM ledger
+            WHERE trans_type = 'Deposit'
+                AND buy_curr = %s
+            ORDER BY createddate DESC
+        """
+        cur.execute(deposit_query, (coin,))
+        deposits = cur.fetchall()
+        
+        unmatched_withdrawals = []
+        unmatched_deposits = []
+        consolidations_withdrawal = []
+        consolidations_deposit = []
+        
+        # Matching logic: withdrawal.sell includes fee, so compare (sell - fee) to deposit.buy
+        for withdrawal in withdrawals:
+            w_id, w_date, w_sell, w_curr, w_fee, w_fee_curr, w_exchange, w_comment = withdrawal
+            w_sell = float(w_sell)
+            w_fee = float(w_fee) if (w_fee and w_fee_curr == coin) else 0.0
+            w_net_amount = w_sell - w_fee  # Net amount transferred (excluding fee)
+            
+            matched = False
+            is_consolidation = False
+            
+            for deposit in deposits:
+                d_id, d_date, d_amount, d_curr, d_exchange, d_comment = deposit
+                d_amount = float(d_amount)
+                
+                # Match: withdrawal net amount should equal deposit amount
+                time_diff = abs((d_date - w_date).total_seconds())
+                amount_diff = abs(d_amount - w_net_amount)
+                amount_ratio = amount_diff / w_net_amount if w_net_amount > 0 else 1.0
+                
+                # Check if same wallet (consolidation/UTXO management)
+                if time_diff < 259200 and amount_ratio < 0.03 and d_exchange == w_exchange:  # 72 hours for consolidations
+                    is_consolidation = True
+                    break
+                # Check if different wallet (actual transfer) - allow up to 72h for delayed free withdrawals
+                elif time_diff < 259200 and amount_ratio < 0.03 and d_exchange != w_exchange:
+                    matched = True
+                    break
+            
+            if is_consolidation:
+                consolidations_withdrawal.append(withdrawal)
+            elif not matched:
+                unmatched_withdrawals.append(withdrawal)
+        
+        # Check deposits
+        for deposit in deposits:
+            d_id, d_date, d_amount, d_curr, d_exchange, d_comment = deposit
+            d_amount = float(d_amount)
+            
+            matched = False
+            is_consolidation = False
+            
+            for withdrawal in withdrawals:
+                w_id, w_date, w_sell, w_curr, w_fee, w_fee_curr, w_exchange, w_comment = withdrawal
+                w_sell = float(w_sell)
+                w_fee = float(w_fee) if (w_fee and w_fee_curr == coin) else 0.0
+                w_net_amount = w_sell - w_fee
+                
+                time_diff = abs((d_date - w_date).total_seconds())
+                amount_diff = abs(d_amount - w_net_amount)
+                amount_ratio = amount_diff / w_net_amount if w_net_amount > 0 else 1.0
+                
+                # Check if same wallet (consolidation/UTXO management)
+                if time_diff < 259200 and amount_ratio < 0.03 and d_exchange == w_exchange:  # 72 hours
+                    is_consolidation = True
+                    break
+                # Check if different wallet (actual transfer) - allow up to 72h for delayed free withdrawals
+                elif time_diff < 259200 and amount_ratio < 0.03 and d_exchange != w_exchange:
+                    matched = True
+                    break
+            
+            if is_consolidation:
+                consolidations_deposit.append(deposit)
+            elif not matched:
+                unmatched_deposits.append(deposit)
+        
+        # Report consolidations (same-wallet UTXO management)
+        if consolidations_withdrawal or consolidations_deposit:
+            consolidation_count = max(len(consolidations_withdrawal), len(consolidations_deposit))
+            print(f"ℹ️  {consolidation_count} same-wallet consolidation(s) detected (UTXO management - not cross-wallet transfers)")
+            print()
+        
+        if unmatched_withdrawals:
+            print(f"⚠️  {len(unmatched_withdrawals)} unmatched withdrawal(s):")
+            for tx in unmatched_withdrawals[:10]:  # Show first 10
+                tx_id, date, sell, curr, fee, fee_curr, exchange, comment = tx
+                net_amount = float(sell) - (float(fee) if (fee and fee_curr == coin) else 0.0)
+                print(f"  {date.strftime('%Y-%m-%d')} | {exchange:<15} | {float(sell):.8f} (net: {net_amount:.8f}) {curr}")
+            if len(unmatched_withdrawals) > 10:
+                print(f"  ... and {len(unmatched_withdrawals) - 10} more")
+            print()
+        
+        if unmatched_deposits:
+            print(f"⚠️  {len(unmatched_deposits)} unmatched deposit(s):")
+            for tx in unmatched_deposits[:10]:
+                tx_id, date, amount, curr, exchange, comment = tx
+                print(f"  {date.strftime('%Y-%m-%d')} | {exchange:<15} | {float(amount):.8f} {curr}")
+            if len(unmatched_deposits) > 10:
+                print(f"  ... and {len(unmatched_deposits) - 10} more")
+            print()
+        
+        if not unmatched_withdrawals and not unmatched_deposits:
+            print(f"✅ All transfers appear to be matched\n")
+        
+        print(f"{'=' * 80}")
+        print(f"Summary:")
+        print(f"  Wallets with negative balances: {len(negative_wallets)}")
+        print(f"  Unmatched withdrawals: {len(unmatched_withdrawals)}")
+        print(f"  Unmatched deposits: {len(unmatched_deposits)}")
+        print(f"{'=' * 80}\n")
+        
+        if negative_wallets or unmatched_withdrawals or unmatched_deposits:
+            print("💡 Recommendations:")
+            print("  1. Review transaction history for wallets with negative balances")
+            print("  2. Check if withdrawals have corresponding deposits (and vice versa)")
+            print("  3. Verify fee amounts are attributed to correct wallets")
+            print("  4. Consider using transfer_funds() method to record paired transfers")
+            print()
+        
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        crypto.close()
+
+
+if __name__ == '__main__':
+    main()

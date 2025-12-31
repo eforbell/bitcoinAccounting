@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""Display transaction ledger for a wallet with running balance.
+
+Shows all transactions for a specific wallet with:
+- Date
+- Type
+- Credit/Debit amounts
+- Running balance
+- Transaction details
+
+Usage:
+    wallet_ledger <WALLET> [COIN]
+    
+Examples:
+    wallet_ledger CC BTC
+    wallet_ledger Vault BTC
+    wallet_ledger Strike
+"""
+
+import sys
+import _bootstrap
+from cryptoAccounts import CryptoAccounts
+from decimal import Decimal
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: wallet_ledger <WALLET> [COIN]")
+        print("Example: wallet_ledger CC BTC")
+        sys.exit(1)
+    
+    wallet = sys.argv[1]
+    coin = sys.argv[2].upper() if len(sys.argv) > 2 else 'BTC'
+    
+    crypto = CryptoAccounts()
+    
+    try:
+        cur = crypto.connection.cursor()
+        
+        # Get all transactions for this wallet/coin, ordered by date ASC for balance calculation
+        query = """
+            SELECT 
+                id,
+                createddate,
+                trans_type,
+                COALESCE(buy, 0) as buy,
+                buy_curr,
+                COALESCE(sell, 0) as sell,
+                sell_curr,
+                COALESCE(fee, 0) as fee,
+                fee_curr,
+                comment,
+                transactionid
+            FROM ledger
+            WHERE exchange = %s 
+                AND (buy_curr = %s OR sell_curr = %s OR fee_curr = %s)
+            ORDER BY createddate ASC, id ASC
+        """
+        
+        cur.execute(query, (wallet, coin, coin, coin))
+        transactions = cur.fetchall()
+        
+        if not transactions:
+            print(f"\nNo {coin} transactions found for wallet: {wallet}")
+            sys.exit(0)
+        
+        print(f"\n{'=' * 120}")
+        print(f"{wallet} Wallet Ledger - {coin}")
+        print(f"{'=' * 120}\n")
+        
+        # Calculate balances forward in time, then reverse for display
+        ledger_entries = []
+        running_balance = Decimal('0')
+        
+        for tx in transactions:
+            tx_id, date, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, comment, txid = tx
+            
+            # Calculate credit/debit
+            # Note: Fees are already included in buy/sell amounts
+            credit = Decimal(str(buy)) if buy_curr == coin else Decimal('0')
+            debit = Decimal(str(sell)) if sell_curr == coin else Decimal('0')
+            fee_amount = Decimal(str(fee)) if fee_curr == coin else Decimal('0')
+            
+            # Update running balance (fees already in buy/sell, don't subtract separately)
+            running_balance += credit - debit
+            
+            ledger_entries.append({
+                'id': tx_id,
+                'date': date,
+                'type': trans_type,
+                'credit': credit,
+                'debit': debit,
+                'fee': fee_amount,
+                'balance': running_balance,
+                'comment': comment,
+                'txid': txid
+            })
+        
+        # Display in reverse chronological order (most recent first)
+        print(f"{'Date':<20} {'Type':<15} {'Credit':>18} {'Debit':>18} {'Fee':>15} {'Balance':>18} {'ID':<6} {'Comment'}")
+        print(f"{'-' * 120}")
+        
+        for entry in reversed(ledger_entries):
+            date_str = entry['date'].strftime('%Y-%m-%d %H:%M:%S')
+            credit_str = f"+{entry['credit']:.8f}" if entry['credit'] > 0 else ""
+            debit_str = f"-{entry['debit']:.8f}" if entry['debit'] > 0 else ""
+            fee_str = f"-{entry['fee']:.8f}" if entry['fee'] > 0 else ""
+            balance_str = f"{entry['balance']:.8f}"
+            comment_str = (entry['comment'] or '')[:30]
+            
+            print(f"{date_str:<20} {entry['type']:<15} {credit_str:>18} {debit_str:>18} {fee_str:>15} {balance_str:>18} {entry['id']:<6} {comment_str}")
+        
+        print(f"{'-' * 120}")
+        print(f"{'FINAL BALANCE:':<71} {running_balance:>18.8f} {coin}")
+        print(f"{'=' * 120}\n")
+        
+        # Summary statistics
+        total_credits = sum(e['credit'] for e in ledger_entries)
+        total_debits = sum(e['debit'] for e in ledger_entries)
+        total_fees = sum(e['fee'] for e in ledger_entries)
+        
+        print(f"Summary:")
+        print(f"  Total Credits:     {total_credits:>18.8f} {coin}")
+        print(f"  Total Debits:      {total_debits:>18.8f} {coin}")
+        print(f"  Total Fees:        {total_fees:>18.8f} {coin}")
+        print(f"  Net Balance:       {running_balance:>18.8f} {coin}")
+        print(f"  Transaction Count: {len(ledger_entries)}")
+        print()
+        
+        # Compare to get_wallet_balance
+        db_balance = crypto.get_wallet_balance(coin, wallet)
+        print(f"Database balance (via get_wallet_balance): {db_balance:.8f} {coin}")
+        
+        if abs(float(running_balance) - db_balance) > 0.00000001:
+            print(f"⚠️  WARNING: Discrepancy detected!")
+            print(f"   Ledger calculation: {float(running_balance):.8f}")
+            print(f"   Database query:     {db_balance:.8f}")
+            print(f"   Difference:         {float(running_balance) - db_balance:.8f}")
+        else:
+            print(f"✓ Balances match")
+        print()
+        
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        crypto.close()
+
+
+if __name__ == '__main__':
+    main()

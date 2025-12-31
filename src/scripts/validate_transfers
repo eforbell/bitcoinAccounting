@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+"""Validate transfer pairs and identify missing deposit/withdrawal records.
+
+Transfers between your own wallets should always come in pairs:
+- Withdrawal from source wallet
+- Deposit to destination wallet
+
+This tool finds:
+- Withdrawals missing matching deposits
+- Deposits missing matching withdrawals
+- Suggests likely matches based on amount/timing
+- Validates basis tracking for transfers
+
+Usage:
+    validate_transfers [COIN] [--suggest-fixes]
+    
+Examples:
+    validate_transfers BTC
+    validate_transfers BTC --suggest-fixes
+    validate_transfers ALGO
+"""
+
+import sys
+import _bootstrap
+from cryptoAccounts import CryptoAccounts
+from datetime import datetime, timedelta
+
+
+def find_potential_match(tx, candidates, max_hours=48, max_amount_diff_pct=2.0):
+    """Find potential matching transaction from candidates.
+    
+    Excludes same-wallet transactions (consolidations/reorganizations).
+    """
+    tx_date = tx['date']
+    tx_amount = tx['amount']
+    tx_wallet = tx['wallet']
+    
+    matches = []
+    
+    for candidate in candidates:
+        # Skip if same wallet (consolidations are internal, not transfers)
+        if candidate['wallet'] == tx_wallet:
+            continue
+        
+        # Check time difference
+        time_diff_hours = abs((candidate['date'] - tx_date).total_seconds()) / 3600
+        if time_diff_hours > max_hours:
+            continue
+        
+        # Check amount difference (allow for fees)
+        amount_diff = abs(candidate['amount'] - tx_amount)
+        amount_diff_pct = (amount_diff / tx_amount * 100) if tx_amount > 0 else 100
+        
+        if amount_diff_pct <= max_amount_diff_pct:
+            matches.append({
+                'candidate': candidate,
+                'time_diff_hours': time_diff_hours,
+                'amount_diff': amount_diff,
+                'amount_diff_pct': amount_diff_pct,
+                'score': time_diff_hours + (amount_diff_pct * 10)  # Lower is better
+            })
+    
+    # Sort by score (lower is better match)
+    matches.sort(key=lambda x: x['score'])
+    return matches
+
+
+def find_consolidations(transactions, coin):
+    """Identify same-wallet consolidations (UTXO management)."""
+    consolidations = []
+    
+    # Group by wallet and date
+    by_wallet_date = {}
+    for tx in transactions:
+        key = (tx['wallet'], tx['date'].date())
+        if key not in by_wallet_date:
+            by_wallet_date[key] = []
+        by_wallet_date[key].append(tx)
+    
+    # Find wallets with both withdrawal and deposit on same day
+    for (wallet, date), txs in by_wallet_date.items():
+        has_withdrawal = any(tx['type'] == 'Withdrawal' for tx in txs)
+        has_deposit = any(tx['type'] == 'Deposit' for tx in txs)
+        
+        if has_withdrawal and has_deposit:
+            consolidations.extend([(tx['id'], tx) for tx in txs])
+    
+    return consolidations
+
+
+def main():
+    suggest_fixes = '--suggest-fixes' in sys.argv
+    coin = 'BTC'
+    
+    for arg in sys.argv[1:]:
+        if not arg.startswith('--'):
+            coin = arg.upper()
+    
+    crypto = CryptoAccounts()
+    
+    try:
+        print(f"\n{'=' * 90}")
+        print(f"Transfer Validation for {coin}")
+        print(f"{'=' * 90}\n")
+        
+        cur = crypto.connection.cursor()
+        
+        # Get all withdrawals
+        withdrawal_query = """
+            SELECT id, createddate, sell, sell_curr, fee, fee_curr, exchange, comment
+            FROM ledger
+            WHERE trans_type = 'Withdrawal' 
+                AND sell_curr = %s
+            ORDER BY createddate ASC
+        """
+        cur.execute(withdrawal_query, (coin,))
+        withdrawal_rows = cur.fetchall()
+        
+        withdrawals = []
+        for row in withdrawal_rows:
+            tx_id, date, amount, curr, fee, fee_curr, wallet, comment = row
+            withdrawals.append({
+                'id': tx_id,
+                'date': date,
+                'amount': float(amount) if amount else 0.0,
+                'fee': float(fee) if (fee and fee_curr == coin) else 0.0,
+                'wallet': wallet,
+                'comment': comment,
+                'type': 'Withdrawal'
+            })
+        
+        # Get all deposits
+        deposit_query = """
+            SELECT id, createddate, buy, buy_curr, exchange, comment
+            FROM ledger
+            WHERE trans_type = 'Deposit'
+                AND buy_curr = %s
+            ORDER BY createddate ASC
+        """
+        cur.execute(deposit_query, (coin,))
+        deposit_rows = cur.fetchall()
+        
+        deposits = []
+        for row in deposit_rows:
+            tx_id, date, amount, curr, wallet, comment = row
+            deposits.append({
+                'id': tx_id,
+                'date': date,
+                'amount': float(amount) if amount else 0.0,
+                'wallet': wallet,
+                'comment': comment,
+                'type': 'Deposit'
+            })
+        
+        print(f"Found {len(withdrawals)} withdrawal(s) and {len(deposits)} deposit(s)\n")
+        
+        # Identify consolidations (same-wallet UTXO management)
+        all_transactions = withdrawals + deposits
+        consolidation_ids = set()
+        consolidations = find_consolidations(all_transactions, coin)
+        
+        if consolidations:
+            consolidation_ids = {tx_id for tx_id, tx in consolidations}
+            print(f"ℹ️  Identified {len(consolidations)} transaction(s) as same-wallet consolidations/UTXO management")
+            print(f"   (These are excluded from transfer pair validation)")
+            print()
+        
+        # Track which transactions have been matched
+        matched_withdrawals = set()
+        matched_deposits = set()
+        
+        # Find matches
+        for withdrawal in withdrawals:
+            matches = find_potential_match(withdrawal, deposits)
+            if matches:
+                matched_withdrawals.add(withdrawal['id'])
+                matched_deposits.add(matches[0]['candidate']['id'])
+        
+        # Find unmatched withdrawals (excluding consolidations)
+        unmatched_withdrawals = [w for w in withdrawals 
+                                if w['id'] not in matched_withdrawals 
+                                and w['id'] not in consolidation_ids]
+        unmatched_deposits = [d for d in deposits 
+                             if d['id'] not in matched_deposits 
+                             and d['id'] not in consolidation_ids]
+        
+        if unmatched_withdrawals:
+            print(f"⚠️  UNMATCHED WITHDRAWALS: {len(unmatched_withdrawals)}")
+            print(f"{'-' * 90}")
+            
+            for withdrawal in unmatched_withdrawals:
+                print(f"\nWithdrawal #{withdrawal['id']}")
+                print(f"  Date:     {withdrawal['date'].strftime('%Y-%m-%d %H:%M')}")
+                print(f"  Wallet:   {withdrawal['wallet']}")
+                print(f"  Amount:   {withdrawal['amount']:.8f} {coin}")
+                if withdrawal['fee'] > 0:
+                    print(f"  Fee:      {withdrawal['fee']:.8f} {coin}")
+                if withdrawal['comment']:
+                    print(f"  Comment:  {withdrawal['comment']}")
+                
+                # Find potential matches
+                potential_matches = find_potential_match(withdrawal, unmatched_deposits, max_hours=168)  # 7 days
+                
+                if potential_matches:
+                    print(f"\n  💡 Possible matching deposits:")
+                    for i, match in enumerate(potential_matches[:3], 1):  # Show top 3
+                        dep = match['candidate']
+                        print(f"\n    {i}. Deposit #{dep['id']}")
+                        print(f"       Wallet:  {dep['wallet']}")
+                        print(f"       Date:    {dep['date'].strftime('%Y-%m-%d %H:%M')} ({match['time_diff_hours']:.1f}h apart)")
+                        print(f"       Amount:  {dep['amount']:.8f} {coin} (diff: {match['amount_diff']:.8f}, {match['amount_diff_pct']:.2f}%)")
+                        
+                        if suggest_fixes:
+                            print(f"\n       ✏️  Suggested fix:")
+                            print(f"       # Verify this is the correct matching deposit, then no action needed")
+                            print(f"       # Or if deposit is missing, add it:")
+                            print(f"       crypto.deposit('{dep['date'].strftime('%Y-%m-%d %H:%M:%S')}', ")
+                            print(f"                      {withdrawal['amount']:.8f}, '{coin}', '{dep['wallet']}')")
+                else:
+                    print(f"\n  ❌ No matching deposit found within 7 days")
+                    
+                    if suggest_fixes:
+                        # Suggest common destination wallets
+                        print(f"\n  ✏️  Suggested fix - add missing deposit:")
+                        print(f"  # Determine destination wallet and run:")
+                        expected_date = withdrawal['date'] + timedelta(minutes=30)
+                        expected_amount = withdrawal['amount'] - withdrawal['fee']
+                        print(f"  crypto.deposit('{expected_date.strftime('%Y-%m-%d %H:%M:%S')}', ")
+                        print(f"                 {expected_amount:.8f}, '{coin}', 'DESTINATION_WALLET')")
+                
+                print()
+        
+        if unmatched_deposits:
+            print(f"⚠️  UNMATCHED DEPOSITS: {len(unmatched_deposits)}")
+            print(f"{'-' * 90}")
+            
+            for deposit in unmatched_deposits:
+                print(f"\nDeposit #{deposit['id']}")
+                print(f"  Date:     {deposit['date'].strftime('%Y-%m-%d %H:%M')}")
+                print(f"  Wallet:   {deposit['wallet']}")
+                print(f"  Amount:   {deposit['amount']:.8f} {coin}")
+                if deposit['comment']:
+                    print(f"  Comment:  {deposit['comment']}")
+                
+                # Find potential matches
+                potential_matches = find_potential_match(deposit, unmatched_withdrawals, max_hours=168)
+                
+                if potential_matches:
+                    print(f"\n  💡 Possible matching withdrawals:")
+                    for i, match in enumerate(potential_matches[:3], 1):
+                        wtd = match['candidate']
+                        print(f"\n    {i}. Withdrawal #{wtd['id']}")
+                        print(f"       Wallet:  {wtd['wallet']}")
+                        print(f"       Date:    {wtd['date'].strftime('%Y-%m-%d %H:%M')} ({match['time_diff_hours']:.1f}h apart)")
+                        print(f"       Amount:  {wtd['amount']:.8f} {coin} (diff: {match['amount_diff']:.8f}, {match['amount_diff_pct']:.2f}%)")
+                        
+                        if suggest_fixes:
+                            print(f"\n       ✏️  Suggested fix:")
+                            print(f"       # Verify this is the correct matching withdrawal, then no action needed")
+                else:
+                    print(f"\n  ❌ No matching withdrawal found within 7 days")
+                    
+                    if suggest_fixes:
+                        print(f"\n  ✏️  Suggested fix - add missing withdrawal:")
+                        print(f"  # Determine source wallet and run:")
+                        expected_date = deposit['date'] - timedelta(minutes=30)
+                        expected_fee = deposit['amount'] * 0.0001  # Estimate 0.01% fee
+                        print(f"  crypto.withdraw('{expected_date.strftime('%Y-%m-%d %H:%M:%S')}', ")
+                        print(f"                  {deposit['amount']:.8f}, '{coin}', {expected_fee:.8f}, '{coin}',")
+                        print(f"                  'SOURCE_WALLET')")
+                
+                print()
+        
+        if not unmatched_withdrawals and not unmatched_deposits:
+            print(f"✅ All transfers are properly paired!\n")
+        
+        # Summary
+        print(f"{'=' * 90}")
+        print(f"Summary:")
+        print(f"  Total withdrawals:      {len(withdrawals)}")
+        print(f"  Total deposits:         {len(deposits)}")
+        consolidation_count = len(consolidations)
+        print(f"  Consolidations:         {consolidation_count} (same-wallet UTXO management)")
+        print(f"  Matched pairs:          {len(matched_withdrawals)}")
+        print(f"  Unmatched withdrawals:  {len(unmatched_withdrawals)}")
+        print(f"  Unmatched deposits:     {len(unmatched_deposits)}")
+        print(f"{'=' * 90}\n")
+        print(f"{'=' * 90}\n")
+        
+        if unmatched_withdrawals or unmatched_deposits:
+            print("💡 Next steps:")
+            print("  1. Review suggested matches above")
+            print("  2. Verify transactions in your exchange/wallet history")
+            print("  3. Add missing deposit/withdrawal records")
+            print("  4. Re-run this tool to verify all transfers are paired")
+            print()
+            print("  Use --suggest-fixes flag for code snippets to add missing records")
+            print()
+        
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        crypto.close()
+
+
+if __name__ == '__main__':
+    main()

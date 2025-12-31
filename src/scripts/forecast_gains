@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""Forecast capital gains for hypothetical crypto sales using FIFO basis.
+
+Simulates a sale without recording any transactions. Shows which lots would be
+sold, cost basis, proceeds, and tax implications (short vs long-term).
+
+Usage:
+    forecast_gains <COIN> <QUANTITY> [SALE_PRICE_USD] [--wallet=WALLET_ID]
+    
+Examples:
+    forecast_gains BTC 0.5              # Use current market price, all wallets
+    forecast_gains BTC 0.5 95000        # Specify sale price
+    forecast_gains ALGO 1000 0.25       # Forecast selling 1000 ALGO @ $0.25
+    forecast_gains BTC 0.1 --wallet=CC  # Per-wallet forecast
+"""
+
+import sys
+from datetime import datetime
+import _bootstrap
+from cryptoAccounts import CryptoAccounts
+
+
+def main():
+    if len(sys.argv) < 3:
+        print("Usage: forecast_gains <COIN> <QUANTITY> [SALE_PRICE_USD] [--wallet=WALLET_ID]")
+        print("Example: forecast_gains BTC 0.5 95000 --wallet=CC")
+        sys.exit(1)
+    
+    # Parse arguments
+    wallet = None
+    args = []
+    for arg in sys.argv[1:]:
+        if arg.startswith('--wallet='):
+            wallet = arg.split('=', 1)[1]
+        else:
+            args.append(arg)
+    
+    coin = args[0].upper()
+    
+    try:
+        quantity = float(args[1])
+    except ValueError:
+        print(f"ERROR: Invalid quantity '{args[1]}'. Must be a number.", file=sys.stderr)
+        sys.exit(1)
+    
+    if quantity <= 0:
+        print(f"ERROR: Quantity must be positive, got {quantity}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Get sale price (optional)
+    if len(args) > 2:
+        try:
+            sale_price_usd = float(args[2])
+        except ValueError:
+            print(f"ERROR: Invalid sale price '{args[2]}'. Must be a number.", file=sys.stderr)
+            sys.exit(1)
+        
+        if sale_price_usd <= 0:
+            print(f"ERROR: Sale price must be positive, got {sale_price_usd}", file=sys.stderr)
+            sys.exit(1)
+        
+        price_source = f"specified (${sale_price_usd:,.2f})"
+    else:
+        sale_price_usd = None
+        price_source = "current market"
+    
+    crypto = CryptoAccounts()
+    
+    try:
+        # Get current balance
+        if wallet:
+            current_balance = float(crypto.get_wallet_balance(coin, wallet))
+            wallet_label = f" from {wallet} wallet"
+        else:
+            current_balance = float(crypto.get_balance(coin))
+            wallet_label = ""
+        
+        if current_balance < quantity:
+            print(f"\n{'!' * 70}")
+            print(f"WARNING: Insufficient balance!")
+            print(f"  Requested sale: {quantity:.8f} {coin}")
+            print(f"  Current balance: {current_balance:.8f} {coin}")
+            print(f"  Shortfall: {(quantity - current_balance):.8f} {coin}")
+            print(f"{'!' * 70}\n")
+        
+        # Get current market price if not specified
+        if sale_price_usd is None:
+            if coin == 'BTC':
+                sale_price_usd = crypto.get_bitcoin_price()
+                price_source = "current market (CoinGecko)"
+            else:
+                print(f"ERROR: Market price lookup not available for {coin}. Please specify sale price.", file=sys.stderr)
+                sys.exit(1)
+        
+        proceeds_total = quantity * sale_price_usd
+        if wallet:
+            print(f"Wallet: {wallet}")
+        print(f"Quantity: {quantity:.8f}")
+        print(f"Sale price: ${sale_price_usd:,.2f} per {coin} ({price_source})")
+        print(f"Total proceeds: ${proceeds_total:,.2f}")
+        print(f"Current balance{wallet_label}: {current_balance:.8f} {coin}")
+        print(f"{'=' * 70}\n")
+        
+        # Use the FIFO forecast method
+        lots, summary = crypto.forecast_capital_gains_fifo(coin, quantity, sale_price_usd, wallet=wallet)
+        
+        if not lots:
+            print("No purchase history found. Unable to calculate cost basis.")
+            sys.exit(0)
+        
+        print("Lots to be sold (FIFO order):")
+        print(f"{'─' * 70}")
+        print(f"{'Acquire Date':<15} {'Quantity':>12} {'Unit Cost':>12} {'Total Cost':>12} {'Days':>6} {'Term':<6}")
+        print(f"{'─' * 70}")
+        
+        for lot in lots:
+            acquire_date = lot['acquire_date'].strftime('%m/%d/%Y') if lot['acquire_date'] else 'UNKNOWN'
+            print(f"{acquire_date:<15} {lot['quantity']:>12.8f} ${lot['unit_cost']:>11,.2f} ${lot['cost_basis']:>11,.2f} {lot['holding_days']:>6} {lot['term']:<6}")
+        
+        print(f"{'─' * 70}")
+        print(f"{'TOTALS':<15} {summary['total_quantity']:>12.8f} {'':>12} ${summary['total_cost_basis']:>11,.2f}")
+        print(f"{'─' * 70}\n")
+        
+        # Calculate gains by term
+        short_term_gain = summary['short_term_proceeds'] - summary['short_term_cost']
+        long_term_gain = summary['long_term_proceeds'] - summary['long_term_cost']
+        total_gain = proceeds_total - summary['total_cost_basis']
+        
+        print("Tax Implications:")
+        print(f"{'─' * 70}")
+        
+        if summary['short_term_count'] > 0:
+            print(f"\nShort-term (<1 year):")
+            print(f"  Lots: {summary['short_term_count']}")
+            print(f"  Quantity: {summary['short_term_quantity']:.8f} {coin}")
+            print(f"  Proceeds: ${summary['short_term_proceeds']:,.2f}")
+            print(f"  Cost basis: ${summary['short_term_cost']:,.2f}")
+            print(f"  Gain/(Loss): ${short_term_gain:,.2f}")
+            print(f"  Tax rate: Ordinary income (your marginal rate)")
+        
+        if summary['long_term_count'] > 0:
+            print(f"\nLong-term (≥1 year):")
+            print(f"  Lots: {summary['long_term_count']}")
+            print(f"  Quantity: {summary['long_term_quantity']:.8f} {coin}")
+            print(f"  Proceeds: ${summary['long_term_proceeds']:,.2f}")
+            print(f"  Cost basis: ${summary['long_term_cost']:,.2f}")
+            print(f"  Gain/(Loss): ${long_term_gain:,.2f}")
+            print(f"  Tax rate: 0%, 15%, or 20% (based on income)")
+        
+        if summary['missing_basis_count'] > 0:
+            print(f"\n{'!' * 70}")
+            print(f"WARNING: Missing cost basis detected!")
+            print(f"  {summary['missing_basis_count']} lot(s) with unknown acquisition")
+            print(f"  {summary['missing_basis_quantity']:.8f} {coin} with $0 basis")
+            print(f"  This maximizes taxable gain (worst case)")
+            print(f"{'!' * 70}")
+        
+        print(f"\n{'─' * 70}")
+        print(f"TOTAL Capital Gain/(Loss): ${total_gain:,.2f}")
+        print(f"{'─' * 70}")
+        
+        if total_gain > 0:
+            print(f"\nNet gain of ${total_gain:,.2f}")
+        elif total_gain < 0:
+            print(f"\nNet loss of ${abs(total_gain):,.2f}")
+            print(f"Capital losses can offset gains and up to $3,000 of ordinary income")
+        else:
+            print(f"\nBreak-even (no gain or loss)")
+        
+        print(f"\n{'=' * 70}")
+        print("NOTE: This is a forecast only. No transactions have been recorded.")
+        print(f"{'=' * 70}\n")
+        
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        crypto.close()
+
+
+if __name__ == '__main__':
+    main()
