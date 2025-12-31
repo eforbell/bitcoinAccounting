@@ -807,11 +807,10 @@ class CryptoAccounts(object):
             # Note: Fees are already included in buy/sell amounts, not subtracted separately
             query = """
                 SELECT 
-                    COALESCE(SUM(buy), 0) - COALESCE(SUM(sell), 0)
+                    COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
+                    COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0)
                 FROM ledger
-                WHERE 
-                    (buy_curr = %s OR sell_curr = %s)
-                    AND exchange = %s
+                WHERE exchange = %s
             """
             cur.execute(query, (coin, coin, wallet))
             result = cur.fetchone()[0]
