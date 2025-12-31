@@ -26,14 +26,21 @@ from cryptoAccounts import CryptoAccounts
 from datetime import datetime, timedelta
 
 
-def find_potential_match(tx, candidates, max_hours=48, max_amount_diff_pct=2.0):
+def find_potential_match(tx, candidates, max_hours=48, max_amount_diff_pct=3.0):
     """Find potential matching transaction from candidates.
     
     Excludes same-wallet transactions (consolidations/reorganizations).
+    For withdrawals, uses net amount (amount - fee) for comparison.
     """
     tx_date = tx['date']
-    tx_amount = tx['amount']
     tx_wallet = tx['wallet']
+    
+    # For withdrawals, use net amount (after fee)
+    # For deposits, use amount as-is
+    if tx['type'] == 'Withdrawal':
+        tx_amount = tx['amount'] - tx.get('fee', 0.0)
+    else:
+        tx_amount = tx['amount']
     
     matches = []
     
@@ -47,8 +54,14 @@ def find_potential_match(tx, candidates, max_hours=48, max_amount_diff_pct=2.0):
         if time_diff_hours > max_hours:
             continue
         
+        # For candidate, also use net amount if it's a withdrawal
+        if candidate['type'] == 'Withdrawal':
+            candidate_amount = candidate['amount'] - candidate.get('fee', 0.0)
+        else:
+            candidate_amount = candidate['amount']
+        
         # Check amount difference (allow for fees)
-        amount_diff = abs(candidate['amount'] - tx_amount)
+        amount_diff = abs(candidate_amount - tx_amount)
         amount_diff_pct = (amount_diff / tx_amount * 100) if tx_amount > 0 else 100
         
         if amount_diff_pct <= max_amount_diff_pct:
