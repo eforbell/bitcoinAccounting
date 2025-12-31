@@ -24,7 +24,7 @@ def connect():
         'host': os.getenv('PGHOST', '192.0.2.10'),
         'port': os.getenv('PGPORT', '5432'),
         'user': os.getenv('PGUSER', 'bitcoin_accounting'),
-        'password': os.getenv('PGPASSWORD', 'REDACTED-ROTATED'),
+        'password': os.getenv('PGPASSWORD', '####'),
         'database': os.getenv('PGDATABASE', 'postgres'),
         'connect_timeout': 5
     }
