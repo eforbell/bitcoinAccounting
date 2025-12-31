@@ -53,12 +53,12 @@ class TestSQLiteIntegration(unittest.TestCase):
                     ('2025-03-01','Trade',10,'ETH',20000,'USD',0,'USD','ExB'))
         self.conn.commit()
 
-        # Compute balance for BTC (sum of buys - sum of sells - sum of fees where currency matches)
+        # Compute balance for BTC (sum of buys - sum of sells)
+        # Note: fee column is for tracking only, fees are already included in buy/sell amounts
         balance_query = '''
             SELECT
               COALESCE((SELECT SUM(buy) FROM ledger WHERE buy_curr = 'BTC'), 0)
-              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'BTC'), 0)
-              - COALESCE((SELECT SUM(fee) FROM ledger WHERE fee_curr = 'BTC'), 0) as balance
+              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'BTC'), 0) as balance
         '''
         cur.execute(balance_query)
         row = cur.fetchone()
@@ -90,11 +90,11 @@ class TestSQLiteIntegration(unittest.TestCase):
         self.conn.commit()
 
         # Balance should be 0.4 BTC (0.5 bought, 0.1 sold)
+        # Note: fee column is for tracking only, fees are already included in buy/sell amounts
         balance_query = '''
             SELECT
               COALESCE((SELECT SUM(buy) FROM ledger WHERE buy_curr = 'BTC'), 0)
-              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'BTC'), 0)
-              - COALESCE((SELECT SUM(fee) FROM ledger WHERE fee_curr = 'BTC'), 0) as balance
+              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'BTC'), 0) as balance
         '''
         cur.execute(balance_query)
         row = cur.fetchone()
@@ -108,22 +108,21 @@ class TestSQLiteIntegration(unittest.TestCase):
         cur.execute("INSERT INTO ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange) VALUES (?,?,?,?,?,?,?,?,?)",
                     ('2025-01-01','Trade',1.0,'BTC',50000,'USD',0,'USD','ExA'))
         # Transfer 0.5 BTC from ExA to ExB with 0.001 BTC fee
-        # The withdrawal reduces the balance by the sell amount and the fee amount
-        # sell=0.5 (amount transferred), fee=0.001 (network/exchange fee)
+        # The withdrawal: sell includes both transferred amount AND fee (0.5 + 0.001 = 0.501)
+        # Fee field (0.001) is for tracking only, already included in sell amount
         cur.execute("INSERT INTO ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange) VALUES (?,?,?,?,?,?,?,?,?)",
-                    ('2025-02-01','Withdrawal',None,None,0.5,'BTC',0.001,'BTC','ExA'))
+                    ('2025-02-01','Withdrawal',None,None,0.501,'BTC',0.001,'BTC','ExA'))
         # The deposit: receive 0.5 BTC at ExB
         cur.execute("INSERT INTO ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange) VALUES (?,?,?,?,?,?,?,?,?)",
                     ('2025-02-01','Deposit',0.5,'BTC',None,None,0,'BTC','ExB'))
         self.conn.commit()
 
-        # Balance calculation: SUM(buy where buy_curr='BTC') - SUM(sell where sell_curr='BTC') - SUM(fee where fee_curr='BTC')
-        # = (1.0 initial buy + 0.5 deposit) - 0.5 withdrawal - 0.001 fee = 0.999 BTC
+        # Balance calculation: SUM(buy) - SUM(sell) (fees already in buy/sell)
+        # = (1.0 initial buy + 0.5 deposit) - 0.501 withdrawal = 0.999 BTC
         balance_query = '''
             SELECT
               COALESCE((SELECT SUM(buy) FROM ledger WHERE buy_curr = 'BTC'), 0)
-              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'BTC'), 0)
-              - COALESCE((SELECT SUM(fee) FROM ledger WHERE fee_curr = 'BTC'), 0) as balance
+              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'BTC'), 0) as balance
         '''
         cur.execute(balance_query)
         row = cur.fetchone()
@@ -175,11 +174,11 @@ class TestSQLiteIntegration(unittest.TestCase):
         self.conn.commit()
 
         # BTC balance should be 0.5 BTC
+        # Note: fee column is for tracking only, fees are already included in buy/sell amounts
         btc_balance_query = '''
             SELECT
               COALESCE((SELECT SUM(buy) FROM ledger WHERE buy_curr = 'BTC'), 0)
-              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'BTC'), 0)
-              - COALESCE((SELECT SUM(fee) FROM ledger WHERE fee_curr = 'BTC'), 0) as balance
+              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'BTC'), 0) as balance
         '''
         cur.execute(btc_balance_query)
         row = cur.fetchone()
@@ -187,11 +186,11 @@ class TestSQLiteIntegration(unittest.TestCase):
         self.assertAlmostEqual(btc_balance, 0.5, places=9)
 
         # ETH balance should be 100 ETH
+        # Note: fee column is for tracking only, fees are already included in buy/sell amounts
         eth_balance_query = '''
             SELECT
               COALESCE((SELECT SUM(buy) FROM ledger WHERE buy_curr = 'ETH'), 0)
-              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'ETH'), 0)
-              - COALESCE((SELECT SUM(fee) FROM ledger WHERE fee_curr = 'ETH'), 0) as balance
+              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'ETH'), 0) as balance
         '''
         cur.execute(eth_balance_query)
         row = cur.fetchone()

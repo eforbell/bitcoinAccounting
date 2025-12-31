@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""Compare database transactions with Sparrow CSV exports to find discrepancies."""
+
+import sys
+import csv
+import _bootstrap
+from cryptoAccounts import CryptoAccounts
+from decimal import Decimal
+from datetime import datetime, timedelta
+from collections import defaultdict
+
+
+def parse_sparrow_csv(filepath):
+    """Parse Sparrow CSV and return list of transactions."""
+    transactions = []
+    with open(filepath, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            value = Decimal(row['Value'])
+            fee = Decimal(row['Fee']) if row['Fee'] else Decimal('0')
+            balance = Decimal(row['Balance'])
+            date = datetime.strptime(row['Date (UTC)'], '%Y-%m-%d %H:%M:%S')
+            transactions.append({
+                'date': date,
+                'value': value,
+                'fee': fee,
+                'balance': balance,
+                'label': row['Label'],
+                'txid': row['Txid']
+            })
+    return transactions
+
+
+def get_db_transactions(wallet, coin='BTC'):
+    """Get all database transactions for a wallet."""
+    crypto = CryptoAccounts()
+    cur = crypto.connection.cursor()
+    
+    query = """
+        SELECT 
+            id, createddate, trans_type,
+            COALESCE(buy, 0) as buy, buy_curr,
+            COALESCE(sell, 0) as sell, sell_curr,
+            COALESCE(fee, 0) as fee, fee_curr,
+            comment, transactionid
+        FROM ledger
+        WHERE exchange = %s
+            AND (buy_curr = %s OR sell_curr = %s OR fee_curr = %s)
+        ORDER BY createddate, id
+    """
+    
+    cur.execute(query, (wallet, coin, coin, coin))
+    rows = cur.fetchall()
+    
+    transactions = []
+    for row in rows:
+        tx_id, date, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, comment, txid = row
+        
+        # Calculate net effect
+        # Note: fee column is for tracking only - fees already included in buy/sell amounts
+        credit = Decimal(str(buy)) if buy_curr == coin else Decimal('0')
+        debit = Decimal(str(sell)) if sell_curr == coin else Decimal('0')
+        fee_amt = Decimal(str(fee)) if fee_curr == coin else Decimal('0')
+        
+        # Net value = credits - debits (fees already in buy/sell)
+        net_value = credit - debit
+        
+        transactions.append({
+            'id': tx_id,
+            'date': date,
+            'type': trans_type,
+            'net_value': net_value,
+            'credit': credit,
+            'debit': debit,
+            'fee': fee_amt,
+            'comment': comment,
+            'txid': txid
+        })
+    
+    crypto.close()
+    return transactions
+
+
+def find_match(sparrow_tx, db_transactions, tolerance_hours=48):
+    """Find matching database transaction for a Sparrow transaction."""
+    # Match by amount first (primary key)
+    amount_matches = []
+    for db_tx in db_transactions:
+        if abs(db_tx['net_value'] - sparrow_tx['value']) < Decimal('0.00000001'):
+            amount_matches.append(db_tx)
+    
+    if not amount_matches:
+        return None
+    
+    # If multiple amount matches, filter by date proximity
+    date_range_start = sparrow_tx['date'] - timedelta(hours=tolerance_hours)
+    date_range_end = sparrow_tx['date'] + timedelta(hours=tolerance_hours)
+    
+    date_matches = [tx for tx in amount_matches 
+                   if date_range_start <= tx['date'] <= date_range_end]
+    
+    if date_matches:
+        # Return closest by date
+        return min(date_matches, key=lambda tx: abs((tx['date'] - sparrow_tx['date']).total_seconds()))
+    
+    # No date match, return closest amount match
+    return amount_matches[0]
+
+
+def compare_wallets(wallet_name, sparrow_csv_path):
+    """Compare Sparrow CSV with database for a wallet."""
+    print(f"\n{'=' * 100}")
+    print(f"Comparing {wallet_name} wallet")
+    print(f"{'=' * 100}\n")
+    
+    # Load data
+    sparrow_txs = parse_sparrow_csv(sparrow_csv_path)
+    db_txs = get_db_transactions(wallet_name)
+    
+    print(f"Sparrow transactions: {len(sparrow_txs)}")
+    print(f"Database transactions: {len(db_txs)}")
+    
+    # Calculate running balances
+    sparrow_balance = Decimal('0')
+    db_balance = Decimal('0')
+    
+    for tx in sparrow_txs:
+        sparrow_balance += tx['value']
+    
+    for tx in db_txs:
+        db_balance += tx['net_value']
+    
+    print(f"\nSparrow final balance:  {sparrow_balance:.8f} BTC")
+    print(f"Database final balance: {db_balance:.8f} BTC")
+    print(f"Difference:             {db_balance - sparrow_balance:+.8f} BTC")
+    
+    # Find unmatched transactions
+    matched_db_ids = set()
+    unmatched_sparrow = []
+    
+    for s_tx in sparrow_txs:
+        match = find_match(s_tx, db_txs)
+        if match:
+            matched_db_ids.add(match['id'])
+        else:
+            unmatched_sparrow.append(s_tx)
+    
+    unmatched_db = [tx for tx in db_txs if tx['id'] not in matched_db_ids]
+    
+    # Report unmatched
+    if unmatched_sparrow:
+        print(f"\n{'=' * 100}")
+        print(f"Transactions in Sparrow but NOT in database: {len(unmatched_sparrow)}")
+        print(f"{'=' * 100}\n")
+        for tx in unmatched_sparrow:
+            print(f"Date: {tx['date']}")
+            print(f"  Value: {tx['value']:+.8f} BTC")
+            print(f"  Fee:   {tx['fee']:.8f} BTC")
+            print(f"  Label: {tx['label']}")
+            print()
+    
+    if unmatched_db:
+        print(f"\n{'=' * 100}")
+        print(f"Transactions in database but NOT in Sparrow: {len(unmatched_db)}")
+        print(f"{'=' * 100}\n")
+        for tx in unmatched_db:
+            print(f"ID: {tx['id']} - {tx['date']}")
+            print(f"  Type:      {tx['type']}")
+            print(f"  Net value: {tx['net_value']:+.8f} BTC")
+            print(f"  Credit:    {tx['credit']:.8f} BTC")
+            print(f"  Debit:     {tx['debit']:.8f} BTC")
+            print(f"  Fee:       {tx['fee']:.8f} BTC")
+            print(f"  Comment:   {tx['comment']}")
+            print()
+    
+    if not unmatched_sparrow and not unmatched_db:
+        print("\n✅ All transactions matched!")
+    
+    return {
+        'unmatched_sparrow': unmatched_sparrow,
+        'unmatched_db': unmatched_db,
+        'sparrow_balance': sparrow_balance,
+        'db_balance': db_balance
+    }
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: compare_with_sparrow <wallet_name>")
+        print("\nAvailable comparisons:")
+        print("  compare_with_sparrow CC")
+        print("  compare_with_sparrow Vault")
+        sys.exit(1)
+    
+    wallet = sys.argv[1]
+    
+    # Map wallet names to CSV files
+    csv_files = {
+        'CC': '/Volumes/DATA/workspace/cryptoAccounting/BTC CC-NS-transactions.csv',
+        'Vault': '/Volumes/DATA/workspace/cryptoAccounting/Vault-transactions.csv'
+    }
+    
+    if wallet not in csv_files:
+        print(f"Unknown wallet: {wallet}")
+        print(f"Available: {', '.join(csv_files.keys())}")
+        sys.exit(1)
+    
+    result = compare_wallets(wallet, csv_files[wallet])
+    
+    # Summary
+    print(f"\n{'=' * 100}")
+    print("SUMMARY")
+    print(f"{'=' * 100}\n")
+    
+    if result['unmatched_db']:
+        print(f"Action needed: Remove {len(result['unmatched_db'])} transactions from database")
+        print("SQL to remove:")
+        ids = [str(tx['id']) for tx in result['unmatched_db']]
+        print(f"DELETE FROM ledger WHERE id IN ({', '.join(ids)});")
+        print()
+    
+    if result['unmatched_sparrow']:
+        print(f"Action needed: Add {len(result['unmatched_sparrow'])} transactions to database")
+        print("(Requires manual inspection to determine transaction type)")
+        print()
+
+
+if __name__ == '__main__':
+    main()

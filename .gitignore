@@ -111,3 +111,9 @@ venv.bak/
 # Allow adding this repo's README and other top-level config
 !README.md
 !requirements.txt
+# Sensitive transaction data
+*.csv
+*-transactions.csv
+
+# Database credentials
+src/python/config.py

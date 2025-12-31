@@ -804,34 +804,34 @@ class CryptoAccounts(object):
         
         if wallet:
             # Balance for specific wallet
+            # Note: Fees are already included in buy/sell amounts, not subtracted separately
             query = """
                 SELECT 
-                    COALESCE(SUM(buy), 0) - COALESCE(SUM(sell), 0) - COALESCE(SUM(fee), 0)
+                    COALESCE(SUM(buy), 0) - COALESCE(SUM(sell), 0)
                 FROM ledger
                 WHERE 
-                    (buy_curr = %s OR sell_curr = %s OR fee_curr = %s)
+                    (buy_curr = %s OR sell_curr = %s)
                     AND exchange = %s
             """
-            cur.execute(query, (coin, coin, coin, wallet))
+            cur.execute(query, (coin, coin, wallet))
             result = cur.fetchone()[0]
             return float(result) if result else 0.0
         else:
             # Balance for all wallets
+            # Note: Fees are already included in buy/sell amounts, not subtracted separately
             query = """
                 SELECT 
                     exchange,
                     COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
-                    COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0) -
-                    COALESCE(SUM(CASE WHEN fee_curr = %s THEN fee ELSE 0 END), 0) as balance
+                    COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0) as balance
                 FROM ledger
                 WHERE exchange IS NOT NULL
                 GROUP BY exchange
                 HAVING COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
-                       COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0) -
-                       COALESCE(SUM(CASE WHEN fee_curr = %s THEN fee ELSE 0 END), 0) != 0
+                       COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0) != 0
                 ORDER BY exchange
             """
-            cur.execute(query, (coin, coin, coin, coin, coin, coin))
+            cur.execute(query, (coin, coin, coin, coin))
             return {row[0]: float(row[1]) for row in cur.fetchall()}
 
 

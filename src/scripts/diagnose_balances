@@ -93,8 +93,8 @@ def main():
                 print(f"\n  Components:")
                 print(f"    Total deposits/buys:     +{total_buy:.8f}")
                 print(f"    Total withdrawals/sells: -{total_sell:.8f}")
-                print(f"    Total fees:              -{total_fee:.8f}")
-                print(f"    Net balance:             {(total_buy - total_sell - total_fee):.8f}")
+                print(f"    Total fees (tracking):    {total_fee:.8f}")
+                print(f"    Net balance:             {(total_buy - total_sell):.8f}")
                 
                 # Suggest fixes
                 print(f"\n  💡 Possible causes:")
