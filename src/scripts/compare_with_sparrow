@@ -81,15 +81,30 @@ def get_db_transactions(wallet, coin='BTC'):
     return transactions
 
 
-def find_match(sparrow_tx, db_transactions, tolerance_hours=48):
-    """Find matching database transaction for a Sparrow transaction."""
-    # Match by amount first (primary key)
+def find_match(sparrow_tx, db_transactions, matched_db_ids=None, tolerance_hours=48):
+    """Find matching database transaction for a Sparrow transaction.
+    
+    Args:
+        sparrow_tx: Sparrow transaction to match
+        db_transactions: List of database transactions
+        matched_db_ids: Set of already-matched DB transaction IDs to exclude
+        tolerance_hours: Time window for matching (default 48 hours)
+    """
+    if matched_db_ids is None:
+        matched_db_ids = set()
+    
+    # Match by amount first (primary key), excluding already-matched transactions
     amount_matches = []
     for db_tx in db_transactions:
+        if db_tx['id'] in matched_db_ids:
+            continue  # Skip already-matched transactions
         if abs(db_tx['net_value'] - sparrow_tx['value']) < Decimal('0.00000001'):
             amount_matches.append(db_tx)
     
     if not amount_matches:
+        print(f"No amount match for Sparrow TX: value={sparrow_tx['value']}, date={sparrow_tx['date']}")
+        for db_tx in db_transactions:
+            print(f"DB TX ID {db_tx['id']}: net_value={db_tx['net_value']}, date={db_tx['date']}")
         return None
     
     # If multiple amount matches, filter by date proximity
@@ -102,7 +117,7 @@ def find_match(sparrow_tx, db_transactions, tolerance_hours=48):
     if date_matches:
         # Return closest by date
         return min(date_matches, key=lambda tx: abs((tx['date'] - sparrow_tx['date']).total_seconds()))
-    
+        
     # No date match, return closest amount match
     return amount_matches[0]
 
@@ -139,7 +154,7 @@ def compare_wallets(wallet_name, sparrow_csv_path):
     unmatched_sparrow = []
     
     for s_tx in sparrow_txs:
-        match = find_match(s_tx, db_txs)
+        match = find_match(s_tx, db_txs, matched_db_ids)
         if match:
             matched_db_ids.add(match['id'])
         else:
@@ -185,19 +200,17 @@ def compare_wallets(wallet_name, sparrow_csv_path):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: compare_with_sparrow <wallet_name>")
-        print("\nAvailable comparisons:")
-        print("  compare_with_sparrow CC")
-        print("  compare_with_sparrow Vault")
+    if len(sys.argv) < 3:
+        print("Usage: compare_with_sparrow <wallet_name> <sparrow_csv_path>")
         sys.exit(1)
     
     wallet = sys.argv[1]
     
+    csv_file = sys.argv[2] if len(sys.argv) > 2 else None
+    
     # Map wallet names to CSV files
     csv_files = {
-        'CC': '/Volumes/DATA/workspace/cryptoAccounting/BTC CC-NS-transactions.csv',
-        'Vault': '/Volumes/DATA/workspace/cryptoAccounting/Vault-transactions.csv'
+        wallet: sys.argv[2] if len(sys.argv) > 2 else None
     }
     
     if wallet not in csv_files:
