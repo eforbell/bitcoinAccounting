@@ -102,9 +102,6 @@ def find_match(sparrow_tx, db_transactions, matched_db_ids=None, tolerance_hours
             amount_matches.append(db_tx)
     
     if not amount_matches:
-        # print(f"No amount match for Sparrow TX: value={sparrow_tx['value']}, date={sparrow_tx['date']}")
-        #for db_tx in db_transactions:
-        #    print(f"DB TX ID {db_tx['id']}: net_value={db_tx['net_value']}, date={db_tx['date']}")
         return None
     
     # If multiple amount matches, filter by date proximity
