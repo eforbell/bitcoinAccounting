@@ -59,8 +59,6 @@ def main():
         print(f"{'-' * 90}")
         
         for wallet_id, balance in sorted_wallets:
-            if abs(balance) < 0.00000001:  # Skip dust
-                continue
             
             # Get metadata if available
             if wallet_id in wallets_metadata:
@@ -76,6 +74,8 @@ def main():
                 wallet_type = 'unknown'
                 custody = 'unknown'
                 status = 'Unknown'
+                if not show_all and abs(balance) < 0.00000001:  # Skip dust
+                    continue
             
             percentage = (balance / total_balance * 100) if total_balance > 0 else 0
             

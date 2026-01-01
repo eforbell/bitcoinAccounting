@@ -826,11 +826,9 @@ class CryptoAccounts(object):
                 FROM ledger
                 WHERE exchange IS NOT NULL
                 GROUP BY exchange
-                HAVING COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
-                       COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0) != 0
                 ORDER BY exchange
             """
-            cur.execute(query, (coin, coin, coin, coin))
+            cur.execute(query, (coin, coin))
             return {row[0]: float(row[1]) for row in cur.fetchall()}
 
 
