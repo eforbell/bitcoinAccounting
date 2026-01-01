@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+"""Track and review realized capital gains/losses for any tax year.
+
+This tool lets you review your actual capital gains for past years with the
+same detail and accuracy as the forecast_gains tool.
+
+Usage:
+    gains_tracker 2024                    # Review all 2024 gains
+    gains_tracker 2024 --wallet Strike    # Review Strike gains only
+    gains_tracker 2024 --coin BTC         # Review BTC gains only
+    gains_tracker 2024 --export-1099b     # Export to TaxAct CSV format
+    gains_tracker 2024 --wallet Strike --export-1099b  # Per-wallet export
+
+Examples:
+    # Review all 2024 gains
+    gains_tracker 2024
+    
+    # Review gains from specific wallet (required for 2025+ per-wallet FIFO)
+    gains_tracker 2025 --wallet Vault
+    
+    # Export to TaxAct format for tax filing
+    gains_tracker 2024 --export-1099b
+    
+    # Export per-wallet gains (proper for 2025+)
+    gains_tracker 2025 --wallet Strike --export-1099b
+
+Output:
+    - Summary of short-term vs long-term gains
+    - Detailed lot-by-lot breakdown
+    - Cost basis and proceeds for each sale
+    - Holding period for each lot
+    - Optional CSV export in TaxAct/IRS format
+"""
+
+import sys
+import csv
+from datetime import datetime
+import _bootstrap
+from cryptoAccounts import CryptoAccounts
+
+
+def format_currency(amount):
+    """Format amount as currency."""
+    return f"${amount:,.2f}"
+
+
+def format_crypto(amount, decimals=8):
+    """Format crypto amount with appropriate decimals."""
+    return f"{amount:.{decimals}f}"
+
+
+def print_summary(lots, summary, year, coin, wallet=None):
+    """Print summary of gains/losses."""
+    print(f"\n{'=' * 100}")
+    if wallet:
+        print(f"{year} Capital Gains Summary - {wallet} Wallet - {coin}")
+    else:
+        print(f"{year} Capital Gains Summary - All Wallets - {coin}")
+    print(f"{'=' * 100}\n")
+    
+    print(f"Total Transactions: {summary['total_count']}")
+    print(f"Total Quantity Sold: {format_crypto(summary['total_quantity'])} {coin}")
+    print(f"Total Proceeds: {format_currency(summary['total_proceeds'])}")
+    print(f"Total Cost Basis: {format_currency(summary['total_cost_basis'])}")
+    
+    total_gain = summary['total_proceeds'] - summary['total_cost_basis']
+    print(f"Net Gain/Loss: {format_currency(total_gain)}")
+    
+    print(f"\n{'-' * 100}")
+    print("Breakdown by Holding Period:")
+    print(f"{'-' * 100}\n")
+    
+    # Short-term
+    st_gain = summary['short_term_proceeds'] - summary['short_term_cost']
+    print(f"Short-Term (≤1 year):")
+    print(f"  Transactions: {summary['short_term_count']}")
+    print(f"  Quantity: {format_crypto(summary['short_term_quantity'])} {coin}")
+    print(f"  Proceeds: {format_currency(summary['short_term_proceeds'])}")
+    print(f"  Cost Basis: {format_currency(summary['short_term_cost'])}")
+    print(f"  Gain/Loss: {format_currency(st_gain)}")
+    
+    # Long-term
+    lt_gain = summary['long_term_proceeds'] - summary['long_term_cost']
+    print(f"\nLong-Term (>1 year):")
+    print(f"  Transactions: {summary['long_term_count']}")
+    print(f"  Quantity: {format_crypto(summary['long_term_quantity'])} {coin}")
+    print(f"  Proceeds: {format_currency(summary['long_term_proceeds'])}")
+    print(f"  Cost Basis: {format_currency(summary['long_term_cost'])}")
+    print(f"  Gain/Loss: {format_currency(lt_gain)}")
+    
+    # Missing basis
+    if summary['missing_basis_count'] > 0:
+        print(f"\n⚠️  Missing Basis:")
+        print(f"  Transactions: {summary['missing_basis_count']}")
+        print(f"  Quantity: {format_crypto(summary['missing_basis_quantity'])} {coin}")
+
+
+def print_detailed_lots(lots, coin):
+    """Print detailed lot-by-lot breakdown."""
+    print(f"\n{'=' * 100}")
+    print("Detailed Lot-by-Lot Breakdown")
+    print(f"{'=' * 100}\n")
+    
+    print(f"{'Date Sold':<12} {'Date Acquired':<12} {'Qty':<15} {'Proceeds':<15} {'Cost Basis':<15} {'Gain/Loss':<15} {'Term':<6} {'Wallet'}")
+    print(f"{'-' * 100}")
+    
+    for lot in lots:
+        date_sold = lot['date_sold'].strftime('%Y-%m-%d')
+        date_acquired = lot['date_acquired'].strftime('%Y-%m-%d') if lot['date_acquired'] else 'Unknown'
+        qty = format_crypto(lot['quantity'], 8)
+        proceeds = format_currency(lot['proceeds'])
+        cost_basis = format_currency(lot['cost_basis']) if lot['cost_basis'] is not None else 'Unknown'
+        
+        if lot['gain_loss'] is not None:
+            gain_loss = format_currency(lot['gain_loss'])
+        else:
+            gain_loss = 'Unknown'
+        
+        term = 'Long' if lot['term'] == 'long' else 'Short'
+        wallet = lot.get('wallet', 'N/A')
+        
+        print(f"{date_sold:<12} {date_acquired:<12} {qty:<15} {proceeds:<15} {cost_basis:<15} {gain_loss:<15} {term:<6} {wallet}")
+
+
+def export_to_taxact(lots, year, coin, wallet=None):
+    """Export gains to 1099-B CSV format with IRS-compliant headers."""
+    if wallet:
+        filename = f"1099b_{coin}_{wallet}_{year}.csv"
+    else:
+        filename = f"1099b_{coin}_all_{year}.csv"
+    
+    with open(filename, 'w', newline='') as f:
+        writer = csv.writer(f)
+        
+        # IRS Form 8949 / 1099-B header format
+        writer.writerow([
+            'Description',
+            'Date Sold',
+            'Sales Proceeds',
+            'Date Acquired',
+            'Cost or Other Basis',
+            'Term',
+            'Reporting Category'
+        ])
+        
+        for lot in lots:
+            description = f"{lot['quantity']:.8f} {coin}"
+            date_sold = lot['date_sold'].strftime('%m/%d/%Y')
+            sales_proceeds = f"{lot['proceeds']:.2f}"
+            date_acquired = lot['date_acquired'].strftime('%m/%d/%Y') if lot['date_acquired'] else ''
+            cost_basis = f"{lot['cost_basis']:.2f}" if lot['cost_basis'] is not None else ''
+            
+            # Term: Short or Long
+            term = 'Short' if lot['term'] == 'short' else 'Long'
+            
+            # Reporting Category: Leave empty for user to fill in A/B/C/D/E/F
+            reporting_category = ''
+            
+            writer.writerow([
+                description,
+                date_sold,
+                sales_proceeds,
+                date_acquired,
+                cost_basis,
+                term,
+                reporting_category
+            ])
+    
+    print(f"\n✅ Exported to {filename}")
+    print(f"   Import this file into TaxAct or your tax software")
+    print(f"\n{'=' * 90}")
+    print(f"📝 Before importing, fill in 'Reporting Category' column:")
+    print(f"{'=' * 90}")
+    print(f"\n  Short-term:")
+    print(f"    (A) Received a Form 1099-B showing basis (Box 3) was reported to the IRS")
+    print(f"    (B) Received a Form 1099-B showing basis was not reported to the IRS")
+    print(f"    (C) Did not receive a Form 1099-B")
+    print(f"\n  Long-term:")
+    print(f"    (D) Received a Form 1099-B showing basis was reported to the IRS")
+    print(f"    (E) Received a Form 1099-B showing basis was not reported to the IRS")
+    print(f"    (F) Did not receive a Form 1099-B")
+    print(f"\n  💡 For most crypto transactions: use C (short-term) or F (long-term)")
+    print(f"     Some exchanges now issue 1099-DA forms: use B (short) or E (long)")
+    print(f"{'=' * 90}\n")
+
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__)
+        sys.exit(1)
+    
+    # Parse arguments
+    year = int(sys.argv[1])
+    coin = 'BTC'
+    wallet = None
+    export = False
+    
+    i = 2
+    while i < len(sys.argv):
+        if sys.argv[i] == '--coin':
+            coin = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == '--wallet':
+            wallet = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == '--export-1099b':
+            export = True
+            i += 1
+        else:
+            print(f"Unknown argument: {sys.argv[i]}")
+            sys.exit(1)
+    
+    # Validate year
+    if year < 2009 or year > datetime.now().year:
+        print(f"Invalid year: {year}")
+        sys.exit(1)
+    
+    # Warn if using global accounting for 2025+
+    if year >= 2025 and wallet is None:
+        print(f"⚠️  WARNING: For tax year {year}, IRS Rev. Proc. 2024-28 requires")
+        print(f"   per-wallet FIFO accounting. Use --wallet flag for compliant reporting.")
+        print(f"   Example: gains_tracker {year} --wallet Strike")
+        print()
+    
+    crypto = CryptoAccounts()
+    
+    try:
+        print(f"\nCalculating {year} capital gains for {coin}...")
+        if wallet:
+            print(f"Wallet: {wallet}")
+        
+        # Get sales for the year
+        sales, worksheet = crypto.get_sales_for_1099b(coin, year, wallet=wallet)
+        
+        if not sales:
+            print(f"\nNo {coin} sales found for {year}")
+            if wallet:
+                print(f"in wallet: {wallet}")
+            sys.exit(0)
+        
+        # Convert worksheet to lots format and calculate summary
+        lots = []
+        summary = {
+            'total_count': 0,
+            'total_quantity': 0.0,
+            'total_proceeds': 0.0,
+            'total_cost_basis': 0.0,
+            'short_term_count': 0,
+            'short_term_quantity': 0.0,
+            'short_term_proceeds': 0.0,
+            'short_term_cost': 0.0,
+            'long_term_count': 0,
+            'long_term_quantity': 0.0,
+            'long_term_proceeds': 0.0,
+            'long_term_cost': 0.0,
+            'missing_basis_count': 0,
+            'missing_basis_quantity': 0.0
+        }
+        
+        for sale in worksheet:
+            lot = {
+                'date_sold': datetime.strptime(sale['Sale Date'], '%m/%d/%Y'),
+                'date_acquired': datetime.strptime(sale['Acquire Date'], '%m/%d/%Y') if sale['Acquire Date'] else None,
+                'quantity': float(sale['Lot Quantity']),
+                'proceeds': float(sale['Proceeds']) * (float(sale['Lot Quantity']) / float(sale['Sale Quantity'])),
+                'cost_basis': float(sale['Total Cost Basis']) if sale['Total Cost Basis'] else None,
+                'gain_loss': float(sale['Gain/Loss']) if sale['Gain/Loss'] else None,
+                'term': sale['Term'].lower(),
+                'wallet': wallet or 'All'
+            }
+            lots.append(lot)
+            
+            # Update summary
+            summary['total_count'] += 1
+            summary['total_quantity'] += lot['quantity']
+            summary['total_proceeds'] += lot['proceeds']
+            if lot['cost_basis'] is not None:
+                summary['total_cost_basis'] += lot['cost_basis']
+            
+            if lot['term'] == 'short':
+                summary['short_term_count'] += 1
+                summary['short_term_quantity'] += lot['quantity']
+                summary['short_term_proceeds'] += lot['proceeds']
+                if lot['cost_basis'] is not None:
+                    summary['short_term_cost'] += lot['cost_basis']
+            elif lot['term'] == 'long':
+                summary['long_term_count'] += 1
+                summary['long_term_quantity'] += lot['quantity']
+                summary['long_term_proceeds'] += lot['proceeds']
+                if lot['cost_basis'] is not None:
+                    summary['long_term_cost'] += lot['cost_basis']
+            
+            if lot['cost_basis'] is None:
+                summary['missing_basis_count'] += 1
+                summary['missing_basis_quantity'] += lot['quantity']
+        
+        # Print results
+        print_summary(lots, summary, year, coin, wallet)
+        print_detailed_lots(lots, coin)
+        
+        # Export if requested
+        if export:
+            export_to_taxact(lots, year, coin, wallet)
+        else:
+            print(f"\n💡 Tip: Use --export-1099b to export to TaxAct CSV format")
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        crypto.close()
+
+
+if __name__ == '__main__':
+    main()
