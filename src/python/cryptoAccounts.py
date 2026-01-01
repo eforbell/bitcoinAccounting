@@ -16,28 +16,54 @@ class CryptoAccounts(object):
         self.connection.close()
 
     def get_balance(self, coin = 'BTC'):
+        """Get total balance across all wallets for a coin.
+        
+        Fees are already included in buy/sell amounts, not subtracted separately.
+        
+        Args:
+            coin: Currency code (e.g., 'BTC', 'USD')
+            
+        Returns:
+            float: Total balance
+        """
         cur = self.connection.cursor()
-        query = "select get_balance('" + coin + "')"
-        cur.execute(query)
-        rows = cur.fetchall()
-        for row in rows:
-            returnVal = row[0]
-            if abs(float(returnVal))-0.0000000000001 > 0:
-                return returnVal
-            else:
-                return 0
+        query = """
+            SELECT 
+                COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0)
+            FROM ledger
+        """
+        cur.execute(query, (coin, coin))
+        result = cur.fetchone()
+        balance = float(result[0]) if result and result[0] else 0.0
+        # Return 0 for very small amounts (dust)
+        return balance if abs(balance) > 0.0000000000001 else 0.0
 
     def get_balance_by_account(self, coin = 'BTC', account = 'Vault'):
+        """Get balance for a specific account/wallet.
+        
+        Fees are already included in buy/sell amounts, not subtracted separately.
+        
+        Args:
+            coin: Currency code (e.g., 'BTC', 'USD')
+            account: Wallet/exchange name
+            
+        Returns:
+            float: Account balance
+        """
         cur = self.connection.cursor()
-        query = "select get_balance_by_account('" + coin + "', '" + account + "')"
-        cur.execute(query)
-        rows = cur.fetchall()
-        for row in rows:
-            returnVal = row[0]
-            if abs(float(returnVal))-0.0000000000001 > 0:
-                return returnVal
-            else:
-                return 0
+        query = """
+            SELECT 
+                COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0)
+            FROM ledger
+            WHERE exchange = %s
+        """
+        cur.execute(query, (coin, coin, account))
+        result = cur.fetchone()
+        balance = float(result[0]) if result and result[0] else 0.0
+        # Return 0 for very small amounts (dust)
+        return balance if abs(balance) > 0.0000000000001 else 0.0
 
     def get_basis(self, coin = 'BTC'):
         cur = self.connection.cursor()
