@@ -259,9 +259,16 @@ def main():
         }
         
         for sale in worksheet:
+            # Parse acquire date - handle UNKNOWN/empty dates
+            acquire_date_str = sale['Acquire Date']
+            if acquire_date_str and acquire_date_str.upper() not in ('UNKNOWN', 'VARIOUS', ''):
+                date_acquired = datetime.strptime(acquire_date_str, '%m/%d/%Y')
+            else:
+                date_acquired = None
+            
             lot = {
                 'date_sold': datetime.strptime(sale['Sale Date'], '%m/%d/%Y'),
-                'date_acquired': datetime.strptime(sale['Acquire Date'], '%m/%d/%Y') if sale['Acquire Date'] else None,
+                'date_acquired': date_acquired,
                 'quantity': float(sale['Lot Quantity']),
                 'proceeds': float(sale['Proceeds']) * (float(sale['Lot Quantity']) / float(sale['Sale Quantity'])),
                 'cost_basis': float(sale['Total Cost Basis']) if sale['Total Cost Basis'] else None,
