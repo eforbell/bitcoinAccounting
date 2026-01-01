@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Show cryptocurrency balances at exchanges with cost basis tracking.
+
+This shows which exchanges have coins with KNOWN cost basis (purchased directly
+at that exchange) vs coins transferred in (which may have broken basis chain).
+
+Critical for 2025+ per-wallet FIFO: you can only sell confidently from exchanges
+where you have direct purchase history with proper cost basis.
+
+Usage:
+    exchange_liquidity [COIN]
+    
+Examples:
+    exchange_liquidity           # BTC by default
+    exchange_liquidity BTC       # Bitcoin
+    exchange_liquidity ETH       # Ethereum
+"""
+
+import sys
+import _bootstrap
+from cryptoAccounts import CryptoAccounts
+
+
+# Define which wallets are exchanges (can immediately sell)
+EXCHANGES = [
+    'River',
+    'Strike', 
+    'Kraken',
+    'Coinbase Pro',
+    'Coinbase',
+    'Binance',
+    'Gemini',
+    'Swan Bitcoin',
+    'BlockFi',
+    'Uphold',
+    'Nexo',
+    'Ledger'
+]
+
+
+def get_exchange_purchase_history(crypto, coin, exchange):
+    """Get purchase/trade history at exchange.
+    
+    Returns:
+        (total_purchased, current_balance, net_withdrawn)
+    """
+    cur = crypto.connection.cursor()
+    
+    # Get all Trade transactions where we bought the coin
+    cur.execute("""
+        SELECT SUM(buy)
+        FROM ledger
+        WHERE exchange = %s
+          AND trans_type = 'Trade'
+          AND buy_curr = %s
+    """, (exchange, coin))
+    
+    result = cur.fetchone()
+    total_purchased = float(result[0]) if result[0] else 0
+    
+    # Get current balance
+    current_balance = crypto.get_wallet_balance(coin, exchange)
+    
+    # Net withdrawn = purchased - current balance
+    net_withdrawn = total_purchased - current_balance
+    
+    return total_purchased, current_balance, net_withdrawn
+
+
+def main():
+    coin = sys.argv[1].upper() if len(sys.argv) > 1 else 'BTC'
+    
+    crypto = CryptoAccounts()
+    
+    try:
+        print(f"\n{'=' * 100}")
+        print(f"Purchase History & Cost Basis Tracking for {coin}")
+        print(f"(Shows where you have explainable cost basis for 2025+ per-wallet FIFO)")
+        print(f"{'=' * 100}\n")
+        
+        exchange_data = []
+        total_all_purchases = 0
+        total_still_at_exchange = 0
+        total_withdrawn = 0
+        
+        for exchange in EXCHANGES:
+            purchased, balance, withdrawn = get_exchange_purchase_history(crypto, coin, exchange)
+            
+            if purchased > 0:  # Has purchase history
+                exchange_data.append({
+                    'name': exchange,
+                    'purchased': purchased,
+                    'balance': balance,
+                    'withdrawn': withdrawn
+                })
+                
+                total_all_purchases += purchased
+                total_still_at_exchange += balance
+                total_withdrawn += withdrawn
+        
+        if exchange_data:
+            print(f"{'Exchange':<20} {'Total Purchased':>18} {'Current Balance':>18} {'Withdrawn':>18} {'Status'}")
+            print(f"{'-' * 100}")
+            
+            for data in sorted(exchange_data, key=lambda x: x['purchased'], reverse=True):
+                if data['balance'] > 0 and data['withdrawn'] == 0:
+                    status = "✓ All here"
+                elif data['balance'] > 0 and data['withdrawn'] > 0:
+                    status = "⚠ Some moved"
+                elif data['balance'] == 0:
+                    status = "⚠ All moved"
+                else:
+                    status = ""
+                    
+                print(f"{data['name']:<20} {data['purchased']:>18.8f} {data['balance']:>18.8f} {data['withdrawn']:>18.8f} {status}")
+            
+            print(f"{'-' * 100}")
+            print(f"{'TOTALS':<20} {total_all_purchases:>18.8f} {total_still_at_exchange:>18.8f} {total_withdrawn:>18.8f}")
+        else:
+            print(f"No purchase history found for {coin} at exchanges")
+            print(f"All {coin} may have been acquired through deposits/transfers")
+        
+        # Get total balance
+        total_balance = crypto.get_balance(coin)
+        in_cold_storage = total_balance - total_still_at_exchange
+        
+        print(f"\n{'=' * 100}")
+        print(f"Cost Basis Analysis:")
+        print(f"  Total purchased at exchanges:  {total_all_purchases:>18.8f} {coin}  ← Known cost basis")
+        print(f"  Still at exchanges:            {total_still_at_exchange:>18.8f} {coin}  ← Safe to sell now")
+        print(f"  Withdrawn to cold storage:     {total_withdrawn:>18.8f} {coin}  ← Needs transfer chain")
+        print(f"  Other cold storage:            {in_cold_storage - total_withdrawn:>18.8f} {coin}  ← Unknown basis")
+        print(f"  TOTAL HOLDINGS:                {total_balance:>18.8f} {coin}")
+        print(f"{'=' * 100}")
+        
+        if total_still_at_exchange > 0:
+            print(f"\n✓ You can safely sell {total_still_at_exchange:.8f} {coin} from exchanges with known basis")
+            
+        if total_withdrawn > 0:
+            print(f"\n⚠ {total_withdrawn:.8f} {coin} purchased at exchanges but withdrawn to cold storage")
+            print(f"  These coins have cost basis but may show as $0 due to broken transfer chain")
+            print(f"  To sell these, need to fix transfer linking or manually document basis")
+            
+        unknown_basis = in_cold_storage - total_withdrawn
+        if unknown_basis > 0.00000001:  # Ignore dust
+            print(f"\n⚠ {unknown_basis:.8f} {coin} in cold storage with no exchange purchase history")
+            print(f"  May be from deposits, transfers, or mining - research required")
+            
+        print(f"\n💡 Purchase history exists at these exchanges - this is your cost basis documentation")
+        print(f"   For 2025+ compliance, either sell from these exchanges directly")
+        print(f"   or implement transfer chain tracking to link withdrawn coins to original purchases")
+        print()
+        
+    finally:
+        crypto.close()
+
+
+if __name__ == '__main__':
+    main()
