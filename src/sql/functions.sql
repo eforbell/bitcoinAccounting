@@ -6,15 +6,11 @@ BEGIN
      balance := (select sum(total) from
 		(SELECT sum(buy) total
 		FROM public.ledger
-		where buy_curr = coin
+		where buy_curr = coin and trans_type != 'Stake'
 		UNION
 		select -sum(sell) total
 		from public.ledger
-		where sell_curr = coin
-		UNION
-		select -sum(fee) total
-		from public.ledger
-		where fee_curr = coin
+		where sell_curr = coin 
 		) total);
 END; $function$
 ;
