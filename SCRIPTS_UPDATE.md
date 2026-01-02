@@ -88,56 +88,99 @@ Each script now:
 
 ## Usage
 
-Set up environment variables (choose one approach):
+All scripts use `_bootstrap.py` for automatic path setup. No environment variables required!
 
-**Option 1: Set REPO_ROOT (Recommended)**
+### Prerequisites
+
+1. Install Python dependencies:
 ```bash
-export REPO_ROOT=/path/to/cryptoAccounting
+cd /path/to/cryptoAccounting
+pip install -r requirements.txt
 ```
 
-**Option 2: Set CRYPTO_ACCOUNTING_PYTHONPATH**
+2. Configure database connection in `src/python/config.py`
+
+### Running Scripts
+
+Scripts work from anywhere - they automatically find the module path:
+
 ```bash
-export CRYPTO_ACCOUNTING_PYTHONPATH=/path/to/cryptoAccounting/src/python
+# From the scripts directory
+cd src/scripts
+./balance              # Show BTC balance
+./balance ETH          # Show ETH balance
+./wallet_balances BTC  # Show all wallets
+./gains_tracker 2024   # Review 2024 capital gains
+./exchange_liquidity BTC --wallet=Strike  # Check Strike purchase history
+
+# Or with python directly
+python src/scripts/balance
+python src/scripts/gains_tracker 2024 BTC --export-1099b
+
+# Or from anywhere after adding to PATH (see Deployment below)
+balance
+gains_tracker 2024
 ```
 
-**Option 3: Add to PYTHONPATH**
-```bash
-export PYTHONPATH=/path/to/cryptoAccounting/src/python:$PYTHONPATH
-```
+### Quick Reference
 
-Then run scripts:
-```bash
-./balance           # Show BTC balance
-./balance ETH       # Show ETH balance
-./transfer          # Interactive transfer
-./buySats          # Interactive buy
-./sell             # Interactive sell
-./trades BTC       # Show BTC trade history
-./earnInterest     # Record interest income
-./export_tx ledger.csv BTC  # Export BTC transactions
-```
+**Transaction Recording:**
+- `buySats` - Record Bitcoin purchase
+- `sell` - Record sale
+- `transfer` - Transfer between wallets
+- `earnInterest` - Record interest income
+
+**Balance & Holdings:**
+- `balance [COIN]` - Show total balance
+- `wallet_balances [COIN] [--all]` - Holdings by wallet
+- `wallet_ledger WALLET [COIN]` - Detailed transaction history
+- `exchange_liquidity [COIN] [--wallet=NAME]` - Purchase history analysis
+
+**Tax & Reporting:**
+- `gains_tracker YEAR [COIN] [--wallet=NAME] [--export-1099b]` - Capital gains review
+- `forecast_gains COIN QTY [PRICE] [--wallet=NAME]` - Simulate sale
+- `export_1099b YEAR [--wallet=NAME]` - Export tax forms
+- `export_tx FILE [COIN]` - Export transactions to CSV
+
+**Validation & Diagnostics:**
+- `diagnose_balances WALLET [COIN]` - Validate wallet balances
+- `validate_transfers [COIN]` - Check withdrawal/deposit pairs
+- `compare_with_sparrow WALLET CSV_FILE` - Reconcile with Sparrow wallet
+- `trades [COIN]` - Show trade history
 
 ## Deployment to ~/bin
 
+Simple deployment - just symlink the scripts:
+
 ```bash
-# Create symlinks
+# Create symlinks for frequently used scripts
 mkdir -p ~/bin
-for script in balance transfer buySats sell trades earnInterest export_tx; do
-    ln -s /path/to/cryptoAccounting/src/scripts/$script ~/bin/$script
-done
+cd ~/bin
 
-# Make executable (if needed)
-chmod +x ~/bin/*
+# Link the scripts you use most
+ln -s /path/to/cryptoAccounting/src/scripts/balance .
+ln -s /path/to/cryptoAccounting/src/scripts/wallet_balances .
+ln -s /path/to/cryptoAccounting/src/scripts/gains_tracker .
+ln -s /path/to/cryptoAccounting/src/scripts/exchange_liquidity .
+ln -s /path/to/cryptoAccounting/src/scripts/forecast_gains .
+# ... add more as needed
 
-# Add ~/bin to PATH (in ~/.bashrc or ~/.zshrc)
+# Make sure ~/bin is in your PATH (add to ~/.bashrc or ~/.zshrc)
 export PATH="$HOME/bin:$PATH"
-export REPO_ROOT=/path/to/cryptoAccounting
 
-# Then use from anywhere
+# Now use from anywhere - no environment variables needed!
 balance
-transfer
-buySats
+wallet_balances BTC
+gains_tracker 2024
 ```
+
+The `_bootstrap.py` module automatically:
+1. Finds the repository root
+2. Adds `src/python` to Python path
+3. Handles imports cleanly
+4. Works from any directory
+
+No `REPO_ROOT`, `PYTHONPATH`, or `CRYPTO_ACCOUNTING_PYTHONPATH` needed!
 
 ## Error Handling
 
