@@ -46,9 +46,17 @@ Workflow (how I use it locally)
 - Copy the repo to target machine and add the src/scripts folder to your path or run directly. These scripts have a bootstrap loader and nicely wrap the primary logic.
 - When you purchase BTC, run the `buySats` script which will insert a `Trade`/`Deposit` (or appropriate) row into the `ledger` table. 'sell' does the opposite (try not to sell your bitcoin!)
 - When moving BTC between wallets, run the `transfer` script which inserts a withdrawal + deposit pair to reflect the transfer.
-- To check balances and basic cost-basis, use wallet_balances / gains_tracker / forecast_gains scripts.
+- To check balances and basic cost-basis, use `wallet_balances`, `gains_tracker`, or `forecast_gains` scripts.
+- For detailed transaction history, use `wallet_ledger WALLET_NAME`.
+- To validate data integrity, use `diagnose_balances`, `validate_transfers`, or `compare_with_sparrow`.
+- To analyze where you have cost basis for selling, use `exchange_liquidity`.
 
-For detailed instructions on how to deploy scripts to `~/bin` and establish the Python module path, see [SCRIPTS_DEPLOYMENT.md](SCRIPTS_DEPLOYMENT.md).
+For detailed script documentation and quick reference, see [SCRIPTS_UPDATE.md](SCRIPTS_UPDATE.md).
+
+**2025+ Tax Compliance:**
+- Starting tax year 2025, IRS Rev. Proc. 2024-28 requires per-wallet FIFO accounting
+- All gain/forecast tools support `--wallet` parameter for per-wallet calculations
+- Tools provide clear warnings when using global FIFO for 2025+ transactions
 
 Notes about the schema
 - Tables are defined in `src/sql/tables.sql` (notably `ledger` and `pair_price`).
@@ -69,10 +77,13 @@ chmod +x run_tests.sh
 ```
 
 - Tests use in-memory SQLite to validate core ledger and balance logic without requiring a live Postgres instance.
+- **All 15 unit tests passing** ✅
 - Current test coverage:
   - Balance calculation (buys, sells, fees)
+  - Currency-specific balance filtering
   - Average purchase price / cost-basis
   - Transfers with fees (withdrawal + deposit pairs)
+  - Fee handling (tracking only, not subtracted from balances)
   - Price lookups and fiat conversions
   - Multi-currency isolation
 - Both runners support verbose output (`-v` or `-Verbose`) and coverage reports (`-c` or `-Coverage`).
