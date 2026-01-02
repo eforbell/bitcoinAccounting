@@ -1,41 +1,25 @@
 #!/usr/bin/env python3
-"""Show cryptocurrency balances at exchanges with cost basis tracking.
+"""Show which exchanges have cost basis history (purchase records).
 
-This shows which exchanges have coins with KNOWN cost basis (purchased directly
-at that exchange) vs coins transferred in (which may have broken basis chain).
+For 2025+ per-wallet FIFO: shows which exchanges have Trade (purchase) records
+where you can transfer coins TO and sell with proper cost basis.
 
-Critical for 2025+ per-wallet FIFO: you can only sell confidently from exchanges
-where you have direct purchase history with proper cost basis.
+Critical insight: Current balance doesn't matter - what matters is where you
+have PURCHASE HISTORY. Transfer coins to those exchanges to sell with basis.
 
 Usage:
-    exchange_liquidity [COIN]
+    exchange_liquidity [COIN] [--wallet=EXCHANGE]
     
 Examples:
-    exchange_liquidity           # BTC by default
-    exchange_liquidity BTC       # Bitcoin
-    exchange_liquidity ETH       # Ethereum
+    exchange_liquidity               # BTC, all exchanges
+    exchange_liquidity BTC           # Bitcoin, all exchanges
+    exchange_liquidity BTC --wallet=Strike   # BTC at Strike only
+    exchange_liquidity ALGO --wallet=Kraken  # ALGO at Kraken only
 """
 
 import sys
 import _bootstrap
 from cryptoAccounts import CryptoAccounts
-
-
-# Define which wallets are exchanges (can immediately sell)
-EXCHANGES = [
-    'River',
-    'Strike', 
-    'Kraken',
-    'Coinbase Pro',
-    'Coinbase',
-    'Binance',
-    'Gemini',
-    'Swan Bitcoin',
-    'BlockFi',
-    'Uphold',
-    'Nexo',
-    'Ledger'
-]
 
 
 def get_exchange_purchase_history(crypto, coin, exchange):
@@ -68,13 +52,23 @@ def get_exchange_purchase_history(crypto, coin, exchange):
 
 
 def main():
-    coin = sys.argv[1].upper() if len(sys.argv) > 1 else 'BTC'
+    # Parse arguments
+    wallet = None
+    coin = 'BTC'
+    
+    for arg in sys.argv[1:]:
+        if arg.startswith('--wallet='):
+            wallet = arg.split('=', 1)[1]
+        elif not arg.startswith('--'):
+            coin = arg.upper()
     
     crypto = CryptoAccounts()
     
     try:
         print(f"\n{'=' * 100}")
         print(f"Purchase History & Cost Basis Tracking for {coin}")
+        if wallet:
+            print(f"Wallet: {wallet}")
         print(f"(Shows where you have explainable cost basis for 2025+ per-wallet FIFO)")
         print(f"{'=' * 100}\n")
         
@@ -83,7 +77,28 @@ def main():
         total_still_at_exchange = 0
         total_withdrawn = 0
         
-        for exchange in EXCHANGES:
+        # Determine which exchanges to check
+        if wallet:
+            exchanges_to_check = [wallet]
+        else:
+            # Query all wallets from database
+            cur = crypto.connection.cursor()
+            try:
+                # Try wallets table first (wallet_id is the wallet name)
+                cur.execute("SELECT wallet_id FROM wallets WHERE wallet_id IS NOT NULL ORDER BY wallet_id")
+                exchanges_to_check = [row[0] for row in cur.fetchall()]
+                if not exchanges_to_check:
+                    # Fallback: get distinct exchanges from ledger
+                    crypto.connection.rollback()
+                    cur.execute("SELECT DISTINCT exchange FROM ledger WHERE exchange IS NOT NULL ORDER BY exchange")
+                    exchanges_to_check = [row[0] for row in cur.fetchall()]
+            except:
+                # Fallback: get distinct exchanges from ledger
+                crypto.connection.rollback()
+                cur.execute("SELECT DISTINCT exchange FROM ledger WHERE exchange IS NOT NULL ORDER BY exchange")
+                exchanges_to_check = [row[0] for row in cur.fetchall()]
+        
+        for exchange in exchanges_to_check:
             purchased, balance, withdrawn = get_exchange_purchase_history(crypto, coin, exchange)
             
             if purchased > 0:  # Has purchase history
