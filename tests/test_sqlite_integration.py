@@ -197,6 +197,141 @@ class TestSQLiteIntegration(unittest.TestCase):
         eth_balance = row['balance']
         self.assertAlmostEqual(eth_balance, 100, places=9)
 
+    def test_per_wallet_balance_currency_filtering(self):
+        """Test that per-wallet balance correctly filters by currency.
+        
+        Critical bug fix: Previously summed USD amounts as BTC when calculating
+        per-wallet balances, causing massive incorrect balances like -58302 BTC.
+        
+        This test ensures we only sum amounts when the currency matches.
+        """
+        cur = self.conn.cursor()
+        # Strike buys 0.01 BTC for 50,000 USD (expensive coin!)
+        cur.execute("INSERT INTO ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange) VALUES (?,?,?,?,?,?,?,?,?)",
+                    ('2025-01-01','Trade',0.01,'BTC',50000,'USD',0,'USD','Strike'))
+        # Strike buys another 0.02 BTC for 100,000 USD
+        cur.execute("INSERT INTO ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange) VALUES (?,?,?,?,?,?,?,?,?)",
+                    ('2025-01-02','Trade',0.02,'BTC',100000,'USD',0,'USD','Strike'))
+        # Another exchange (River) buys 0.5 BTC
+        cur.execute("INSERT INTO ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange) VALUES (?,?,?,?,?,?,?,?,?)",
+                    ('2025-01-03','Trade',0.5,'BTC',25000,'USD',0,'USD','River'))
+        self.conn.commit()
+
+        # Per-wallet balance for Strike should be 0.03 BTC (NOT negative!)
+        # The bug was: SUM(buy) - SUM(sell) WHERE (buy_curr='BTC' OR sell_curr='BTC')
+        # Which summed: (0.01 + 0.02) - (50000 + 100000) = -149999.97 BTC ❌
+        # 
+        # Correct: Only sum amounts when currency matches
+        strike_balance_query = '''
+            SELECT
+              COALESCE(SUM(CASE WHEN buy_curr = 'BTC' THEN buy ELSE 0 END), 0) -
+              COALESCE(SUM(CASE WHEN sell_curr = 'BTC' THEN sell ELSE 0 END), 0) as balance
+            FROM ledger
+            WHERE exchange = 'Strike'
+        '''
+        cur.execute(strike_balance_query)
+        row = cur.fetchone()
+        strike_balance = row['balance']
+        self.assertAlmostEqual(strike_balance, 0.03, places=9, 
+                             msg="Strike should have 0.03 BTC, not a huge negative number")
+
+        # River should have 0.5 BTC (independent of Strike)
+        river_balance_query = '''
+            SELECT
+              COALESCE(SUM(CASE WHEN buy_curr = 'BTC' THEN buy ELSE 0 END), 0) -
+              COALESCE(SUM(CASE WHEN sell_curr = 'BTC' THEN sell ELSE 0 END), 0) as balance
+            FROM ledger
+            WHERE exchange = 'River'
+        '''
+        cur.execute(river_balance_query)
+        row = cur.fetchone()
+        river_balance = row['balance']
+        self.assertAlmostEqual(river_balance, 0.5, places=9)
+
+        # Total across all wallets should be 0.53 BTC
+        total_balance_query = '''
+            SELECT
+              COALESCE(SUM(CASE WHEN buy_curr = 'BTC' THEN buy ELSE 0 END), 0) -
+              COALESCE(SUM(CASE WHEN sell_curr = 'BTC' THEN sell ELSE 0 END), 0) as balance
+            FROM ledger
+        '''
+        cur.execute(total_balance_query)
+        row = cur.fetchone()
+        total_balance = row['balance']
+        self.assertAlmostEqual(total_balance, 0.53, places=9)
+    def test_withdrawal_deposit_with_fees_tracking_only(self):
+        """Test that fees in withdrawals/deposits are tracked but not double-subtracted from balance.
+        
+        Scenario: Transfer 1.0 BTC from ExchangeA to Wallet with 0.001 BTC network fee
+        - Withdrawal: sell=1.0 BTC (includes fee), fee=0.001 BTC (tracking only)
+        - Deposit: buy=0.999 BTC (net received)
+        
+        Balance should decrease by exactly 1.0 BTC (not 1.001 BTC).
+        Fee is documentation only - the sell amount already includes it.
+        """
+        cur = self.conn.cursor()
+        
+        # Start with 2.0 BTC at ExchangeA
+        cur.execute("INSERT INTO ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange) VALUES (?,?,?,?,?,?,?,?,?)",
+                    ('2025-01-01','Trade',2.0,'BTC',100000,'USD',0,'USD','ExchangeA'))
+        
+        # Withdraw 1.0 BTC with 0.001 BTC fee (1.0 includes the 0.001 fee)
+        # sell=1.0 is the GROSS amount (what left the exchange)
+        # fee=0.001 is for tracking/documentation only
+        cur.execute("INSERT INTO ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange) VALUES (?,?,?,?,?,?,?,?,?)",
+                    ('2025-02-01','Withdrawal',0,'',1.0,'BTC',0.001,'BTC','ExchangeA'))
+        
+        # Deposit 0.999 BTC to Wallet (net received after fee)
+        # buy=0.999 is the NET amount (what arrived)
+        cur.execute("INSERT INTO ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange) VALUES (?,?,?,?,?,?,?,?,?)",
+                    ('2025-02-01','Deposit',0.999,'BTC',0,'',0,'','Wallet'))
+        
+        self.conn.commit()
+        
+        # Total BTC balance calculation: 
+        # Buys: 2.0 (trade) + 0.999 (deposit) = 2.999
+        # Sells: 1.0 (withdrawal)
+        # Balance: 2.999 - 1.0 = 1.999 BTC
+        # NOTE: Fee is NOT separately subtracted
+        balance_query = '''
+            SELECT
+              COALESCE((SELECT SUM(buy) FROM ledger WHERE buy_curr = 'BTC'), 0)
+              - COALESCE((SELECT SUM(sell) FROM ledger WHERE sell_curr = 'BTC'), 0) as balance
+        '''
+        cur.execute(balance_query)
+        row = cur.fetchone()
+        total_balance = row['balance']
+        
+        # Should be 1.999 BTC (2.0 bought, 1.0 withdrawn gross, 0.999 deposited)
+        # The 0.001 fee shows up in the accounting as: 1.0 out, 0.999 in = 0.001 consumed
+        self.assertAlmostEqual(total_balance, 1.999, places=9)
+        
+        # Per-wallet balances
+        wallet_balance_query = '''
+            SELECT exchange,
+              COALESCE(SUM(CASE WHEN buy_curr = 'BTC' THEN buy ELSE 0 END), 0)
+              - COALESCE(SUM(CASE WHEN sell_curr = 'BTC' THEN sell ELSE 0 END), 0) as balance
+            FROM ledger
+            WHERE exchange IS NOT NULL AND exchange != ''
+            GROUP BY exchange
+        '''
+        cur.execute(wallet_balance_query)
+        wallets = {row['exchange']: row['balance'] for row in cur.fetchall()}
+        
+        # ExchangeA: bought 2.0, withdrew 1.0 = 1.0 BTC remaining
+        self.assertAlmostEqual(wallets.get('ExchangeA', 0), 1.0, places=9)
+        
+        # Wallet: deposited 0.999 = 0.999 BTC
+        self.assertAlmostEqual(wallets.get('Wallet', 0), 0.999, places=9)
+        
+        # Verify fee was tracked but not double-counted
+        fee_query = "SELECT SUM(fee) as total_fees FROM ledger WHERE fee_curr = 'BTC'"
+        cur.execute(fee_query)
+        total_fees = cur.fetchone()['total_fees']
+        self.assertAlmostEqual(total_fees, 0.001, places=9)
+        
+        # The 0.001 fee is already reflected in the balance difference (1.0 out - 0.999 in)
+        # We don't subtract it again
 
 if __name__ == '__main__':
     unittest.main()
