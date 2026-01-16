@@ -24,31 +24,45 @@ from cryptoAccounts import CryptoAccounts
 
 def get_exchange_purchase_history(crypto, coin, exchange):
     """Get purchase/trade history at exchange.
-    
+
     Returns:
-        (total_purchased, current_balance, net_withdrawn)
+        (total_purchased, current_balance, total_usd_spent)
     """
     cur = crypto.connection.cursor()
-    
-    # Get all Trade transactions where we bought the coin
+
+    # Get all Trade transactions with USD cost conversion
+    # - USD: direct value
+    # - Stablecoins (USDC, GUSD, BUSD, USDT): treat as 1:1 USD
+    # - Other crypto: look up historical USD price from pair_price table
     cur.execute("""
-        SELECT SUM(buy)
-        FROM ledger
-        WHERE exchange = %s
-          AND trans_type = 'Trade'
-          AND buy_curr = %s
+        SELECT SUM(buy_amt), SUM(usd_value)
+        FROM (
+            SELECT DISTINCT ON (l.id)
+                   l.buy as buy_amt,
+                   CASE
+                       WHEN l.sell_curr = 'USD' THEN l.sell
+                       WHEN l.sell_curr IN ('USDC', 'GUSD', 'BUSD', 'USDT') THEN l.sell
+                       ELSE l.sell * COALESCE(pp.price, 0)
+                   END as usd_value
+            FROM ledger l
+            LEFT JOIN pair_price pp ON pp.from_curr = l.sell_curr
+                AND pp.to_curr = 'USD'
+                AND DATE(pp.date) = DATE(l.createddate)
+            WHERE l.exchange = %s
+              AND l.trans_type = 'Trade'
+              AND l.buy_curr = %s
+            ORDER BY l.id
+        ) trades
     """, (exchange, coin))
-    
+
     result = cur.fetchone()
     total_purchased = float(result[0]) if result[0] else 0
-    
+    total_usd_spent = float(result[1]) if result[1] else 0
+
     # Get current balance
     current_balance = crypto.get_wallet_balance(coin, exchange)
-    
-    # Net withdrawn = purchased - current balance
-    net_withdrawn = total_purchased - current_balance
-    
-    return total_purchased, current_balance, net_withdrawn
+
+    return total_purchased, current_balance, total_usd_spent
 
 
 def main():
@@ -75,8 +89,8 @@ def main():
         exchange_data = []
         total_all_purchases = 0
         total_still_at_exchange = 0
-        total_withdrawn = 0
-        
+        total_usd_spent = 0
+
         # Determine which exchanges to check
         if wallet:
             exchanges_to_check = [wallet]
@@ -99,38 +113,34 @@ def main():
                 exchanges_to_check = [row[0] for row in cur.fetchall()]
         
         for exchange in exchanges_to_check:
-            purchased, balance, withdrawn = get_exchange_purchase_history(crypto, coin, exchange)
-            
+            purchased, balance, usd_spent = get_exchange_purchase_history(crypto, coin, exchange)
+
             if purchased > 0:  # Has purchase history
+                avg_cost = usd_spent / purchased if purchased > 0 else 0
                 exchange_data.append({
                     'name': exchange,
                     'purchased': purchased,
                     'balance': balance,
-                    'withdrawn': withdrawn
+                    'usd_spent': usd_spent,
+                    'avg_cost': avg_cost
                 })
-                
+
                 total_all_purchases += purchased
                 total_still_at_exchange += balance
-                total_withdrawn += withdrawn
+                total_usd_spent += usd_spent
         
         if exchange_data:
-            print(f"{'Exchange':<20} {'Total Purchased':>18} {'Current Balance':>18} {'Withdrawn':>18} {'Status'}")
-            print(f"{'-' * 100}")
-            
+            print(f"{'Exchange':<20} {'Total Purchased':>18} {'Current Balance':>18} {'Avg Cost (USD)':>16}")
+            print(f"{'-' * 76}")
+
             for data in sorted(exchange_data, key=lambda x: x['purchased'], reverse=True):
-                if data['balance'] > 0 and data['withdrawn'] == 0:
-                    status = "✓ All here"
-                elif data['balance'] > 0 and data['withdrawn'] > 0:
-                    status = "⚠ Some moved"
-                elif data['balance'] == 0:
-                    status = "⚠ All moved"
-                else:
-                    status = ""
-                    
-                print(f"{data['name']:<20} {data['purchased']:>18.8f} {data['balance']:>18.8f} {data['withdrawn']:>18.8f} {status}")
-            
-            print(f"{'-' * 100}")
-            print(f"{'TOTALS':<20} {total_all_purchases:>18.8f} {total_still_at_exchange:>18.8f} {total_withdrawn:>18.8f}")
+                avg_cost_str = f"${data['avg_cost']:,.2f}" if data['avg_cost'] > 0 else "N/A"
+                print(f"{data['name']:<20} {data['purchased']:>18.8f} {data['balance']:>18.8f} {avg_cost_str:>16}")
+
+            print(f"{'-' * 76}")
+            total_avg_cost = total_usd_spent / total_all_purchases if total_all_purchases > 0 else 0
+            total_avg_str = f"${total_avg_cost:,.2f}" if total_avg_cost > 0 else "N/A"
+            print(f"{'TOTALS':<20} {total_all_purchases:>18.8f} {total_still_at_exchange:>18.8f} {total_avg_str:>16}")
         else:
             print(f"No purchase history found for {coin} at exchanges")
             print(f"All {coin} may have been acquired through deposits/transfers")
@@ -138,32 +148,25 @@ def main():
         # Get total balance
         total_balance = crypto.get_balance(coin)
         in_cold_storage = total_balance - total_still_at_exchange
-        
-        print(f"\n{'=' * 100}")
-        print(f"Cost Basis Analysis:")
-        print(f"  Total purchased at exchanges:  {total_all_purchases:>18.8f} {coin}  ← Known cost basis")
-        print(f"  Still at exchanges:            {total_still_at_exchange:>18.8f} {coin}  ← Safe to sell now")
-        print(f"  Withdrawn to cold storage:     {total_withdrawn:>18.8f} {coin}  ← Needs transfer chain")
-        print(f"  Other cold storage:            {in_cold_storage - total_withdrawn:>18.8f} {coin}  ← Unknown basis")
+        total_avg_cost = total_usd_spent / total_all_purchases if total_all_purchases > 0 else 0
+
+        print(f"\n{'=' * 76}")
+        print(f"Cost Basis Summary:")
+        print(f"  Total purchased at exchanges:  {total_all_purchases:>18.8f} {coin}")
+        print(f"  Total USD spent:               ${total_usd_spent:>17,.2f}")
+        print(f"  Average cost basis:            ${total_avg_cost:>17,.2f} per {coin}")
+        print(f"  Still at exchanges:            {total_still_at_exchange:>18.8f} {coin}")
+        print(f"  In cold storage:               {in_cold_storage:>18.8f} {coin}")
         print(f"  TOTAL HOLDINGS:                {total_balance:>18.8f} {coin}")
-        print(f"{'=' * 100}")
-        
+        print(f"{'=' * 76}")
+
         if total_still_at_exchange > 0:
-            print(f"\n✓ You can safely sell {total_still_at_exchange:.8f} {coin} from exchanges with known basis")
-            
-        if total_withdrawn > 0:
-            print(f"\n⚠ {total_withdrawn:.8f} {coin} purchased at exchanges but withdrawn to cold storage")
-            print(f"  These coins have cost basis but may show as $0 due to broken transfer chain")
-            print(f"  To sell these, need to fix transfer linking or manually document basis")
-            
-        unknown_basis = in_cold_storage - total_withdrawn
-        if unknown_basis > 0.00000001:  # Ignore dust
-            print(f"\n⚠ {unknown_basis:.8f} {coin} in cold storage with no exchange purchase history")
-            print(f"  May be from deposits, transfers, or mining - research required")
-            
+            print(f"\n✓ {total_still_at_exchange:.8f} {coin} at exchanges with known basis (avg ${total_avg_cost:,.2f})")
+
+        if in_cold_storage > 0.00000001:  # Ignore dust
+            print(f"\n⚠ {in_cold_storage:.8f} {coin} in cold storage - transfer chain needed for basis tracking")
+
         print(f"\n💡 Purchase history exists at these exchanges - this is your cost basis documentation")
-        print(f"   For 2025+ compliance, either sell from these exchanges directly")
-        print(f"   or implement transfer chain tracking to link withdrawn coins to original purchases")
         print()
         
     finally:
