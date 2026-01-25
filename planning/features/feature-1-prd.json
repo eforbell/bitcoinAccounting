@@ -1,0 +1,506 @@
+{
+  "branchName": "feature/sqlite-database-backend",
+  "projectName": "SQLite Database Backend",
+  "description": "Add SQLite as an embedded database option while maintaining PostgreSQL support, eliminating external database dependency for typical users",
+  "principles": [
+    "Rock-solid quality over speed - every feature must be bulletproof before moving on",
+    "Comprehensive test coverage - unit tests, integration tests, edge cases",
+    "All tests must pass before a story is marked complete",
+    "No story is done until it's documented and tested",
+    "Backward compatibility - existing PostgreSQL users must not be affected",
+    "Fail fast, fail loudly - errors should be obvious and actionable"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "sqliteDriver": "sqlite3 (stdlib)",
+    "postgresDriver": "psycopg2-binary (existing)",
+    "testing": "pytest + pytest-cov",
+    "mocking": "pytest-mock",
+    "linting": "ruff (if configured)"
+  },
+  "testingRequirements": {
+    "coverage": "Minimum 90% line coverage for all new code",
+    "unitTests": "Every public function/method must have unit tests",
+    "integrationTests": "Full workflow tests against SQLite (PostgreSQL optional for comparison)",
+    "edgeCases": "Test invalid inputs, missing data, empty tables, migration edge cases",
+    "ci": "All tests must pass before story completion",
+    "postgresRequired": "PostgreSQL is NOT required for development or testing. All new code must be testable with SQLite only. PostgreSQL comparison tests are optional and skipped when PostgreSQL is unavailable."
+  },
+  "fileStructure": {
+    "description": "New database abstraction layer lives in src/python/db/ package",
+    "layout": {
+      "src/python/": {
+        "__init__.py": "Package marker (new)",
+        "config.py": "MODIFIED - add get_backend() factory, keep connect() for backward compat",
+        "cryptoAccounts.py": "MODIFIED - use db layer instead of direct psycopg2",
+        "cryptoViz.py": "UNCHANGED",
+        "db/": {
+          "__init__.py": "Exports: DatabaseBackend, SqliteBackend, PostgresBackend, get_backend()",
+          "backend.py": "Abstract DatabaseBackend base class with interface definition",
+          "postgres.py": "PostgresBackend class wrapping psycopg2",
+          "sqlite.py": "SqliteBackend class wrapping sqlite3",
+          "schema.py": "DDL for all tables, create_tables() function for each backend",
+          "queries/": {
+            "__init__.py": "Exports all query classes",
+            "price.py": "PriceLookup class: get_price(), get_price_date()",
+            "balance.py": "BalanceCalculator class: get_balance(), get_sum_of_all_transfers()",
+            "trades.py": "TradeQuery class: get_trades(), get_trade_cost()",
+            "income.py": "IncomeQuery class: get_interest_income(), get_dividend_cost()",
+            "basis.py": "BasisCalculator class: get_avg_purchase_price()"
+          },
+          "migration.py": "PostgreSQL to SQLite migration tool"
+        }
+      },
+      "src/scripts/": {
+        "_bootstrap.py": "MODIFIED - ensure db package is importable",
+        "(all scripts)": "UNCHANGED - will work via CryptoAccounts refactor"
+      },
+      "tests/": {
+        "test_sqlite_integration.py": "EXISTING - expand with new tests",
+        "test_db_backend.py": "NEW - backend abstraction tests",
+        "test_queries.py": "NEW - query class unit tests",
+        "test_migration.py": "NEW - migration tool tests",
+        "conftest.py": "NEW - shared fixtures (in-memory SQLite, sample data)"
+      }
+    }
+  },
+  "keyDecisions": {
+    "placeholderSyntax": {
+      "decision": "Use named placeholders with dictionary parameters",
+      "rationale": "Both sqlite3 and psycopg2 support :name syntax with execute(query, {'name': value}). This avoids %s vs ? incompatibility entirely.",
+      "example": "SELECT * FROM ledger WHERE buy_curr = :coin",
+      "note": "Existing queries using %s will be converted during SQL-009 refactor"
+    },
+    "cursorHandling": {
+      "decision": "Backend exposes execute() method that returns list of Row objects",
+      "rationale": "Hide cursor complexity inside backend. Callers get results directly.",
+      "interface": "backend.execute(query, params) -> List[Row], backend.execute_one(query, params) -> Row|None, backend.execute_scalar(query, params) -> Any"
+    },
+    "rowType": {
+      "decision": "Query results returned as list of dictionaries",
+      "rationale": "Dictionaries are simple, JSON-serializable, and column names are preserved. Both backends can produce these.",
+      "example": "[{'id': 1, 'buy_curr': 'BTC', 'buy': 0.5}, ...]"
+    },
+    "nullHandling": {
+      "decision": "Python None is used consistently for NULL/missing values",
+      "rationale": "Both backends map NULL to None. Query functions return None (not 0) when no data found.",
+      "example": "get_price() returns None if no price found, not 0.0"
+    },
+    "timestampFormat": {
+      "decision": "All timestamps stored and returned as ISO 8601 strings in SQLite",
+      "rationale": "SQLite has no native datetime. ISO 8601 sorts correctly and is human-readable.",
+      "format": "YYYY-MM-DD HH:MM:SS",
+      "note": "PostgresBackend converts datetime objects to strings for consistency"
+    },
+    "transactionSemantics": {
+      "decision": "Explicit commit required for write operations",
+      "rationale": "Both backends will use explicit transaction control. No autocommit.",
+      "pattern": "backend.execute(insert_query, params); backend.commit()"
+    },
+    "errorHandling": {
+      "decision": "Backend raises DatabaseError for all database-related failures",
+      "rationale": "Unified exception type simplifies error handling in calling code",
+      "class": "db.exceptions.DatabaseError (wraps psycopg2.Error and sqlite3.Error)"
+    }
+  },
+  "cliScripts": {
+    "description": "Complete list of CLI scripts requiring verification in SQL-011",
+    "scripts": [
+      "balance",
+      "buySats",
+      "compare_with_sparrow",
+      "diagnose_balances",
+      "earnInterest",
+      "exchange_liquidity",
+      "export_1099b",
+      "export_tx",
+      "forecast_gains",
+      "gains_tracker",
+      "sell",
+      "trades",
+      "transfer",
+      "validate_transfers",
+      "wallet_balances",
+      "wallet_ledger"
+    ],
+    "total": 16
+  },
+  "userStories": [
+    {
+      "id": "SQL-001",
+      "title": "Database abstraction layer foundation",
+      "acceptanceCriteria": [
+        "Create src/python/db/ package with __init__.py",
+        "Create db/backend.py with abstract DatabaseBackend class defining interface:",
+        "  - execute(query: str, params: dict = None) -> List[dict]",
+        "  - execute_one(query: str, params: dict = None) -> dict | None",
+        "  - execute_scalar(query: str, params: dict = None) -> Any",
+        "  - commit() -> None",
+        "  - rollback() -> None",
+        "  - close() -> None",
+        "Create db/sqlite.py with SqliteBackend implementing the interface",
+        "Create db/postgres.py with PostgresBackend implementing the interface",
+        "Both backends convert Row results to list of dictionaries with column names as keys",
+        "Both backends accept queries with :named placeholder syntax",
+        "Create db/exceptions.py with DatabaseError exception class",
+        "Backend wraps native exceptions (psycopg2.Error, sqlite3.Error) in DatabaseError",
+        "Create get_backend(backend_type: str = None) factory function in db/__init__.py",
+        "Factory reads DB_BACKEND env var if backend_type not specified",
+        "Factory defaults to 'sqlite' when DB_BACKEND not set",
+        "Factory raises ValueError for unknown backend types",
+        "Unit tests: SqliteBackend with in-memory database (':memory:')",
+        "Unit tests: execute, execute_one, execute_scalar return correct types",
+        "Unit tests: commit/rollback behavior",
+        "Unit tests: factory function with various inputs",
+        "Skip PostgresBackend integration tests if PGHOST not set (use pytest.mark.skipif)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Foundation for all database operations. PostgreSQL not required for testing."
+    },
+    {
+      "id": "SQL-002",
+      "title": "SQLite schema creation and initialization",
+      "acceptanceCriteria": [
+        "Create db/schema.py with DDL constants for all 4 tables",
+        "SQLite DDL uses: INTEGER PRIMARY KEY (not AUTOINCREMENT - SQLite auto-increments INTEGER PRIMARY KEY automatically)",
+        "SQLite DDL uses: TEXT for all string types (no VARCHAR)",
+        "SQLite DDL uses: REAL for floating point (FLOAT8, NUMERIC, DOUBLE PRECISION)",
+        "SQLite DDL uses: TEXT for timestamps (stored as ISO 8601: 'YYYY-MM-DD HH:MM:SS')",
+        "Create create_tables(backend: DatabaseBackend) function that creates tables if not exist",
+        "Create get_sqlite_path() function: returns SQLITE_DB_PATH env var or ~/.cryptoaccounting/ledger.db",
+        "SqliteBackend.__init__ calls create_tables() automatically for new databases",
+        "SqliteBackend creates parent directory (~/.cryptoaccounting/) if missing",
+        "SqliteBackend accepts ':memory:' path for in-memory database (used in tests)",
+        "Reference existing tests/test_sqlite_integration.py for working SQLite schema",
+        "Unit tests: schema creation on fresh database",
+        "Unit tests: schema creation is idempotent (running twice doesn't error)",
+        "Unit tests: parent directory creation",
+        "Unit tests: insert and query each table type"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Leverage existing test file's schema. INTEGER PRIMARY KEY auto-increments in SQLite without AUTOINCREMENT keyword."
+    },
+    {
+      "id": "SQL-003",
+      "title": "Port get_price() and get_price_date() functions to Python",
+      "acceptanceCriteria": [
+        "Create db/queries/price.py with PriceLookup class",
+        "Constructor takes DatabaseBackend instance",
+        "get_price(from_coin: str, to_coin: str = 'USD', price_date: str = None) -> float | None",
+        "get_price_date(from_coin: str, to_coin: str = 'USD', price_date: str = None) -> str | None",
+        "price_date parameter is ISO 8601 string; defaults to current date if None",
+        "Matching algorithm (must match PostgreSQL function exactly):",
+        "  1. Filter pair_price where from_curr = from_coin AND to_curr = to_coin",
+        "  2. Filter to same calendar day (year, month, day match)",
+        "  3. If multiple matches, select the one with smallest minute-difference from price_date",
+        "  4. Return price (or date) from that row, or None if no matches",
+        "Return None (not 0.0) when no price found",
+        "Use single SQL query with ORDER BY and LIMIT 1 (no Python sorting)",
+        "SQL query must work identically on SQLite and PostgreSQL (use strftime for date parts)",
+        "Unit tests with in-memory SQLite:",
+        "  - Exact timestamp match returns correct price",
+        "  - Same-day fuzzy match returns closest price by minute",
+        "  - No match on day returns None",
+        "  - Multiple prices same day returns closest to requested time",
+        "  - Empty pair_price table returns None"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Critical function. Test thoroughly. The SQL must use strftime() which works on both backends."
+    },
+    {
+      "id": "SQL-004",
+      "title": "Port get_balance() and get_sum_of_all_transfers() to Python",
+      "acceptanceCriteria": [
+        "Create db/queries/balance.py with BalanceCalculator class",
+        "Constructor takes DatabaseBackend instance",
+        "get_balance(coin: str) -> float:",
+        "  - Returns SUM(buy where buy_curr=coin) - SUM(sell where sell_curr=coin)",
+        "  - Excludes trans_type = 'Stake' from buy sum (matches PostgreSQL function)",
+        "  - Returns 0.0 if no transactions (not None)",
+        "get_sum_of_all_transfers(coin: str) -> float:",
+        "  - Same calculation but only includes trans_type IN ('Withdrawal', 'Deposit')",
+        "  - Returns 0.0 if no transfers",
+        "SQL uses COALESCE to handle NULL sums: COALESCE(SUM(...), 0)",
+        "Unit tests:",
+        "  - Balance with only buys",
+        "  - Balance with buys and sells",
+        "  - Balance excluding stakes",
+        "  - Zero balance (no transactions)",
+        "  - Negative balance (sold more than bought)",
+        "  - Transfer sum with mixed transaction types"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Simple functions. Return 0.0 (not None) for empty results - this matches how balances should work."
+    },
+    {
+      "id": "SQL-005",
+      "title": "Port get_trades() to Python",
+      "acceptanceCriteria": [
+        "Create db/queries/trades.py with TradeQuery class",
+        "Constructor takes DatabaseBackend instance",
+        "get_trades(coin: str) -> List[dict]:",
+        "  - Returns list of trade dictionaries, ordered by date ascending",
+        "  - Each dict has keys: date, to_curr, to_quantity, price, from_curr, from_quantity",
+        "  - Filters: trans_type = 'Trade' AND (buy_curr = coin OR sell_curr = coin)",
+        "  - to_quantity is positive for buys, negative for sells (relative to coin parameter)",
+        "  - price is calculated as: counter_amount / coin_amount",
+        "  - Uses CASE expressions matching the PostgreSQL function exactly",
+        "Returns empty list [] if no trades (not None)",
+        "Unit tests:",
+        "  - Buy trade (USD -> BTC): to_quantity positive",
+        "  - Sell trade (BTC -> USD): to_quantity negative",
+        "  - Multiple trades ordered by date",
+        "  - No trades returns empty list",
+        "  - Trades for different coins don't appear"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "The CASE logic determines buy vs sell perspective. Match PostgreSQL exactly."
+    },
+    {
+      "id": "SQL-006",
+      "title": "Port get_trade_cost_new() to Python",
+      "acceptanceCriteria": [
+        "Add get_trade_cost(coin: str, cost_currency: str = 'USD') -> List[dict] to TradeQuery class",
+        "Returns list of trade dictionaries with cost basis information",
+        "Each dict has keys: date, curr, quantity, trade_curr, trade_quantity, cost_curr, unit_cost, total_cost, cost_curr_quote_date",
+        "For each trade from get_trades():",
+        "  - If trade was in cost_currency (e.g., USD): unit_cost = trade price directly",
+        "  - If trade was in other currency: unit_cost = trade_amount * get_price(trade_curr, cost_currency, date)",
+        "  - total_cost = unit_cost * abs(quantity)",
+        "  - cost_curr_quote_date = date used for price lookup (from get_price_date or trade date if direct)",
+        "If get_price() returns None for a cross-currency trade, set unit_cost and total_cost to None",
+        "Inject PriceLookup dependency via constructor: TradeQuery(backend, price_lookup=None)",
+        "Unit tests:",
+        "  - Trade in USD: direct cost, no price lookup needed",
+        "  - Trade in EUR: requires price lookup EUR->USD",
+        "  - Trade with missing price: unit_cost and total_cost are None",
+        "  - Multiple trades with mixed currencies"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Depends on SQL-003 (PriceLookup) and builds on SQL-005 (get_trades). Use dependency injection for testability."
+    },
+    {
+      "id": "SQL-007",
+      "title": "Port get_avg_purchase_price_new() to Python",
+      "acceptanceCriteria": [
+        "Create db/queries/basis.py with BasisCalculator class",
+        "Constructor takes TradeQuery instance (dependency injection)",
+        "get_avg_purchase_price(coin: str, cost_currency: str = 'USD') -> float | None:",
+        "  - Gets trade costs from TradeQuery.get_trade_cost(coin, cost_currency)",
+        "  - Filters to purchases only: quantity > 0",
+        "  - Calculates: SUM(unit_cost * quantity) / SUM(quantity)",
+        "  - Returns None if no purchases exist (not 0.0)",
+        "  - Returns None if all purchases have None unit_cost (missing prices)",
+        "  - Skips trades with None unit_cost in calculation (partial data is okay)",
+        "Unit tests:",
+        "  - Single purchase: returns that price",
+        "  - Multiple purchases: returns weighted average",
+        "  - No purchases (only sales): returns None",
+        "  - Mix of purchases with and without price data: calculates from available",
+        "  - All purchases missing price data: returns None"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Returns None for no-data cases. Calling code must handle None appropriately."
+    },
+    {
+      "id": "SQL-008",
+      "title": "Port get_interest_income() and get_dividend_cost() to Python",
+      "acceptanceCriteria": [
+        "Create db/queries/income.py with IncomeQuery class",
+        "Constructor takes DatabaseBackend and PriceLookup instances",
+        "get_interest_income(coin: str, cost_currency: str = 'USD') -> List[dict]:",
+        "  - Filters: trans_type = 'Interest Income' AND buy_curr = coin",
+        "  - Returns list of dicts with: date, to_curr, to_quantity, cost_curr, unit_cost, total_cost, cost_curr_quote_date",
+        "  - unit_cost from PriceLookup.get_price(coin, cost_currency, date)",
+        "  - total_cost = to_quantity * unit_cost (or None if no price)",
+        "get_dividend_cost(coin: str, cost_currency: str = 'USD') -> List[dict]:",
+        "  - Same logic as get_interest_income (they're functionally identical in PostgreSQL)",
+        "  - Kept as separate method for API compatibility",
+        "Returns empty list [] if no income transactions",
+        "Unit tests:",
+        "  - Interest income with price data",
+        "  - Interest income without price data (unit_cost = None)",
+        "  - Multiple income entries",
+        "  - No income returns empty list"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "In PostgreSQL, get_dividend_cost and get_interest_income are nearly identical. Keep both for compatibility."
+    },
+    {
+      "id": "SQL-009",
+      "title": "Update CryptoAccounts class for backend abstraction",
+      "acceptanceCriteria": [
+        "Modify CryptoAccounts.__init__(backend: DatabaseBackend = None):",
+        "  - If backend provided, use it",
+        "  - If None, call get_backend() to create default backend",
+        "  - Store as self.backend",
+        "  - Create query helper instances: self.price_lookup, self.balance_calc, etc.",
+        "Convert all %s placeholders to :named placeholders in existing queries",
+        "Replace self.connection.cursor() pattern with self.backend.execute() pattern",
+        "Replace stored procedure calls with query class method calls:",
+        "  - get_avg_purchase_price() -> self.basis_calc.get_avg_purchase_price()",
+        "  - Direct SQL get_balance -> self.balance_calc.get_balance()",
+        "Keep all existing public method signatures unchanged",
+        "Keep close() method: calls self.backend.close()",
+        "Update existing tests/test_sqlite_integration.py to use new backend",
+        "Update existing tests/test_1099b_export.py if it uses CryptoAccounts",
+        "All 15 existing SQLite tests must pass",
+        "All existing 1099b tests must pass",
+        "New integration tests: create CryptoAccounts with SqliteBackend, exercise major methods"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "High-risk refactor. Convert queries incrementally, test after each change. All existing tests are the safety net."
+    },
+    {
+      "id": "SQL-010",
+      "title": "PostgreSQL to SQLite data migration tool",
+      "acceptanceCriteria": [
+        "Create db/migration.py with migrate_postgres_to_sqlite(pg_backend, sqlite_path) function",
+        "Create src/scripts/migrate_to_sqlite CLI script",
+        "Migration process:",
+        "  1. Connect to PostgreSQL using existing credentials (PGHOST, etc.)",
+        "  2. Create new SQLite database at target path",
+        "  3. For each table (ledger, pair_price, coins, wallets): SELECT all rows, INSERT into SQLite",
+        "  4. Convert PostgreSQL timestamps to ISO 8601 strings during transfer",
+        "  5. Report row counts for each table",
+        "  6. Verify: row count in SQLite matches PostgreSQL for each table",
+        "Dry-run mode (--dry-run flag): connect, count rows, report what would be migrated, don't write",
+        "Target path: --output flag or default to ~/.cryptoaccounting/ledger.db",
+        "Error handling:",
+        "  - If target file exists, abort with error (don't overwrite). Use --force to override.",
+        "  - If migration fails mid-way, delete partial SQLite file and report error",
+        "  - Wrap entire migration in transaction, rollback on any error",
+        "Skip migration if PostgreSQL is empty (0 rows in ledger) - warn user",
+        "Unit tests: timestamp conversion, row counting logic",
+        "Integration test: migrate sample data, verify queries return same results"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Requires PostgreSQL access. Skip tests with pytest.mark.skipif when PGHOST not set."
+    },
+    {
+      "id": "SQL-011",
+      "title": "CLI scripts compatibility verification",
+      "acceptanceCriteria": [
+        "Verify each of the 16 CLI scripts works with SQLite backend:",
+        "  - balance: show coin balances",
+        "  - buySats: record BTC purchase",
+        "  - compare_with_sparrow: reconcile with wallet export",
+        "  - diagnose_balances: validate balance calculations",
+        "  - earnInterest: record interest income",
+        "  - exchange_liquidity: show per-exchange holdings",
+        "  - export_1099b: generate tax report",
+        "  - export_tx: export transactions to CSV",
+        "  - forecast_gains: project capital gains",
+        "  - gains_tracker: review realized gains",
+        "  - sell: record sale transaction",
+        "  - trades: display trade history",
+        "  - transfer: move funds between wallets",
+        "  - validate_transfers: check transfer pairs match",
+        "  - wallet_balances: per-wallet balance view",
+        "  - wallet_ledger: transaction history for wallet",
+        "Create tests/test_cli_scripts.py with integration tests",
+        "Each script test: invoke with sample SQLite database, verify no errors",
+        "For scripts that modify data: verify changes persisted correctly",
+        "Document any script-specific issues in code comments"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Manual verification is acceptable for complex scripts. Automated tests for core functionality."
+    },
+    {
+      "id": "SQL-012",
+      "title": "Documentation and user guide",
+      "acceptanceCriteria": [
+        "Update README.md with new Quick Start section for SQLite (zero-config)",
+        "Document environment variables:",
+        "  - DB_BACKEND: 'sqlite' (default) or 'postgres'",
+        "  - SQLITE_DB_PATH: path to SQLite file (default: ~/.cryptoaccounting/ledger.db)",
+        "  - PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE: existing PostgreSQL vars",
+        "Add 'Migrating from PostgreSQL' section with step-by-step instructions",
+        "Add 'Choosing SQLite vs PostgreSQL' section:",
+        "  - SQLite: single user, local machine, zero setup, portable",
+        "  - PostgreSQL: multi-user, network access, existing infrastructure",
+        "Add troubleshooting section:",
+        "  - 'Database is locked' (SQLite concurrent access)",
+        "  - Permission errors on ~/.cryptoaccounting/",
+        "  - Migration verification steps",
+        "Update any existing documentation referencing PostgreSQL-only setup"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Final story. User-facing documentation."
+    }
+  ],
+  "futureEnhancements": [
+    "SQLite WAL mode for better concurrent access",
+    "Database backup and restore utilities",
+    "Web-based data editor for SQLite (using sqlite-web or similar)",
+    "Automatic database schema versioning and migrations",
+    "Read replica support for PostgreSQL",
+    "Database encryption for SQLite (SQLCipher)"
+  ],
+  "migrationNotes": {
+    "placeholderConversion": {
+      "before": "SELECT * FROM ledger WHERE buy_curr = %s",
+      "after": "SELECT * FROM ledger WHERE buy_curr = :coin",
+      "note": "All queries converted in SQL-009"
+    },
+    "typeMapping": {
+      "SERIAL4": "INTEGER PRIMARY KEY",
+      "VARCHAR(n)": "TEXT",
+      "FLOAT8": "REAL",
+      "NUMERIC": "REAL",
+      "TIMESTAMP": "TEXT (ISO 8601 format)",
+      "BOOLEAN": "INTEGER (0/1)"
+    },
+    "dateFunctionMapping": {
+      "PostgreSQL": "SQLite equivalent (use SQLite version in all new queries)",
+      "date_trunc('day', ts)": "date(ts)",
+      "date_trunc('month', ts)": "strftime('%Y-%m', ts)",
+      "date_trunc('year', ts)": "strftime('%Y', ts)",
+      "EXTRACT('year' FROM ts)": "CAST(strftime('%Y', ts) AS INTEGER)",
+      "EXTRACT('month' FROM ts)": "CAST(strftime('%m', ts) AS INTEGER)",
+      "EXTRACT('day' FROM ts)": "CAST(strftime('%d', ts) AS INTEGER)",
+      "DATE_PART('hour', ts)": "CAST(strftime('%H', ts) AS INTEGER)",
+      "DATE_PART('minute', ts)": "CAST(strftime('%M', ts) AS INTEGER)",
+      "now()": "datetime('now')"
+    }
+  },
+  "existingTestInfrastructure": {
+    "file": "tests/test_sqlite_integration.py",
+    "status": "15 tests passing",
+    "capabilities": [
+      "In-memory SQLite database creation",
+      "Ledger and pair_price table schema",
+      "Balance calculation tests",
+      "Fee handling tests",
+      "FIFO matching logic tests",
+      "Currency isolation tests"
+    ],
+    "notes": "Excellent foundation. These tests validate the refactored CryptoAccounts in SQL-009."
+  },
+  "riskAssessment": {
+    "high": [
+      "get_price() fuzzy date matching - core to all cost calculations",
+      "CryptoAccounts refactor (SQL-009) - touches all functionality"
+    ],
+    "medium": [
+      "Placeholder syntax conversion (%s to :named)",
+      "Timestamp handling consistency"
+    ],
+    "low": [
+      "Schema creation - straightforward DDL translation",
+      "Simple balance queries - minimal logic"
+    ]
+  }
+}
