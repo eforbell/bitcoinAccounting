@@ -101,3 +101,32 @@
   - PostgreSQL parameters need CAST(:price_date AS TIMESTAMP) for date functions when passing ISO strings.
 
 ---
+
+## 2026-01-25 - SQL-004
+
+- What was implemented:
+  - Created `src/python/db/queries/balance.py` with `BalanceCalculator` class
+  - `get_balance(coin: str) -> float` method: calculates buys minus sells
+  - Excludes trans_type = 'Stake' from buy sum (matches PostgreSQL function semantics)
+  - `get_sum_of_all_transfers(coin: str) -> float` method: sum of deposits minus withdrawals
+  - Both methods use COALESCE to convert NULL sums to 0
+  - Both methods return 0.0 (not None) when no matching transactions exist
+  - 9 comprehensive unit tests covering all edge cases
+
+- Files changed:
+  - `src/python/db/queries/balance.py` (new)
+  - `src/python/db/queries/__init__.py` (modified - export BalanceCalculator)
+  - `src/python/db/__init__.py` (modified - export BalanceCalculator)
+  - `tests/test_db_backend.py` (modified - added TestBalanceCalculator class with 9 tests)
+  - `AGENTS.md` (updated - added COALESCE NULL handling pattern)
+
+- **Learnings:**
+  - COALESCE is essential for aggregate functions that return NULL on empty result sets. `SUM()` returns NULL when no rows match, not 0.
+  - Design choice: balance functions return 0.0 (not None) for "no data" cases. Semantically, zero transactions means zero balance, not unknown balance.
+  - Use None for lookups (like get_price) where data is truly missing. Use 0.0 for aggregates where zero is meaningful.
+  - SQLite schema uses `createddate` column (not `date`) in ledger table - must match actual schema.
+  - Nested subqueries with COALESCE: wrap each SUM() separately before arithmetic to handle NULLs correctly.
+  - All 48 tests passing (45 passed, 3 skipped PostgreSQL tests). Zero regressions from adding new functionality.
+  - Test pattern: use in-memory SQLite (`:memory:`) for fast, isolated unit tests. Create test data with explicit INSERT statements.
+
+---

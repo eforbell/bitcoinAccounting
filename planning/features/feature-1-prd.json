@@ -233,7 +233,7 @@
         "  - Transfer sum with mixed transaction types"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Simple functions. Return 0.0 (not None) for empty results - this matches how balances should work."
     },
     {
