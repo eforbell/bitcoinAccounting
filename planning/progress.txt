@@ -221,3 +221,37 @@
 
 ---
 
+## 2026-01-25 - SQL-008
+
+- What was implemented:
+  - Created `src/python/db/queries/income.py` with `IncomeQuery` class
+  - `get_interest_income(coin: str, cost_currency: str = 'USD') -> list[dict[str, Any]]` method
+  - Filters for trans_type = 'Interest Income' transactions for specified coin
+  - Uses PriceLookup to convert income to cost basis in target currency
+  - Returns list with date, to_curr, to_quantity, cost_curr, unit_cost, total_cost, cost_curr_quote_date
+  - `get_dividend_cost(coin: str, cost_currency: str = 'USD') -> list[dict[str, Any]]` method
+  - Delegates to get_interest_income() - functionally identical
+  - Kept as separate method for API compatibility with PostgreSQL stored procedures
+  - Both methods return empty list [] when no income transactions exist
+  - Dependency injection pattern: IncomeQuery accepts optional PriceLookup instance
+  - 6 comprehensive unit tests covering all scenarios
+
+- Files changed:
+  - `src/python/db/queries/income.py` (new)
+  - `src/python/db/queries/__init__.py` (modified - export IncomeQuery)
+  - `src/python/db/__init__.py` (modified - export IncomeQuery)
+  - `tests/test_db_backend.py` (modified - added TestIncomeQuery class with 6 tests)
+  - `AGENTS.md` (updated - added income transaction schema pattern)
+
+- **Learnings:**
+  - Interest and dividend income both use trans_type = 'Interest Income' in the ledger table
+  - Income transactions have empty sell_curr ('') and zero sell (0.0) values
+  - Only buy_curr and buy fields contain meaningful data for income transactions
+  - In PostgreSQL, get_dividend_cost and get_interest_income query identical data
+  - Both methods kept separate for backward compatibility with existing function interface
+  - Pattern: Sequential price lookups for each transaction row using PriceLookup.get_price() and get_price_date()
+  - Returns None for unit_cost, total_cost, and cost_curr_quote_date when price unavailable
+  - All 73 tests passing (70 passed, 3 skipped PostgreSQL tests). No regressions from adding IncomeQuery.
+
+---
+

@@ -331,7 +331,7 @@
         "  - No income returns empty list"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "In PostgreSQL, get_dividend_cost and get_interest_income are nearly identical. Keep both for compatibility."
     },
     {
