@@ -278,3 +278,43 @@ else:
 - Propagate None through calculations: if any price lookup fails, set all derived values to None
 - Store the actual price date used for conversion (`cost_curr_quote_date`) for audit trails
 - Direct trades in the target currency skip the lookup (e.g., USD trade with USD cost_currency)
+
+## Weighted Average Calculations
+
+**Pattern**: Calculate weighted average price by summing cost-weighted quantities:
+
+```python
+# Filter to valid purchases (quantity > 0, unit_cost not None)
+purchases = [t for t in trades if t["quantity"] > 0 and t["unit_cost"] is not None]
+
+# Calculate weighted average
+total_cost: float = sum(t["unit_cost"] * t["quantity"] for t in purchases)
+total_quantity: float = sum(t["quantity"] for t in purchases)
+avg_price: float = total_cost / total_quantity
+```
+
+**Key Insights**:
+- Filter out None values BEFORE aggregation - don't let None propagate into sum()
+- Filter to purchases only (quantity > 0) - sales have negative quantity and should be excluded
+- Return None when no valid purchases exist (not 0.0) - None indicates "no data", not "zero cost"
+- Explicit type annotations on intermediate variables help mypy --strict infer return type correctly
+
+## Mypy Strict Mode with Generator Expressions
+
+**Issue**: `mypy --strict` can't infer return type from division of sum() generator expressions:
+
+```python
+# Fails strict mode: "Returning Any from function declared to return Optional[float]"
+return sum(trade["unit_cost"] * trade["quantity"] for trade in purchases) / sum(...)
+```
+
+**Solution**: Add explicit type annotations for intermediate values:
+
+```python
+total_cost: float = sum(trade["unit_cost"] * trade["quantity"] for trade in purchases)
+total_quantity: float = sum(trade["quantity"] for trade in purchases)
+avg_price: float = total_cost / total_quantity
+return avg_price
+```
+
+**Why**: Mypy can't infer that dictionary access returns float/int from generator expressions. Explicit annotations eliminate the ambiguity.

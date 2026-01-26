@@ -5,6 +5,7 @@ import pytest
 
 from src.python.db import (
     BalanceCalculator,
+    BasisCalculator,
     DatabaseBackend,
     DatabaseError,
     SqliteBackend,
@@ -1624,5 +1625,253 @@ class TestTradeQuery:
         cost_data = trade_query.get_trade_cost('BTC', 'USD')
 
         assert cost_data == []
+
+        backend.close()
+
+
+class TestBasisCalculator:
+    """Tests for BasisCalculator class."""
+
+    def test_single_purchase_returns_that_price(self):
+        """Test average price with single purchase returns that price."""
+        backend = SqliteBackend(':memory:')
+
+        # Insert a single purchase trade
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        basis_calc = BasisCalculator(trade_query)
+
+        avg_price = basis_calc.get_avg_purchase_price('BTC', 'USD')
+
+        assert avg_price == 50000.0
+
+        backend.close()
+
+    def test_multiple_purchases_returns_weighted_average(self):
+        """Test average price with multiple purchases returns weighted average."""
+        backend = SqliteBackend(':memory:')
+
+        # Insert multiple purchase trades
+        # Purchase 1: 1.0 BTC @ 50000 USD/BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+            }
+        )
+
+        # Purchase 2: 0.5 BTC @ 52000 USD/BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-16 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': 'USD',
+                'sell': 26000.0,
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        basis_calc = BasisCalculator(trade_query)
+
+        avg_price = basis_calc.get_avg_purchase_price('BTC', 'USD')
+
+        # Weighted average: (50000 * 1.0 + 52000 * 0.5) / (1.0 + 0.5)
+        # = (50000 + 26000) / 1.5 = 76000 / 1.5 = 50666.67
+        expected = (50000.0 * 1.0 + 52000.0 * 0.5) / 1.5
+        assert avg_price == pytest.approx(expected)
+
+        backend.close()
+
+    def test_no_purchases_returns_none(self):
+        """Test average price with only sales returns None."""
+        backend = SqliteBackend(':memory:')
+
+        # Insert a sale trade (BTC -> USD)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'USD',
+                'buy': 52000.0,
+                'sell_curr': 'BTC',
+                'sell': 1.0,
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        basis_calc = BasisCalculator(trade_query)
+
+        avg_price = basis_calc.get_avg_purchase_price('BTC', 'USD')
+
+        assert avg_price is None
+
+        backend.close()
+
+    def test_mixed_purchases_and_sales(self):
+        """Test average price calculates only from purchases, ignoring sales."""
+        backend = SqliteBackend(':memory:')
+
+        # Purchase 1: 1.0 BTC @ 50000 USD/BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+            }
+        )
+
+        # Sale: 0.5 BTC @ 60000 USD/BTC (should be ignored)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-16 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'USD',
+                'buy': 30000.0,
+                'sell_curr': 'BTC',
+                'sell': 0.5,
+            }
+        )
+
+        # Purchase 2: 0.5 BTC @ 52000 USD/BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-17 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': 'USD',
+                'sell': 26000.0,
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        basis_calc = BasisCalculator(trade_query)
+
+        avg_price = basis_calc.get_avg_purchase_price('BTC', 'USD')
+
+        # Should only average the two purchases: (50000 * 1.0 + 52000 * 0.5) / 1.5
+        expected = (50000.0 * 1.0 + 52000.0 * 0.5) / 1.5
+        assert avg_price == pytest.approx(expected)
+
+        backend.close()
+
+    def test_purchases_with_missing_price_data(self):
+        """Test average price handles missing price data gracefully."""
+        backend = SqliteBackend(':memory:')
+
+        # Purchase 1: 1.0 BTC in USD (has price)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+            }
+        )
+
+        # Purchase 2: 0.5 BTC in EUR (will have missing price because no EUR/USD price)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-16 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': 'EUR',
+                'sell': 45000.0,
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        basis_calc = BasisCalculator(trade_query)
+
+        avg_price = basis_calc.get_avg_purchase_price('BTC', 'USD')
+
+        # Should only average the purchase with available price data
+        assert avg_price == 50000.0
+
+        backend.close()
+
+    def test_all_purchases_missing_price_data_returns_none(self):
+        """Test average price returns None when all purchases lack price data."""
+        backend = SqliteBackend(':memory:')
+
+        # Purchase in EUR (no EUR/USD price available)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'EUR',
+                'sell': 45000.0,
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        basis_calc = BasisCalculator(trade_query)
+
+        avg_price = basis_calc.get_avg_purchase_price('BTC', 'USD')
+
+        assert avg_price is None
+
+        backend.close()
+
+    def test_empty_ledger_returns_none(self):
+        """Test average price returns None when no trades exist."""
+        backend = SqliteBackend(':memory:')
+
+        trade_query = TradeQuery(backend)
+        basis_calc = BasisCalculator(trade_query)
+
+        avg_price = basis_calc.get_avg_purchase_price('BTC', 'USD')
+
+        assert avg_price is None
 
         backend.close()

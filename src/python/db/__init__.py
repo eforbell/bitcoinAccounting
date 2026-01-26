@@ -11,6 +11,7 @@ from .backend import DatabaseBackend
 from .exceptions import DatabaseError
 from .postgres import PostgresBackend
 from .queries.balance import BalanceCalculator
+from .queries.basis import BasisCalculator
 from .queries.price import PriceLookup
 from .queries.trades import TradeQuery
 from .schema import create_tables, get_sqlite_path
@@ -53,6 +54,7 @@ __all__ = [
     'create_tables',
     'get_sqlite_path',
     'BalanceCalculator',
+    'BasisCalculator',
     'PriceLookup',
     'TradeQuery',
 ]
