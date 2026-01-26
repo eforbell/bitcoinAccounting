@@ -1,7 +1,7 @@
 # Feature Iteration Agent Instructions
 
 1. Read `planning/current-feature.json` to find active feature
-2. Read the PRD at the path specified in `prdPath` (e.g., `features/feature-2-prd.json`)
+2. Read the PRD at the path specified in `prdPath` (e.g., `planning/features/feature-2-prd.json`)
 3. Read `planning/progress.txt` (check Codebase Patterns first)
 4. Check you're on the correct branch (from `current-feature.json`)
    - If branch doesn't exist, create it from `main`

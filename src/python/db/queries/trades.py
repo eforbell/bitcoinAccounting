@@ -60,6 +60,7 @@ class TradeQuery:
             - price: Exchange rate (counter_amount / coin_amount)
             - from_curr: The counter currency
             - from_quantity: Amount of counter currency
+            - exchange: Wallet/exchange name
 
             Returns empty list [] if no trades found.
         """
@@ -85,7 +86,8 @@ class TradeQuery:
                 CASE
                     WHEN buy_curr = :coin THEN sell
                     WHEN sell_curr = :coin THEN buy
-                END AS from_quantity
+                END AS from_quantity,
+                exchange
             FROM ledger
             WHERE trans_type = 'Trade'
               AND (buy_curr = :coin OR sell_curr = :coin)
@@ -175,3 +177,49 @@ class TradeQuery:
             })
 
         return result
+
+    def get_sales(
+        self,
+        coin: str,
+        through_date: str | None = None,
+        wallet: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Get all sales of a coin, optionally filtered by date and wallet.
+
+        Args:
+            coin: The currency code to get sales for (e.g., 'BTC', 'ETH')
+            through_date: Optional ISO 8601 date to filter sales through (inclusive)
+            wallet: Optional wallet/exchange name to filter by
+
+        Returns:
+            List of sale dictionaries ordered by date (ascending).
+            Each dict contains:
+            - createddate: Transaction timestamp
+            - quantity: Amount sold (as positive number)
+            - exchange: Wallet/exchange name
+            - id: Transaction ID
+
+            Returns empty list [] if no sales found.
+        """
+        query = """
+            SELECT createddate, sell as quantity, exchange, id
+            FROM ledger
+            WHERE sell_curr = :coin
+                AND trans_type = 'Trade'
+                AND sell > 0
+        """
+
+        params: dict[str, Any] = {"coin": coin}
+
+        if through_date is not None:
+            query += " AND createddate <= :through_date"
+            params["through_date"] = through_date
+
+        if wallet is not None:
+            query += " AND exchange = :wallet"
+            params["wallet"] = wallet
+
+        query += " ORDER BY createddate ASC"
+
+        results = self.backend.execute(query, params)
+        return [dict(row) for row in results]

@@ -63,7 +63,7 @@ class IncomeQuery:
         """
         # Query for all Interest Income transactions for this coin
         query = """
-            SELECT createddate, buy
+            SELECT createddate, buy, exchange
             FROM ledger
             WHERE trans_type = 'Interest Income' AND buy_curr = :coin
             ORDER BY createddate
@@ -76,6 +76,7 @@ class IncomeQuery:
         for row in rows:
             date = row["createddate"]
             to_quantity = row["buy"]
+            exchange = row["exchange"]
 
             # Lookup price for this coin in the cost currency
             unit_cost = self.price_lookup.get_price(coin, cost_currency, date)
@@ -98,6 +99,7 @@ class IncomeQuery:
                     "unit_cost": unit_cost,
                     "total_cost": total_cost,
                     "cost_curr_quote_date": cost_curr_quote_date,
+                    "exchange": exchange,
                 }
             )
 

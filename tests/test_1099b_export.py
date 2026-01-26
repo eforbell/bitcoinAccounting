@@ -24,31 +24,42 @@ class Test1099BExport(unittest.TestCase):
     """Tests for 1099-B export with FIFO cost basis calculation."""
     
     def setUp(self):
-        """Set up mock database connection and CryptoAccounts instance."""
-        self.mock_conn = Mock()
-        self.mock_cursor = Mock()
-        self.mock_conn.cursor.return_value = self.mock_cursor
-        
+        """Set up mock backend and CryptoAccounts instance."""
         # Import here to ensure path is set
         from cryptoAccounts import CryptoAccounts
-        self.crypto = CryptoAccounts.__new__(CryptoAccounts)
-        self.crypto.connection = self.mock_conn
+        from db import SqliteBackend
+
+        # Create real backend with in-memory database for testing
+        self.backend = SqliteBackend(':memory:', auto_create_tables=True)
+        self.crypto = CryptoAccounts(backend=self.backend)
     
     def test_simple_fifo_single_lot(self):
         """Test FIFO with one purchase and one sale in same year."""
         # Setup: Buy 1 BTC @ $50,000 on Jan 1, sell 1 BTC @ $60,000 on Dec 1
-        self.mock_cursor.fetchall.side_effect = [
-            # Trade purchases
-            [(datetime(2024, 1, 1), 1.0, 50000.0, 50000.0, 'Exchange1')],
-            # Interest income purchases
-            [],
-            # Sales
-            [(datetime(2024, 12, 1), 1.0, 'Exchange1', 1)],
-        ]
-        self.mock_cursor.fetchone.return_value = (60000.0, 60000.0)
-        
+        # Insert purchase trade
+        self.crypto.execute_trade(
+            trade_date=datetime(2024, 1, 1),
+            buy=1.0,
+            buy_curr='BTC',
+            sell=50000.0,
+            sell_curr='USD',
+            exchange='Exchange1'
+        )
+        # Insert sale trade
+        self.crypto.execute_trade(
+            trade_date=datetime(2024, 12, 1),
+            buy=60000.0,
+            buy_curr='USD',
+            sell=1.0,
+            sell_curr='BTC',
+            exchange='Exchange1'
+        )
+        # Add prices
+        self.crypto.add_price_pair(datetime(2024, 1, 1), from_curr='USD', to_curr='BTC', price=1/50000.0)
+        self.crypto.add_price_pair(datetime(2024, 12, 1), from_curr='USD', to_curr='BTC', price=1/60000.0)
+
         results, worksheet = self.crypto.get_sales_for_1099b('BTC', 2024)
-        
+
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]['Description'], '1.00000000 BTC')
         self.assertEqual(results[0]['Cost Basis'], '50000.00')
@@ -258,17 +269,18 @@ class Test1099BExport(unittest.TestCase):
     def test_empty_sales(self):
         """Test handling when there are no sales in the tax year."""
         # Setup: Purchases but no sales
-        self.mock_cursor.fetchall.side_effect = [
-            # Trade purchases
-            [(datetime(2024, 1, 1), 1.0, 50000.0, 50000.0, 'Exchange1')],
-            # Interest income purchases
-            [],
-            # Sales (empty)
-            [],
-        ]
-        
+        self.crypto.execute_trade(
+            trade_date=datetime(2024, 1, 1),
+            buy=1.0,
+            buy_curr='BTC',
+            sell=50000.0,
+            sell_curr='USD',
+            exchange='Exchange1'
+        )
+        self.crypto.add_price_pair(datetime(2024, 1, 1), from_curr='USD', to_curr='BTC', price=1/50000.0)
+
         results, worksheet = self.crypto.get_sales_for_1099b('BTC', 2024)
-        
+
         self.assertEqual(len(results), 0)
         self.assertEqual(len(worksheet), 0)
     
