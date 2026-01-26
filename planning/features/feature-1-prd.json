@@ -357,7 +357,7 @@
         "New integration tests: create CryptoAccounts with SqliteBackend, exercise major methods"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "High-risk refactor. Convert queries incrementally, test after each change. All existing tests are the safety net."
     },
     {

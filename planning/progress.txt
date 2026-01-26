@@ -305,3 +305,29 @@
   - Zero regressions from refactoring
 
 ---
+
+## 2026-01-25 - SQL-009 (Complete)
+
+- What was completed:
+  - Updated all 1099b tests to use real in-memory SQLite database instead of mocks
+  - Tests now insert actual data using CryptoAccounts methods (execute_trade, interest, add_price_pair)
+  - Removed all mock_cursor.fetchall.side_effect patterns
+  - Added test_long_term_classification as a separate test (was combined with short-term previously)
+
+- Files changed:
+  - `tests/test_1099b_export.py` (completely rewritten - 11 tests now using real database)
+  - `planning/features/feature-1-prd.json` (marked SQL-009 as passes: true)
+
+- **Test Results:**
+  - 88 tests passing total
+  - 11 1099b export tests passing
+  - 70 backend tests passing (3 PostgreSQL skipped)
+  - 7 SQLite integration tests passing
+
+- **Learnings:**
+  - Real database tests are superior to mocks - they catch actual SQL issues
+  - Pattern: Create SqliteBackend(':memory:', auto_create_tables=True), inject into CryptoAccounts
+  - Use CryptoAccounts.execute_trade() for purchases AND sales (direction determined by buy_curr/sell_curr)
+  - Interest income requires both crypto.interest() AND add_price_pair() for cost basis
+
+---
