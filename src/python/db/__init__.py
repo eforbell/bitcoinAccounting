@@ -10,6 +10,7 @@ import os
 from .backend import DatabaseBackend
 from .exceptions import DatabaseError
 from .postgres import PostgresBackend
+from .queries.price import PriceLookup
 from .schema import create_tables, get_sqlite_path
 from .sqlite import SqliteBackend
 
@@ -49,4 +50,5 @@ __all__ = [
     'get_backend',
     'create_tables',
     'get_sqlite_path',
+    'PriceLookup',
 ]

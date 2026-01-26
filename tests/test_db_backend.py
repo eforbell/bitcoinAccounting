@@ -11,6 +11,7 @@ from src.python.db import (
     get_backend,
     create_tables,
     get_sqlite_path,
+    PriceLookup,
 )
 
 
@@ -469,5 +470,263 @@ class TestSchemaCreation:
         # Parent dirs should now exist
         assert db_path.parent.exists()
         assert db_path.exists()
+
+        backend.close()
+
+
+class TestPriceLookup:
+    """Tests for PriceLookup query class."""
+
+    def test_exact_timestamp_match(self):
+        """Test that exact timestamp match returns correct price."""
+        backend = SqliteBackend(':memory:')
+
+        # Insert exact price match
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 50000.0,
+                'date': '2025-01-15 14:30:00'
+            }
+        )
+        backend.commit()
+
+        price_lookup = PriceLookup(backend)
+        price = price_lookup.get_price('BTC', 'USD', '2025-01-15 14:30:00')
+
+        assert price == 50000.0
+
+        backend.close()
+
+    def test_same_day_fuzzy_match_closest_time(self):
+        """Test that same-day fuzzy matching returns closest price by minute."""
+        backend = SqliteBackend(':memory:')
+
+        # Insert multiple prices on same day at different times
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 49000.0,
+                'date': '2025-01-15 08:00:00'  # 6.5 hours before requested
+            }
+        )
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 50000.0,
+                'date': '2025-01-15 14:00:00'  # 30 minutes before requested
+            }
+        )
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 51000.0,
+                'date': '2025-01-15 20:00:00'  # 5.5 hours after requested
+            }
+        )
+        backend.commit()
+
+        price_lookup = PriceLookup(backend)
+        # Request price at 14:30 - should match 14:00 (30 min away)
+        price = price_lookup.get_price('BTC', 'USD', '2025-01-15 14:30:00')
+
+        assert price == 50000.0
+
+        backend.close()
+
+    def test_no_match_on_day_returns_none(self):
+        """Test that no price on requested day returns None."""
+        backend = SqliteBackend(':memory:')
+
+        # Insert price on different day
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 50000.0,
+                'date': '2025-01-14 14:30:00'
+            }
+        )
+        backend.commit()
+
+        price_lookup = PriceLookup(backend)
+        # Request price on different day
+        price = price_lookup.get_price('BTC', 'USD', '2025-01-15 14:30:00')
+
+        assert price is None
+
+        backend.close()
+
+    def test_empty_table_returns_none(self):
+        """Test that empty pair_price table returns None."""
+        backend = SqliteBackend(':memory:')
+
+        price_lookup = PriceLookup(backend)
+        price = price_lookup.get_price('BTC', 'USD', '2025-01-15 14:30:00')
+
+        assert price is None
+
+        backend.close()
+
+    def test_wrong_currency_pair_returns_none(self):
+        """Test that wrong currency pair returns None."""
+        backend = SqliteBackend(':memory:')
+
+        # Insert BTC/USD price
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 50000.0,
+                'date': '2025-01-15 14:30:00'
+            }
+        )
+        backend.commit()
+
+        price_lookup = PriceLookup(backend)
+        # Request ETH/USD (not in table)
+        price = price_lookup.get_price('ETH', 'USD', '2025-01-15 14:30:00')
+
+        assert price is None
+
+        backend.close()
+
+    def test_get_price_date_returns_matched_timestamp(self):
+        """Test that get_price_date returns the actual timestamp used."""
+        backend = SqliteBackend(':memory:')
+
+        # Insert price
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 50000.0,
+                'date': '2025-01-15 14:00:00'
+            }
+        )
+        backend.commit()
+
+        price_lookup = PriceLookup(backend)
+        # Request at 14:30, should match 14:00
+        price_date = price_lookup.get_price_date('BTC', 'USD', '2025-01-15 14:30:00')
+
+        assert price_date == '2025-01-15 14:00:00'
+
+        backend.close()
+
+    def test_get_price_date_no_match_returns_none(self):
+        """Test that get_price_date returns None when no match."""
+        backend = SqliteBackend(':memory:')
+
+        price_lookup = PriceLookup(backend)
+        price_date = price_lookup.get_price_date('BTC', 'USD', '2025-01-15 14:30:00')
+
+        assert price_date is None
+
+        backend.close()
+
+    def test_default_price_date_uses_current_time(self):
+        """Test that None price_date defaults to current datetime."""
+        backend = SqliteBackend(':memory:')
+
+        from datetime import datetime
+
+        # Insert price for today
+        today = datetime.now().strftime('%Y-%m-%d 12:00:00')
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 50000.0,
+                'date': today
+            }
+        )
+        backend.commit()
+
+        price_lookup = PriceLookup(backend)
+        # Don't specify price_date - should default to today
+        price = price_lookup.get_price('BTC', 'USD', None)
+
+        # Should find the price if today matches
+        assert price == 50000.0
+
+        backend.close()
+
+    def test_default_to_currency_is_usd(self):
+        """Test that to_coin defaults to USD."""
+        backend = SqliteBackend(':memory:')
+
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 50000.0,
+                'date': '2025-01-15 14:30:00'
+            }
+        )
+        backend.commit()
+
+        price_lookup = PriceLookup(backend)
+        # Don't specify to_coin - should default to USD
+        price = price_lookup.get_price('BTC', price_date='2025-01-15 14:30:00')
+
+        assert price == 50000.0
+
+        backend.close()
+
+    def test_multiple_prices_returns_absolute_closest(self):
+        """Test that when multiple prices exist, the absolute closest by time is returned."""
+        backend = SqliteBackend(':memory:')
+
+        # Insert prices: one 15 min before, one 10 min after
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 49500.0,
+                'date': '2025-01-15 14:15:00'  # 15 min before 14:30
+            }
+        )
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 50500.0,
+                'date': '2025-01-15 14:40:00'  # 10 min after 14:30
+            }
+        )
+        backend.commit()
+
+        price_lookup = PriceLookup(backend)
+        # Request at 14:30 - should match 14:40 (10 min away vs 15 min)
+        price = price_lookup.get_price('BTC', 'USD', '2025-01-15 14:30:00')
+
+        assert price == 50500.0
 
         backend.close()

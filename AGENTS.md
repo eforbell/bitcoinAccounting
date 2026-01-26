@@ -95,3 +95,49 @@ CREATE TABLE IF NOT EXISTS ledger (...);
 ```
 
 This allows `create_tables()` to be called multiple times safely without errors.
+
+## Cross-Database Query Compatibility
+
+**Challenge**: Date/time functions differ significantly between SQLite and PostgreSQL:
+
+- PostgreSQL: `EXTRACT('year' FROM date)`, `DATE_PART('minute', diff)`
+- SQLite: `CAST(strftime('%Y', date) AS INTEGER)`, `julianday()` for differences
+
+**Solution**: Use backend type detection with separate SQL generation methods:
+
+```python
+from ..sqlite import SqliteBackend
+
+if isinstance(self.backend, SqliteBackend):
+    query = self._get_sqlite_query()
+else:
+    query = self._get_postgres_query()
+```
+
+**Benefit**: Maintains identical semantics across backends while using each database's native functions for optimal performance.
+
+## SQLite Date Calculations
+
+**julianday() for time differences**: SQLite's `julianday()` returns fractional days since 4714 BC. Multiply by 1440 (minutes per day) to get minute-level precision:
+
+```sql
+-- Get minute difference between two timestamps
+ABS((julianday(date) - julianday(:price_date)) * 1440)
+```
+
+This enables fuzzy date matching: find the price on the same calendar day with the smallest time difference.
+
+## Query Class Pattern with Dependency Injection
+
+**Pattern**: Create query classes that accept backend instances:
+
+```python
+class PriceLookup:
+    def __init__(self, backend: DatabaseBackend) -> None:
+        self.backend = backend
+```
+
+**Benefits**:
+- Testable: can inject in-memory backend for fast tests
+- Flexible: works with any backend implementation
+- Composable: query classes can depend on other query classes
