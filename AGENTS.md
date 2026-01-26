@@ -318,3 +318,24 @@ return avg_price
 ```
 
 **Why**: Mypy can't infer that dictionary access returns float/int from generator expressions. Explicit annotations eliminate the ambiguity.
+
+## Income Transactions Schema Pattern
+
+**Pattern**: Interest Income and Dividend transactions use specific field patterns in the ledger table:
+
+```python
+{
+    'trans_type': 'Interest Income',
+    'buy_curr': 'BTC',          # The coin received
+    'buy': 0.001,               # Amount received
+    'sell_curr': '',            # Empty string for income (no counter-currency)
+    'sell': 0.0,                # Zero for income (nothing sold)
+}
+```
+
+**Key Insights**:
+- Interest and dividend income are both recorded with trans_type = 'Interest Income'
+- sell_curr is empty string (not NULL) and sell is 0.0 for income transactions
+- Only buy_curr and buy fields contain meaningful data
+- get_dividend_cost() and get_interest_income() query the same data (functionally identical)
+- Both functions are kept separate for API compatibility with PostgreSQL stored procedures

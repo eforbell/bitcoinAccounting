@@ -8,6 +8,7 @@ from src.python.db import (
     BasisCalculator,
     DatabaseBackend,
     DatabaseError,
+    IncomeQuery,
     SqliteBackend,
     PostgresBackend,
     get_backend,
@@ -1873,5 +1874,251 @@ class TestBasisCalculator:
         avg_price = basis_calc.get_avg_purchase_price('BTC', 'USD')
 
         assert avg_price is None
+
+        backend.close()
+
+
+class TestIncomeQuery:
+    """Tests for IncomeQuery class."""
+
+    def test_interest_income_with_price_data(self):
+        """Test interest income with available price data."""
+        backend = SqliteBackend(':memory:')
+
+        # Add interest income transaction
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Interest Income',
+                'buy_curr': 'BTC',
+                'buy': 0.001,
+                'sell_curr': '',
+                'sell': 0.0,
+            }
+        )
+
+        # Add price data for BTC/USD
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from_curr, :to_curr, :price, :date)""",
+            {
+                'from_curr': 'BTC',
+                'to_curr': 'USD',
+                'price': 50000.0,
+                'date': '2025-01-15 10:05:00',
+            }
+        )
+        backend.commit()
+
+        income_query = IncomeQuery(backend)
+        income = income_query.get_interest_income('BTC', 'USD')
+
+        assert len(income) == 1
+        assert income[0]['date'] == '2025-01-15 10:00:00'
+        assert income[0]['to_curr'] == 'BTC'
+        assert income[0]['to_quantity'] == 0.001
+        assert income[0]['cost_curr'] == 'USD'
+        assert income[0]['unit_cost'] == pytest.approx(50000.0)
+        assert income[0]['total_cost'] == pytest.approx(50.0)
+        assert income[0]['cost_curr_quote_date'] == '2025-01-15 10:05:00'
+
+        backend.close()
+
+    def test_interest_income_without_price_data(self):
+        """Test interest income without price data returns None for costs."""
+        backend = SqliteBackend(':memory:')
+
+        # Add interest income transaction
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Interest Income',
+                'buy_curr': 'BTC',
+                'buy': 0.001,
+                'sell_curr': '',
+                'sell': 0.0,
+            }
+        )
+        # No price data available
+        backend.commit()
+
+        income_query = IncomeQuery(backend)
+        income = income_query.get_interest_income('BTC', 'USD')
+
+        assert len(income) == 1
+        assert income[0]['date'] == '2025-01-15 10:00:00'
+        assert income[0]['to_curr'] == 'BTC'
+        assert income[0]['to_quantity'] == 0.001
+        assert income[0]['cost_curr'] == 'USD'
+        assert income[0]['unit_cost'] is None
+        assert income[0]['total_cost'] is None
+        assert income[0]['cost_curr_quote_date'] is None
+
+        backend.close()
+
+    def test_multiple_interest_income_entries(self):
+        """Test multiple interest income transactions are returned in date order."""
+        backend = SqliteBackend(':memory:')
+
+        # Add multiple interest income transactions
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-10 10:00:00',
+                'trans_type': 'Interest Income',
+                'buy_curr': 'BTC',
+                'buy': 0.001,
+                'sell_curr': '',
+                'sell': 0.0,
+            }
+        )
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-20 10:00:00',
+                'trans_type': 'Interest Income',
+                'buy_curr': 'BTC',
+                'buy': 0.002,
+                'sell_curr': '',
+                'sell': 0.0,
+            }
+        )
+
+        # Add price data
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from_curr, :to_curr, :price, :date)""",
+            {
+                'from_curr': 'BTC',
+                'to_curr': 'USD',
+                'price': 50000.0,
+                'date': '2025-01-10 10:00:00',
+            }
+        )
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from_curr, :to_curr, :price, :date)""",
+            {
+                'from_curr': 'BTC',
+                'to_curr': 'USD',
+                'price': 52000.0,
+                'date': '2025-01-20 10:00:00',
+            }
+        )
+        backend.commit()
+
+        income_query = IncomeQuery(backend)
+        income = income_query.get_interest_income('BTC', 'USD')
+
+        assert len(income) == 2
+        # Verify ordered by date
+        assert income[0]['date'] == '2025-01-10 10:00:00'
+        assert income[0]['to_quantity'] == 0.001
+        assert income[0]['unit_cost'] == pytest.approx(50000.0)
+        assert income[0]['total_cost'] == pytest.approx(50.0)
+
+        assert income[1]['date'] == '2025-01-20 10:00:00'
+        assert income[1]['to_quantity'] == 0.002
+        assert income[1]['unit_cost'] == pytest.approx(52000.0)
+        assert income[1]['total_cost'] == pytest.approx(104.0)
+
+        backend.close()
+
+    def test_no_interest_income_returns_empty_list(self):
+        """Test no interest income returns empty list."""
+        backend = SqliteBackend(':memory:')
+
+        income_query = IncomeQuery(backend)
+        income = income_query.get_interest_income('BTC', 'USD')
+
+        assert income == []
+
+        backend.close()
+
+    def test_interest_income_filters_by_coin(self):
+        """Test interest income filters to specified coin only."""
+        backend = SqliteBackend(':memory:')
+
+        # Add BTC interest income
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Interest Income',
+                'buy_curr': 'BTC',
+                'buy': 0.001,
+                'sell_curr': '',
+                'sell': 0.0,
+            }
+        )
+
+        # Add ETH interest income
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Interest Income',
+                'buy_curr': 'ETH',
+                'buy': 0.01,
+                'sell_curr': '',
+                'sell': 0.0,
+            }
+        )
+        backend.commit()
+
+        income_query = IncomeQuery(backend)
+        income = income_query.get_interest_income('BTC', 'USD')
+
+        # Should only return BTC income
+        assert len(income) == 1
+        assert income[0]['to_curr'] == 'BTC'
+
+        backend.close()
+
+    def test_dividend_cost_delegates_to_interest_income(self):
+        """Test get_dividend_cost returns same results as get_interest_income."""
+        backend = SqliteBackend(':memory:')
+
+        # Add interest income transaction
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell)
+               VALUES (:date, :trans_type, :buy_curr, :buy, :sell_curr, :sell)""",
+            {
+                'date': '2025-01-15 10:00:00',
+                'trans_type': 'Interest Income',
+                'buy_curr': 'BTC',
+                'buy': 0.001,
+                'sell_curr': '',
+                'sell': 0.0,
+            }
+        )
+
+        # Add price data
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from_curr, :to_curr, :price, :date)""",
+            {
+                'from_curr': 'BTC',
+                'to_curr': 'USD',
+                'price': 50000.0,
+                'date': '2025-01-15 10:05:00',
+            }
+        )
+        backend.commit()
+
+        income_query = IncomeQuery(backend)
+        interest = income_query.get_interest_income('BTC', 'USD')
+        dividends = income_query.get_dividend_cost('BTC', 'USD')
+
+        # Should be identical
+        assert interest == dividends
 
         backend.close()
