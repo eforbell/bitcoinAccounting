@@ -155,7 +155,7 @@
         "Skip PostgresBackend integration tests if PGHOST not set (use pytest.mark.skipif)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Foundation for all database operations. PostgreSQL not required for testing."
     },
     {
@@ -179,7 +179,7 @@
         "Unit tests: insert and query each table type"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Leverage existing test file's schema. INTEGER PRIMARY KEY auto-increments in SQLite without AUTOINCREMENT keyword."
     },
     {
@@ -207,7 +207,7 @@
         "  - Empty pair_price table returns None"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Critical function. Test thoroughly. The SQL must use strftime() which works on both backends."
     },
     {

@@ -1,0 +1,103 @@
+## Codebase Patterns
+
+- **Named Placeholders**: Both sqlite3 and psycopg2 support `:named` syntax with dict parameters. Use this for cross-database compatibility instead of `%s` or `?`.
+- **Python 3.9 Type Hints**: Add `from __future__ import annotations` to use `|` union syntax on Python 3.9.
+- **Optional Dependencies with mypy**: Use `TYPE_CHECKING` pattern to conditionally import types without runtime failures.
+- **SQLite Row Factory**: Set `connection.row_factory = sqlite3.Row` to enable `dict(row)` conversion.
+
+---
+
+## 2026-01-25 - SQL-001
+
+- What was implemented:
+  - Created `src/python/db/` package with database abstraction layer
+  - Abstract `DatabaseBackend` base class with unified interface
+  - `SqliteBackend` implementation supporting file and in-memory databases
+  - `PostgresBackend` implementation wrapping psycopg2
+  - `DatabaseError` exception for unified error handling
+  - `get_backend()` factory function with DB_BACKEND env var support
+  - Comprehensive test suite: 17 tests passing, 3 skipped (PostgreSQL)
+
+- Files changed:
+  - `src/python/__init__.py` (new)
+  - `src/python/db/__init__.py` (new)
+  - `src/python/db/backend.py` (new)
+  - `src/python/db/exceptions.py` (new)
+  - `src/python/db/sqlite.py` (new)
+  - `src/python/db/postgres.py` (new)
+  - `tests/test_db_backend.py` (new)
+  - `AGENTS.md` (updated)
+
+- **Learnings:**
+  - Python 3.9 doesn't support `type1 | type2` syntax natively. Must use `from __future__ import annotations`.
+  - Named placeholders (`:name`) work on both sqlite3 and psycopg2 with dict params, avoiding need for separate query formats.
+  - `TYPE_CHECKING` pattern allows mypy to see types for optional dependencies without runtime ImportError.
+  - sqlite3.Row row_factory enables column-name access without custom dict conversion.
+  - Hiding cursor management in backend methods creates cleaner API than exposing cursors.
+  - Setting `row_factory` for SQLite and using `RealDictCursor` for PostgreSQL provides consistent dict-based results.
+  - Initial testing setup required installing pytest and pytest-cov (not in requirements.txt).
+  - Mypy strict mode catches missing return type annotations on `__init__` methods.
+
+---
+
+## 2026-01-25 - SQL-002
+
+- What was implemented:
+  - Created `src/python/db/schema.py` with DDL constants for all 4 tables
+  - SQLite-compatible schema: INTEGER PRIMARY KEY, TEXT, REAL types
+  - Timestamps stored as ISO 8601 TEXT format ('YYYY-MM-DD HH:MM:SS')
+  - `create_tables()` function for idempotent schema creation (IF NOT EXISTS)
+  - `get_sqlite_path()` function: reads SQLITE_DB_PATH env or defaults to ~/.cryptoaccounting/ledger.db
+  - SqliteBackend auto-creates tables on init via `auto_create_tables` parameter (default True)
+  - Automatic parent directory creation (~/.cryptoaccounting/) if missing
+  - 9 new comprehensive schema tests
+
+- Files changed:
+  - `src/python/db/schema.py` (new)
+  - `src/python/db/sqlite.py` (modified - added auto_create_tables parameter)
+  - `src/python/db/__init__.py` (modified - export create_tables and get_sqlite_path)
+  - `tests/test_db_backend.py` (modified - added TestSchemaCreation class with 9 tests)
+  - `AGENTS.md` (updated)
+
+- **Learnings:**
+  - SQLite's INTEGER PRIMARY KEY auto-increments without needing AUTOINCREMENT keyword. The AUTOINCREMENT keyword has different semantics (prevents ID reuse) and is usually unnecessary.
+  - CREATE TABLE IF NOT EXISTS makes DDL idempotent - essential for auto-creation on backend init.
+  - SQLite has no native TIMESTAMP type - use TEXT with ISO 8601 format which sorts correctly.
+  - SQLite BOOLEAN is stored as INTEGER (0/1), no native boolean type.
+  - For testing, use `auto_create_tables=False` to prevent conflicts when tests create custom schemas.
+  - os.path.expanduser() is essential for ~ expansion in default paths.
+  - Calling create_tables() in __init__ provides zero-config experience for users.
+  - All 4 tables (ledger, pair_price, coins, wallets) successfully created and tested with inserts/queries.
+
+---
+
+## 2026-01-25 - SQL-003
+
+- What was implemented:
+  - Created `src/python/db/queries/` package for query classes
+  - `PriceLookup` class with `get_price()` and `get_price_date()` methods
+  - Fuzzy date matching: finds closest price on same calendar day by minute difference
+  - Backend-specific SQL generation for SQLite vs PostgreSQL compatibility
+  - SQLite: uses `strftime()` for date parts and `julianday()` for minute calculations
+  - PostgreSQL: uses `EXTRACT()` and `DATE_PART()` for date arithmetic
+  - 10 comprehensive unit tests covering exact matches, fuzzy matching, edge cases
+  - Returns `None` (not 0.0) when no price found
+
+- Files changed:
+  - `src/python/db/queries/__init__.py` (new)
+  - `src/python/db/queries/price.py` (new)
+  - `src/python/db/__init__.py` (modified - export PriceLookup)
+  - `tests/test_db_backend.py` (modified - added TestPriceLookup class with 10 tests)
+  - `AGENTS.md` (updated)
+
+- **Learnings:**
+  - Date/time functions are fundamentally incompatible between SQLite and PostgreSQL - must generate separate SQL per backend.
+  - Backend type detection pattern: `if isinstance(self.backend, SqliteBackend):` enables selecting appropriate SQL dialect.
+  - SQLite's `julianday()` returns fractional days. Multiply by 1440 (minutes/day) for minute-level precision: `ABS((julianday(date) - julianday(:price_date)) * 1440)`.
+  - SQLite requires `CAST(strftime('%Y', date) AS INTEGER)` for numeric date parts, plain `strftime()` returns strings.
+  - The fuzzy matching algorithm: filter to same calendar day (year/month/day match), then ORDER BY absolute minute difference, LIMIT 1.
+  - All 10 PriceLookup tests pass, mypy --strict passes, all 53 total tests pass.
+  - Query class pattern with dependency injection (accept backend in constructor) enables easy testing with in-memory databases.
+  - PostgreSQL parameters need CAST(:price_date AS TIMESTAMP) for date functions when passing ISO strings.
+
+---
