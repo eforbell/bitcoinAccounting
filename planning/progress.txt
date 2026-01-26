@@ -130,3 +130,35 @@
   - Test pattern: use in-memory SQLite (`:memory:`) for fast, isolated unit tests. Create test data with explicit INSERT statements.
 
 ---
+## 2026-01-25 - SQL-005
+
+- What was implemented:
+  - Created `src/python/db/queries/trades.py` with `TradeQuery` class
+  - `get_trades(coin: str) -> list[dict[str, Any]]` method
+  - Returns trade history with perspective relative to queried coin
+  - Positive to_quantity for buys, negative for sells
+  - Price calculated as counter_amount / coin_amount using CASE expressions
+  - Filters: trans_type = 'Trade' AND (buy_curr = coin OR sell_curr = coin)
+  - Results ordered by createddate ASC
+  - Returns empty list [] when no trades found
+  - 7 comprehensive unit tests covering all edge cases
+
+- Files changed:
+  - `src/python/db/queries/trades.py` (new)
+  - `src/python/db/queries/__init__.py` (modified - export TradeQuery)
+  - `src/python/db/__init__.py` (modified - export TradeQuery)
+  - `tests/test_db_backend.py` (modified - added TestTradeQuery class with 7 tests)
+  - `AGENTS.md` (updated - added CASE expression patterns, return type guidance)
+
+- **Learnings:**
+  - CASE expressions enable perspective-based queries: same transaction viewed as buy (+) or sell (-) depending on which coin is queried.
+  - Price calculation depends on perspective: always `counter_amount / coin_amount` to maintain consistent units.
+  - Negative values encode direction: sell of coin = negative to_quantity, buy = positive.
+  - CASE expressions work identically on SQLite and PostgreSQL, unlike date functions.
+  - Collections should return empty list [] when no results (not None). Reserve None for optional single values.
+  - `mypy --strict` requires type parameters on generic types: use `list[dict[str, Any]]` not `list[dict]`.
+  - Query pattern: SELECT with CASE columns, WHERE with OR condition, ORDER BY for consistency.
+  - All 52 tests passing (7 new TradeQuery tests). Zero regressions.
+
+---
+

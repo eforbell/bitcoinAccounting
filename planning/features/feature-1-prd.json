@@ -258,7 +258,7 @@
         "  - Trades for different coins don't appear"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "The CASE logic determines buy vs sell perspective. Match PostgreSQL exactly."
     },
     {
