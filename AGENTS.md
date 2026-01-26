@@ -339,3 +339,50 @@ return avg_price
 - Only buy_curr and buy fields contain meaningful data
 - get_dividend_cost() and get_interest_income() query the same data (functionally identical)
 - Both functions are kept separate for API compatibility with PostgreSQL stored procedures
+
+## Backend Abstraction Refactoring
+
+**Critical Rule**: Raw SQL queries passed to backend.execute() are NOT transformed between databases
+
+**Pattern**: Always use query class abstractions when available. If raw SQL has database-specific syntax, create a new query class method.
+
+**Examples of database-specific SQL to avoid**:
+- PostgreSQL: `date::date`, `information_schema.tables`
+- SQLite: `sqlite_master`, different date functions
+
+**Solution**: Use existing query classes (PriceLookup, TradeQuery, BalanceCalculator, etc.) or create new methods in query classes with backend type detection.
+
+## DateTime Handling Across Backends
+
+**Issue**: SQLite stores timestamps as TEXT (ISO 8601 strings), PostgreSQL returns datetime objects
+
+**Pattern**: Always parse dates when processing query results:
+
+```python
+if isinstance(date_value, str):
+    date_value = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+```
+
+**Where this is needed**:
+- Processing results from TradeQuery, IncomeQuery
+- FIFO calculations that compare dates
+- Any date arithmetic or comparisons
+
+## Test Migration from Mocks to Real Data
+
+**Old pattern** (don't use):
+```python
+self.mock_cursor.fetchall.side_effect = [(data1,), (data2,)]
+```
+
+**New pattern** (correct):
+```python
+backend = SqliteBackend(':memory:', auto_create_tables=True)
+crypto = CryptoAccounts(backend=backend)
+crypto.execute_trade(...)  # Insert real data
+```
+
+**Benefits**:
+- Tests actual database behavior, not mocks
+- Catches SQL errors and type conversion issues
+- Works identically for SQLite and PostgreSQL backends

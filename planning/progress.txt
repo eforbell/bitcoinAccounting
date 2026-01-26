@@ -255,3 +255,53 @@
 
 ---
 
+
+## 2026-01-25 - SQL-009 (Partial)
+
+- What was implemented:
+  - Modified CryptoAccounts.__init__() to accept DatabaseBackend parameter with fallback to get_backend()
+  - Created query helper instances in __init__: price_lookup, balance_calc, trade_query, basis_calc, income_query
+  - Refactored get_balance() to use BalanceCalculator.get_balance()
+  - Refactored get_basis() to use BasisCalculator.get_avg_purchase_price()
+  - Refactored get_balance_by_account() with named placeholders
+  - Refactored get_transactions() with named placeholders
+  - Refactored print_trades() to use TradeQuery.get_trade_cost()
+  - Refactored get_sales_for_1099b() to use TradeQuery, IncomeQuery, PriceLookup abstractions
+  - Refactored forecast_capital_gains_fifo() to use query abstractions
+  - Refactored get_wallets() with backend-specific table existence checks
+  - Refactored get_wallet_balance() with named placeholders
+  - Refactored all transaction methods (deposit, withdraw, interest, execute_trade, transfer_funds, import_transactions) with named placeholders
+  - Added exchange field to IncomeQuery.get_interest_income() results
+  - Added exchange field to TradeQuery.get_trades() results
+  - Added TradeQuery.get_sales() method for querying sales with date/wallet filters
+  - Converted all %s placeholders to :named placeholders throughout cryptoAccounts.py
+  - Added datetime parsing for SQLite string dates in FIFO calculations
+  - Updated 2 1099b tests to use real database instead of mocks
+
+- Files changed:
+  - `src/python/cryptoAccounts.py` (modified - major refactor)
+  - `src/python/db/queries/income.py` (modified - added exchange field)
+  - `src/python/db/queries/trades.py` (modified - added exchange field, get_sales method)
+  - `tests/test_1099b_export.py` (modified - 2 tests updated)
+  - `AGENTS.md` (updated - added backend abstraction patterns, datetime handling, test migration)
+
+- **Learnings:**
+  - CRITICAL: Backend.execute() does NOT transform SQL - must use query class abstractions for database-specific syntax
+  - PostgreSQL-specific syntax breaks on SQLite: `::date` casting, `information_schema.tables`
+  - SQLite-specific: `sqlite_master` for table checks, TEXT for timestamps
+  - Always check if query abstraction exists before writing raw SQL
+  - If database-specific SQL needed, create new query class method with backend type detection
+  - DateTime parsing required when processing SQLite results - dates come back as ISO 8601 strings
+  - Pattern: `if isinstance(date, str): date = datetime.fromisoformat(date.replace('Z', '+00:00'))`
+  - Test migration: Real database testing (`:memory:`) superior to mocking - catches actual SQL and type errors
+  - All 77 backend + integration tests passing validates refactor correctness
+  - Remaining work: 8 more 1099b tests need updating from mocks to real data
+  - Type annotations on cryptoAccounts.py methods would improve mypy compliance (optional)
+
+- **Test Status:**
+  - 77 tests passing (70 backend tests + 7 SQLite integration tests)
+  - 2 of 10 1099b tests updated and passing
+  - 3 PostgreSQL tests skipped (no PostgreSQL available)
+  - Zero regressions from refactoring
+
+---
