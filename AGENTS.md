@@ -141,3 +141,15 @@ class PriceLookup:
 - Testable: can inject in-memory backend for fast tests
 - Flexible: works with any backend implementation
 - Composable: query classes can depend on other query classes
+
+## COALESCE for NULL Handling in Aggregate Queries
+
+**Pattern**: Use `COALESCE` to handle NULL results from aggregate functions like `SUM()`:
+
+```sql
+SELECT COALESCE(SUM(buy), 0) - COALESCE(SUM(sell), 0) AS balance
+```
+
+**Why**: When no rows match, `SUM()` returns NULL rather than 0. COALESCE converts NULL to 0 for arithmetic.
+
+**Design Decision**: Balance functions return `0.0` (not `None`) for empty results. This matches accounting semantics where "no transactions" means "zero balance", not "unknown balance". Use `None` for lookups where data is truly missing (like price lookups).

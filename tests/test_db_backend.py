@@ -4,6 +4,7 @@ import os
 import pytest
 
 from src.python.db import (
+    BalanceCalculator,
     DatabaseBackend,
     DatabaseError,
     SqliteBackend,
@@ -728,5 +729,384 @@ class TestPriceLookup:
         price = price_lookup.get_price('BTC', 'USD', '2025-01-15 14:30:00')
 
         assert price == 50500.0
+
+        backend.close()
+
+
+class TestBalanceCalculator:
+    """Tests for BalanceCalculator class."""
+
+    def test_balance_with_only_buys(self):
+        """Test balance calculation with only buy transactions."""
+        backend = SqliteBackend(':memory:')
+
+        # Insert some buy transactions
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase'
+            }
+        )
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-16 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': 'USD',
+                'sell': 25000.0,
+                'fee_curr': 'USD',
+                'fee': 5.0,
+                'exchange': 'Coinbase'
+            }
+        )
+        backend.commit()
+
+        balance_calc = BalanceCalculator(backend)
+        balance = balance_calc.get_balance('BTC')
+
+        assert balance == 1.5
+
+        backend.close()
+
+    def test_balance_with_buys_and_sells(self):
+        """Test balance calculation with both buy and sell transactions."""
+        backend = SqliteBackend(':memory:')
+
+        # Buy 1.0 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+}
+        )
+        # Sell 0.3 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-16 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'USD',
+                'buy': 15000.0,
+                'sell_curr': 'BTC',
+                'sell': 0.3,
+                'fee_curr': 'USD',
+                'fee': 5.0,
+                'exchange': 'Coinbase',
+}
+        )
+        backend.commit()
+
+        balance_calc = BalanceCalculator(backend)
+        balance = balance_calc.get_balance('BTC')
+
+        assert balance == 0.7  # 1.0 - 0.3
+
+        backend.close()
+
+    def test_balance_excluding_stakes(self):
+        """Test that Stake transactions are excluded from buy sum."""
+        backend = SqliteBackend(':memory:')
+
+        # Regular buy
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'ETH',
+                'buy': 10.0,
+                'sell_curr': 'USD',
+                'sell': 30000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+}
+        )
+        # Stake transaction - should be excluded from balance
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-16 10:00:00',
+                'trans_type': 'Stake',
+                'buy_curr': 'ETH',
+                'buy': 5.0,
+                'sell_curr': 'ETH',
+                'sell': 5.0,
+                'fee_curr': 'ETH',
+                'fee': 0.0,
+                'exchange': 'Coinbase',
+}
+        )
+        backend.commit()
+
+        balance_calc = BalanceCalculator(backend)
+        balance = balance_calc.get_balance('ETH')
+
+        # Should be 10.0 (regular buy) - 5.0 (stake sell) = 5.0
+        # The stake buy of 5.0 is excluded
+        assert balance == 5.0
+
+        backend.close()
+
+    def test_zero_balance_no_transactions(self):
+        """Test that balance returns 0.0 when no transactions exist."""
+        backend = SqliteBackend(':memory:')
+
+        balance_calc = BalanceCalculator(backend)
+        balance = balance_calc.get_balance('BTC')
+
+        assert balance == 0.0
+
+        backend.close()
+
+    def test_negative_balance(self):
+        """Test that balance can be negative (sold more than bought)."""
+        backend = SqliteBackend(':memory:')
+
+        # Buy 0.5 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': 'USD',
+                'sell': 25000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+}
+        )
+        # Sell 1.0 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-16 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'USD',
+                'buy': 50000.0,
+                'sell_curr': 'BTC',
+                'sell': 1.0,
+                'fee_curr': 'USD',
+                'fee': 5.0,
+                'exchange': 'Coinbase',
+}
+        )
+        backend.commit()
+
+        balance_calc = BalanceCalculator(backend)
+        balance = balance_calc.get_balance('BTC')
+
+        assert balance == -0.5  # 0.5 - 1.0
+
+        backend.close()
+
+    def test_transfer_sum_with_mixed_transaction_types(self):
+        """Test transfer sum with deposits, withdrawals, and other transaction types."""
+        backend = SqliteBackend(':memory:')
+
+        # Deposit: buy BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Deposit',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': '',
+                'sell': 0.0,
+                'fee_curr': '',
+                'fee': 0.0,
+                'exchange': 'Coinbase',
+}
+        )
+        # Withdrawal: sell BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-16 10:00:00',
+                'trans_type': 'Withdrawal',
+                'buy_curr': '',
+                'buy': 0.0,
+                'sell_curr': 'BTC',
+                'sell': 0.3,
+                'fee_curr': 'BTC',
+                'fee': 0.001,
+                'exchange': 'Coinbase',
+}
+        )
+        # Trade: should be excluded from transfer sum
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-17 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': 'USD',
+                'sell': 25000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+}
+        )
+        backend.commit()
+
+        balance_calc = BalanceCalculator(backend)
+        transfer_sum = balance_calc.get_sum_of_all_transfers('BTC')
+
+        # Should be 1.0 (deposit) - 0.3 (withdrawal) = 0.7
+        # Trade of 0.5 should be excluded
+        assert transfer_sum == 0.7
+
+        backend.close()
+
+    def test_transfer_sum_zero_when_no_transfers(self):
+        """Test transfer sum returns 0.0 when no transfers exist."""
+        backend = SqliteBackend(':memory:')
+
+        # Add a trade (not a transfer)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+}
+        )
+        backend.commit()
+
+        balance_calc = BalanceCalculator(backend)
+        transfer_sum = balance_calc.get_sum_of_all_transfers('BTC')
+
+        # Should be 0.0 because no deposits/withdrawals
+        assert transfer_sum == 0.0
+
+        backend.close()
+
+    def test_transfer_sum_only_deposits(self):
+        """Test transfer sum with only deposits."""
+        backend = SqliteBackend(':memory:')
+
+        # Deposit 1.0 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Deposit',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': '',
+                'sell': 0.0,
+                'fee_curr': '',
+                'fee': 0.0,
+                'exchange': 'Coinbase',
+}
+        )
+        # Deposit 0.5 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-16 10:00:00',
+                'trans_type': 'Deposit',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': '',
+                'sell': 0.0,
+                'fee_curr': '',
+                'fee': 0.0,
+                'exchange': 'Coinbase',
+}
+        )
+        backend.commit()
+
+        balance_calc = BalanceCalculator(backend)
+        transfer_sum = balance_calc.get_sum_of_all_transfers('BTC')
+
+        assert transfer_sum == 1.5
+
+        backend.close()
+
+    def test_transfer_sum_negative_with_more_withdrawals(self):
+        """Test transfer sum can be negative when withdrawals exceed deposits."""
+        backend = SqliteBackend(':memory:')
+
+        # Deposit 0.5 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Deposit',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': '',
+                'sell': 0.0,
+                'fee_curr': '',
+                'fee': 0.0,
+                'exchange': 'Coinbase',
+}
+        )
+        # Withdraw 1.0 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-16 10:00:00',
+                'trans_type': 'Withdrawal',
+                'buy_curr': '',
+                'buy': 0.0,
+                'sell_curr': 'BTC',
+                'sell': 1.0,
+                'fee_curr': '',
+                'fee': 0.0,
+                'exchange': 'Coinbase',
+}
+        )
+        backend.commit()
+
+        balance_calc = BalanceCalculator(backend)
+        transfer_sum = balance_calc.get_sum_of_all_transfers('BTC')
+
+        assert transfer_sum == -0.5  # 0.5 - 1.0
 
         backend.close()
