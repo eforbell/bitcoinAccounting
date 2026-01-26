@@ -10,6 +10,7 @@ import os
 from .backend import DatabaseBackend
 from .exceptions import DatabaseError
 from .postgres import PostgresBackend
+from .schema import create_tables, get_sqlite_path
 from .sqlite import SqliteBackend
 
 
@@ -46,4 +47,6 @@ __all__ = [
     'SqliteBackend',
     'PostgresBackend',
     'get_backend',
+    'create_tables',
+    'get_sqlite_path',
 ]

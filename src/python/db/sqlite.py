@@ -13,19 +13,23 @@ class SqliteBackend(DatabaseBackend):
     """SQLite database backend.
 
     Uses sqlite3 from Python standard library. Supports both file-based
-    and in-memory (':memory:') databases.
+    and in-memory (':memory:') databases. Automatically creates schema
+    tables on initialization.
     """
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, auto_create_tables: bool = True) -> None:
         """Initialize SQLite backend.
 
         Args:
-            db_path: Path to SQLite database file. If None, uses default.
-                    Use ':memory:' for in-memory database (tests).
+            db_path: Path to SQLite database file. If None, uses default
+                    from get_sqlite_path(). Use ':memory:' for in-memory
+                    database (tests).
+            auto_create_tables: If True, automatically create schema tables.
+                               Set to False in tests that create their own schema.
         """
         if db_path is None:
-            import os
-            db_path = os.getenv('SQLITE_DB_PATH', os.path.expanduser('~/.cryptoaccounting/ledger.db'))
+            from .schema import get_sqlite_path
+            db_path = get_sqlite_path()
 
         self.db_path = db_path
 
@@ -41,6 +45,11 @@ class SqliteBackend(DatabaseBackend):
             self.connection.row_factory = sqlite3.Row  # Enable column access by name
         except sqlite3.Error as e:
             raise DatabaseError(f"Failed to connect to SQLite database at {db_path}: {e}") from e
+
+        # Automatically create tables if requested
+        if auto_create_tables:
+            from .schema import create_tables
+            create_tables(self)
 
     def execute(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Execute a query and return all results as list of dictionaries.

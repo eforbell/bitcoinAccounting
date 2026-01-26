@@ -61,3 +61,37 @@ backend.execute("SELECT * FROM ledger WHERE coin = :coin", {"coin": "BTC"})
 - `execute_scalar()` → `Any`
 
 This provides a cleaner interface than exposing cursors to calling code.
+
+## SQLite Schema Auto-Creation
+
+**Pattern**: Automatically create schema tables on backend initialization for convenience:
+
+```python
+class SqliteBackend:
+    def __init__(self, db_path=None, auto_create_tables=True):
+        # ... connect to database ...
+        if auto_create_tables:
+            create_tables(self)
+```
+
+**Benefit**: Users don't need to manually run DDL scripts - tables are created on first use.
+
+**Testing**: Set `auto_create_tables=False` in tests that create custom schemas to avoid conflicts.
+
+## SQLite Type Mappings from PostgreSQL
+
+- `SERIAL4` → `INTEGER PRIMARY KEY` (auto-increments without AUTOINCREMENT keyword)
+- `VARCHAR(n)` → `TEXT`
+- `FLOAT8`/`NUMERIC`/`DOUBLE PRECISION` → `REAL`
+- `TIMESTAMP` → `TEXT` (store as ISO 8601: 'YYYY-MM-DD HH:MM:SS')
+- `BOOLEAN` → `INTEGER` (0/1)
+
+## CREATE TABLE IF NOT EXISTS
+
+**Pattern**: Always use `IF NOT EXISTS` for idempotent DDL:
+
+```sql
+CREATE TABLE IF NOT EXISTS ledger (...);
+```
+
+This allows `create_tables()` to be called multiple times safely without errors.

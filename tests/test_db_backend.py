@@ -9,6 +9,8 @@ from src.python.db import (
     SqliteBackend,
     PostgresBackend,
     get_backend,
+    create_tables,
+    get_sqlite_path,
 )
 
 
@@ -17,13 +19,13 @@ class TestSqliteBackend:
 
     def test_init_memory_database(self):
         """Test initialization with :memory: database."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
         assert backend.db_path == ':memory:'
         backend.close()
 
     def test_execute_returns_list_of_dicts(self):
         """Test execute returns list of dictionaries with column names."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
 
         # Create test table
         backend.execute("CREATE TABLE test (id INTEGER, name TEXT)")
@@ -43,7 +45,7 @@ class TestSqliteBackend:
 
     def test_execute_with_named_params(self):
         """Test execute with :named placeholder syntax."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
 
         backend.execute("CREATE TABLE test (id INTEGER, name TEXT)")
         backend.execute("INSERT INTO test VALUES (1, 'Alice')")
@@ -60,7 +62,7 @@ class TestSqliteBackend:
 
     def test_execute_empty_results(self):
         """Test execute with no matching rows returns empty list."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
 
         backend.execute("CREATE TABLE test (id INTEGER, name TEXT)")
         backend.commit()
@@ -73,7 +75,7 @@ class TestSqliteBackend:
 
     def test_execute_one_returns_dict(self):
         """Test execute_one returns single dictionary."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
 
         backend.execute("CREATE TABLE test (id INTEGER, name TEXT)")
         backend.execute("INSERT INTO test VALUES (1, 'Alice')")
@@ -88,7 +90,7 @@ class TestSqliteBackend:
 
     def test_execute_one_no_results_returns_none(self):
         """Test execute_one returns None when no rows match."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
 
         backend.execute("CREATE TABLE test (id INTEGER, name TEXT)")
         backend.commit()
@@ -101,7 +103,7 @@ class TestSqliteBackend:
 
     def test_execute_scalar_returns_value(self):
         """Test execute_scalar returns first column value."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
 
         backend.execute("CREATE TABLE test (id INTEGER, name TEXT)")
         backend.execute("INSERT INTO test VALUES (1, 'Alice')")
@@ -115,7 +117,7 @@ class TestSqliteBackend:
 
     def test_execute_scalar_with_count(self):
         """Test execute_scalar with COUNT query."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
 
         backend.execute("CREATE TABLE test (id INTEGER, name TEXT)")
         backend.execute("INSERT INTO test VALUES (1, 'Alice')")
@@ -130,7 +132,7 @@ class TestSqliteBackend:
 
     def test_execute_scalar_no_results_returns_none(self):
         """Test execute_scalar returns None when no rows match."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
 
         backend.execute("CREATE TABLE test (id INTEGER, name TEXT)")
         backend.commit()
@@ -143,7 +145,7 @@ class TestSqliteBackend:
 
     def test_commit_and_rollback(self):
         """Test commit and rollback behavior."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
 
         backend.execute("CREATE TABLE test (id INTEGER, name TEXT)")
         backend.commit()
@@ -166,7 +168,7 @@ class TestSqliteBackend:
 
     def test_database_error_on_invalid_query(self):
         """Test that DatabaseError is raised on invalid SQL."""
-        backend = SqliteBackend(':memory:')
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
 
         with pytest.raises(DatabaseError, match="Query execution failed"):
             backend.execute("INVALID SQL SYNTAX")
@@ -177,7 +179,7 @@ class TestSqliteBackend:
         """Test that parent directory is created if missing."""
         db_path = tmp_path / "subdir" / "test.db"
 
-        backend = SqliteBackend(str(db_path))
+        backend = SqliteBackend(str(db_path), auto_create_tables=False)
 
         assert db_path.exists()
 
@@ -262,4 +264,210 @@ class TestPostgresBackend:
         """Test factory creates PostgreSQL backend."""
         backend = get_backend('postgres')
         assert isinstance(backend, PostgresBackend)
+        backend.close()
+
+
+class TestSchemaCreation:
+    """Tests for schema creation and initialization."""
+
+    def test_auto_create_tables_on_init(self, tmp_path):
+        """Test that tables are automatically created when SqliteBackend is initialized."""
+        db_path = tmp_path / "test.db"
+
+        # Create backend with auto_create_tables=True (default)
+        backend = SqliteBackend(str(db_path))
+
+        # Verify all tables exist
+        tables = backend.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        )
+        table_names = [t['name'] for t in tables]
+
+        assert 'ledger' in table_names
+        assert 'pair_price' in table_names
+        assert 'coins' in table_names
+        assert 'wallets' in table_names
+
+        backend.close()
+
+    def test_create_tables_is_idempotent(self, tmp_path):
+        """Test that create_tables can be called multiple times without error."""
+        db_path = tmp_path / "test.db"
+        backend = SqliteBackend(str(db_path), auto_create_tables=False)
+
+        # Create tables first time
+        create_tables(backend)
+
+        # Create tables second time - should not error
+        create_tables(backend)
+
+        # Verify tables exist
+        tables = backend.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        )
+        assert len(tables) == 4
+
+        backend.close()
+
+    def test_ledger_table_structure(self, tmp_path):
+        """Test ledger table has correct columns and can insert/query data."""
+        db_path = tmp_path / "test.db"
+        backend = SqliteBackend(str(db_path))
+
+        # Insert a record
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange)
+               VALUES (:date, :type, :buy, :buy_curr, :sell, :sell_curr, :fee, :fee_curr, :exchange)""",
+            {
+                'date': '2025-01-15 10:30:00',
+                'type': 'Trade',
+                'buy': 0.5,
+                'buy_curr': 'BTC',
+                'sell': 25000.0,
+                'sell_curr': 'USD',
+                'fee': 10.0,
+                'fee_curr': 'USD',
+                'exchange': 'TestExchange'
+            }
+        )
+        backend.commit()
+
+        # Query it back
+        result = backend.execute_one("SELECT * FROM ledger WHERE buy_curr = :curr", {'curr': 'BTC'})
+
+        assert result is not None
+        assert result['trans_type'] == 'Trade'
+        assert result['buy'] == 0.5
+        assert result['buy_curr'] == 'BTC'
+        assert result['id'] is not None  # Auto-incremented
+
+        backend.close()
+
+    def test_pair_price_table_structure(self, tmp_path):
+        """Test pair_price table can store price data."""
+        db_path = tmp_path / "test.db"
+        backend = SqliteBackend(str(db_path))
+
+        # Insert price data
+        backend.execute(
+            """INSERT INTO pair_price (from_curr, to_curr, price, date)
+               VALUES (:from, :to, :price, :date)""",
+            {
+                'from': 'BTC',
+                'to': 'USD',
+                'price': 50000.0,
+                'date': '2025-01-15'
+            }
+        )
+        backend.commit()
+
+        # Query it back
+        result = backend.execute_one(
+            "SELECT * FROM pair_price WHERE from_curr = :from AND to_curr = :to",
+            {'from': 'BTC', 'to': 'USD'}
+        )
+
+        assert result is not None
+        assert result['price'] == 50000.0
+        assert result['date'] == '2025-01-15'
+
+        backend.close()
+
+    def test_coins_table_structure(self, tmp_path):
+        """Test coins table can store coin metadata."""
+        db_path = tmp_path / "test.db"
+        backend = SqliteBackend(str(db_path))
+
+        # Insert coin data
+        backend.execute(
+            """INSERT INTO coins (name, max_supply, circ_supply)
+               VALUES (:name, :max, :circ)""",
+            {
+                'name': 'BTC',
+                'max': 21000000,
+                'circ': 19000000
+            }
+        )
+        backend.commit()
+
+        # Query it back
+        result = backend.execute_one("SELECT * FROM coins WHERE name = :name", {'name': 'BTC'})
+
+        assert result is not None
+        assert result['name'] == 'BTC'
+        assert result['max_supply'] == 21000000
+
+        backend.close()
+
+    def test_wallets_table_structure(self, tmp_path):
+        """Test wallets table can store wallet metadata."""
+        db_path = tmp_path / "test.db"
+        backend = SqliteBackend(str(db_path))
+
+        # Insert wallet data
+        backend.execute(
+            """INSERT INTO wallets (wallet_id, wallet_type, custody, description, active)
+               VALUES (:id, :type, :custody, :desc, :active)""",
+            {
+                'id': 'Strike',
+                'type': 'exchange',
+                'custody': 'custodial',
+                'desc': 'Strike account',
+                'active': 1
+            }
+        )
+        backend.commit()
+
+        # Query it back
+        result = backend.execute_one("SELECT * FROM wallets WHERE wallet_id = :id", {'id': 'Strike'})
+
+        assert result is not None
+        assert result['wallet_type'] == 'exchange'
+        assert result['custody'] == 'custodial'
+        assert result['active'] == 1
+
+        backend.close()
+
+    def test_get_sqlite_path_default(self):
+        """Test get_sqlite_path returns default path."""
+        # Clear env var to test default
+        old_val = os.environ.pop('SQLITE_DB_PATH', None)
+
+        try:
+            path = get_sqlite_path()
+            assert path.endswith('.cryptoaccounting/ledger.db')
+            assert '~' not in path  # Should be expanded
+        finally:
+            if old_val:
+                os.environ['SQLITE_DB_PATH'] = old_val
+
+    def test_get_sqlite_path_from_env(self):
+        """Test get_sqlite_path reads from environment variable."""
+        old_val = os.environ.get('SQLITE_DB_PATH')
+
+        try:
+            test_path = '/tmp/test.db'
+            os.environ['SQLITE_DB_PATH'] = test_path
+            path = get_sqlite_path()
+            assert path == test_path
+        finally:
+            if old_val:
+                os.environ['SQLITE_DB_PATH'] = old_val
+            else:
+                os.environ.pop('SQLITE_DB_PATH', None)
+
+    def test_parent_directory_auto_created(self, tmp_path):
+        """Test that parent directory is created automatically."""
+        db_path = tmp_path / "nested" / "dir" / "test.db"
+
+        # Parent dirs don't exist yet
+        assert not db_path.parent.exists()
+
+        # Create backend
+        backend = SqliteBackend(str(db_path))
+
+        # Parent dirs should now exist
+        assert db_path.parent.exists()
+        assert db_path.exists()
+
         backend.close()
