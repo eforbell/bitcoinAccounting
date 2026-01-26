@@ -13,6 +13,7 @@ from src.python.db import (
     create_tables,
     get_sqlite_path,
     PriceLookup,
+    TradeQuery,
 )
 
 
@@ -1108,5 +1109,285 @@ class TestBalanceCalculator:
         transfer_sum = balance_calc.get_sum_of_all_transfers('BTC')
 
         assert transfer_sum == -0.5  # 0.5 - 1.0
+
+        backend.close()
+
+
+class TestTradeQuery:
+    """Tests for TradeQuery class."""
+
+    def test_buy_trade_positive_quantity(self):
+        """Test buy trade (USD -> BTC) shows positive to_quantity."""
+        backend = SqliteBackend(':memory:')
+
+        # Buy BTC with USD
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        trades = trade_query.get_trades('BTC')
+
+        assert len(trades) == 1
+        trade = trades[0]
+        assert trade['date'] == '2025-01-15 10:00:00'
+        assert trade['to_curr'] == 'BTC'
+        assert trade['to_quantity'] == 1.0  # Positive for buy
+        assert trade['from_curr'] == 'USD'
+        assert trade['from_quantity'] == 50000.0
+        assert trade['price'] == 50000.0  # USD per BTC
+
+        backend.close()
+
+    def test_sell_trade_negative_quantity(self):
+        """Test sell trade (BTC -> USD) shows negative to_quantity."""
+        backend = SqliteBackend(':memory:')
+
+        # Sell BTC for USD
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-16 15:30:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'USD',
+                'buy': 51000.0,
+                'sell_curr': 'BTC',
+                'sell': 1.0,
+                'fee_curr': 'USD',
+                'fee': 5.0,
+                'exchange': 'Coinbase',
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        trades = trade_query.get_trades('BTC')
+
+        assert len(trades) == 1
+        trade = trades[0]
+        assert trade['date'] == '2025-01-16 15:30:00'
+        assert trade['to_curr'] == 'BTC'
+        assert trade['to_quantity'] == -1.0  # Negative for sell
+        assert trade['from_curr'] == 'USD'
+        assert trade['from_quantity'] == 51000.0
+        assert trade['price'] == 51000.0  # USD per BTC
+
+        backend.close()
+
+    def test_multiple_trades_ordered_by_date(self):
+        """Test multiple trades are returned in ascending date order."""
+        backend = SqliteBackend(':memory:')
+
+        # First trade: buy 0.5 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': 'USD',
+                'sell': 25000.0,
+                'fee_curr': 'USD',
+                'fee': 5.0,
+                'exchange': 'Coinbase',
+            }
+        )
+        # Third trade: sell 0.3 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-17 14:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'USD',
+                'buy': 16000.0,
+                'sell_curr': 'BTC',
+                'sell': 0.3,
+                'fee_curr': 'USD',
+                'fee': 3.0,
+                'exchange': 'Kraken',
+            }
+        )
+        # Second trade: buy 1.0 BTC
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-16 12:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 51000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        trades = trade_query.get_trades('BTC')
+
+        # Should be ordered by date ascending
+        assert len(trades) == 3
+        assert trades[0]['date'] == '2025-01-15 10:00:00'
+        assert trades[0]['to_quantity'] == 0.5
+        assert trades[1]['date'] == '2025-01-16 12:00:00'
+        assert trades[1]['to_quantity'] == 1.0
+        assert trades[2]['date'] == '2025-01-17 14:00:00'
+        assert trades[2]['to_quantity'] == -0.3
+
+        backend.close()
+
+    def test_no_trades_returns_empty_list(self):
+        """Test get_trades returns empty list when no trades exist."""
+        backend = SqliteBackend(':memory:')
+
+        trade_query = TradeQuery(backend)
+        trades = trade_query.get_trades('BTC')
+
+        assert trades == []
+
+        backend.close()
+
+    def test_trades_for_different_coin_not_included(self):
+        """Test trades for other coins are not included in results."""
+        backend = SqliteBackend(':memory:')
+
+        # BTC trade
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+            }
+        )
+        # ETH trade (should not appear in BTC results)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 11:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'ETH',
+                'buy': 10.0,
+                'sell_curr': 'USD',
+                'sell': 30000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        btc_trades = trade_query.get_trades('BTC')
+
+        # Should only have 1 trade (BTC)
+        assert len(btc_trades) == 1
+        assert btc_trades[0]['to_curr'] == 'BTC'
+
+        backend.close()
+
+    def test_non_trade_transactions_excluded(self):
+        """Test that non-Trade transactions are excluded from results."""
+        backend = SqliteBackend(':memory:')
+
+        # Trade transaction
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+            }
+        )
+        # Deposit transaction (should be excluded)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 11:00:00',
+                'trans_type': 'Deposit',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': '',
+                'sell': 0.0,
+                'fee_curr': '',
+                'fee': 0.0,
+                'exchange': 'Coinbase',
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        trades = trade_query.get_trades('BTC')
+
+        # Should only include the Trade transaction
+        assert len(trades) == 1
+        assert trades[0]['to_quantity'] == 1.0
+
+        backend.close()
+
+    def test_price_calculation_accuracy(self):
+        """Test that price is calculated correctly as counter_amount / coin_amount."""
+        backend = SqliteBackend(':memory:')
+
+        # Buy 0.02 BTC for 1000 USD (price should be 1000/0.02 = 50000)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 0.02,
+                'sell_curr': 'USD',
+                'sell': 1000.0,
+                'fee_curr': 'USD',
+                'fee': 2.0,
+                'exchange': 'Coinbase',
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        trades = trade_query.get_trades('BTC')
+
+        assert len(trades) == 1
+        # Price should be USD/BTC = 1000/0.02 = 50000
+        assert trades[0]['price'] == 50000.0
 
         backend.close()

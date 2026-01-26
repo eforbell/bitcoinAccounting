@@ -153,3 +153,60 @@ SELECT COALESCE(SUM(buy), 0) - COALESCE(SUM(sell), 0) AS balance
 **Why**: When no rows match, `SUM()` returns NULL rather than 0. COALESCE converts NULL to 0 for arithmetic.
 
 **Design Decision**: Balance functions return `0.0` (not `None`) for empty results. This matches accounting semantics where "no transactions" means "zero balance", not "unknown balance". Use `None` for lookups where data is truly missing (like price lookups).
+
+## CASE Expressions for Perspective-Based Queries
+
+**Pattern**: Use CASE expressions to calculate values from the perspective of a specific coin in buy/sell transactions:
+
+```sql
+SELECT
+    CASE
+        WHEN buy_curr = :coin THEN buy
+        WHEN sell_curr = :coin THEN -sell
+    END AS to_quantity,
+    CASE
+        WHEN buy_curr = :coin THEN sell / buy
+        WHEN sell_curr = :coin THEN buy / sell
+    END AS price
+FROM ledger
+WHERE (buy_curr = :coin OR sell_curr = :coin)
+```
+
+**Key Insights**:
+- Use negative values to indicate direction (sell = negative quantity, buy = positive)
+- Price calculation depends on perspective: always `counter_amount / coin_amount`
+- CASE expressions allow pivoting transaction data to a single coin's point of view
+- This pattern works across both SQLite and PostgreSQL without modification
+
+## Return Types for Collections
+
+**Pattern**: Query methods that return multiple results should return empty list `[]` when no data found, not `None`:
+
+```python
+def get_trades(self, coin: str) -> list[dict[str, Any]]:
+    results = self.backend.execute(query, {"coin": coin})
+    return [dict(row) for row in results]  # Returns [] if no results
+```
+
+**Design Decision**:
+- Return `None`: when looking up a single optional value (e.g., price lookup, date lookup)
+- Return `[]`: when returning a collection/list of items (e.g., trades, transactions)
+- Return `0.0`: when aggregating values where zero is meaningful (e.g., balance, sum)
+
+## Type Hints for Generic Collections in Strict Mode
+
+**Issue**: `mypy --strict` requires type parameters for generic types like `dict` and `list`
+
+**Solution**: Always specify generic parameters:
+
+```python
+# Wrong (fails strict mode)
+def get_trades(self, coin: str) -> list[dict]:
+    ...
+
+# Correct
+def get_trades(self, coin: str) -> list[dict[str, Any]]:
+    ...
+```
+
+**Required imports**: `from typing import Any` when using `dict[str, Any]`
