@@ -191,3 +191,33 @@
 
 ---
 
+## 2026-01-25 - SQL-007
+
+- What was implemented:
+  - Created `src/python/db/queries/basis.py` with `BasisCalculator` class
+  - `get_avg_purchase_price(coin: str, cost_currency: str = 'USD') -> float | None` method
+  - Calculates weighted average purchase price: SUM(unit_cost * quantity) / SUM(quantity)
+  - Filters to purchases only (quantity > 0) and excludes trades without price data (unit_cost = None)
+  - Returns None if no valid purchases exist or all purchases lack price data
+  - Dependency injection pattern: BasisCalculator accepts TradeQuery instance
+  - 7 comprehensive unit tests covering all scenarios
+
+- Files changed:
+  - `src/python/db/queries/basis.py` (new)
+  - `src/python/db/queries/__init__.py` (modified - export BasisCalculator)
+  - `src/python/db/__init__.py` (modified - export BasisCalculator)
+  - `tests/test_db_backend.py` (modified - added TestBasisCalculator class with 7 tests)
+  - `AGENTS.md` (updated - added weighted average calculation pattern, mypy strict mode with generator expressions)
+
+- **Learnings:**
+  - Weighted average formula: `total_cost / total_quantity` where `total_cost = SUM(unit_cost * quantity)`.
+  - Filter out None values BEFORE aggregation - don't let None propagate into sum() calculations.
+  - Filter to purchases only (quantity > 0) - sales have negative quantity and should be excluded.
+  - Return None when no valid data exists (not 0.0) - None indicates "no data available", matching lookup semantics.
+  - Mypy --strict can't infer return types from generator expression sums - requires explicit type annotations on intermediate variables.
+  - Pattern: `total_cost: float = sum(...)` and `avg_price: float = total_cost / total_quantity` eliminates mypy ambiguity.
+  - Dependency injection with TradeQuery enables isolated testing with mocked trade data.
+  - All 67 tests passing (64 passed, 3 skipped PostgreSQL tests). No regressions from adding BasisCalculator.
+
+---
+

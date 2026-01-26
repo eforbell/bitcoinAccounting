@@ -306,7 +306,7 @@
         "  - All purchases missing price data: returns None"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "Returns None for no-data cases. Calling code must handle None appropriately."
     },
     {
