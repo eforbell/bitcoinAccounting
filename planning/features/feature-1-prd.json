@@ -282,7 +282,7 @@
         "  - Multiple trades with mixed currencies"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on SQL-003 (PriceLookup) and builds on SQL-005 (get_trades). Use dependency injection for testability."
     },
     {

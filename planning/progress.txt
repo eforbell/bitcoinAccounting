@@ -162,3 +162,32 @@
 
 ---
 
+## 2026-01-25 - SQL-006
+
+- What was implemented:
+  - Added `get_trade_cost(coin: str, cost_currency: str = 'USD') -> list[dict[str, Any]]` to TradeQuery class
+  - Calculates cost basis for each trade in a specified currency
+  - Handles direct trades in target currency without price lookup
+  - Cross-currency trades use PriceLookup to convert to target currency
+  - Returns None for unit_cost/total_cost when price unavailable
+  - Dependency injection pattern: TradeQuery accepts optional PriceLookup instance
+  - Each result includes: date, curr, quantity, trade_curr, trade_quantity, cost_curr, unit_cost, total_cost, cost_curr_quote_date
+  - 5 comprehensive unit tests covering all scenarios
+
+- Files changed:
+  - `src/python/db/queries/trades.py` (modified - added get_trade_cost, updated constructor for dependency injection)
+  - `tests/test_db_backend.py` (modified - added 5 new tests in TestTradeQuery class)
+  - `AGENTS.md` (updated - added dependency injection pattern, floating-point comparison, cross-currency cost calculations)
+
+- **Learnings:**
+  - Dependency injection with default None enables both testability and convenience: `price_lookup: PriceLookup | None = None` with auto-creation in constructor.
+  - Floating-point arithmetic requires `pytest.approx()` for comparisons due to precision errors (49500.0 vs 49500.00000000001).
+  - Always use `abs(quantity)` when calculating total_cost - cost is always positive even for sells.
+  - Propagate None through calculations: if price lookup fails, set all derived values (unit_cost, total_cost, cost_curr_quote_date) to None.
+  - Direct trades (trade_curr == cost_currency) skip price lookup and use trade price directly for efficiency.
+  - Cross-currency conversion: `usd_per_btc = eur_per_btc * eur_to_usd` when trade is in EUR but cost needed in USD.
+  - All 62 tests passing (59 passed, 3 skipped PostgreSQL tests). No regressions from adding new functionality.
+  - Store cost_curr_quote_date for audit trails - shows which price timestamp was used for conversion.
+
+---
+
