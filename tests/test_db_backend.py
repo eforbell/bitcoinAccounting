@@ -1391,3 +1391,238 @@ class TestTradeQuery:
         assert trades[0]['price'] == 50000.0
 
         backend.close()
+
+    def test_trade_cost_direct_usd(self):
+        """Test get_trade_cost with direct USD trade (no price lookup needed)."""
+        backend = SqliteBackend(':memory:')
+
+        # Buy 1.0 BTC for 50000 USD
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        cost_data = trade_query.get_trade_cost('BTC', 'USD')
+
+        assert len(cost_data) == 1
+        trade = cost_data[0]
+        assert trade['date'] == '2025-01-15 10:00:00'
+        assert trade['curr'] == 'BTC'
+        assert trade['quantity'] == 1.0
+        assert trade['trade_curr'] == 'USD'
+        assert trade['trade_quantity'] == 50000.0
+        assert trade['cost_curr'] == 'USD'
+        assert trade['unit_cost'] == 50000.0  # Direct price, no conversion
+        assert trade['total_cost'] == 50000.0  # 50000 * 1.0
+        assert trade['cost_curr_quote_date'] == '2025-01-15 10:00:00'  # Trade date
+
+        backend.close()
+
+    def test_trade_cost_cross_currency_with_price(self):
+        """Test get_trade_cost with cross-currency trade requiring price lookup."""
+        backend = SqliteBackend(':memory:')
+
+        # Buy 1.0 BTC for 45000 EUR
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'EUR',
+                'sell': 45000.0,
+                'fee_curr': 'EUR',
+                'fee': 10.0,
+                'exchange': 'Kraken',
+            }
+        )
+
+        # Add EUR/USD price for conversion
+        backend.execute(
+            """INSERT INTO pair_price (date, from_curr, to_curr, price)
+               VALUES (:date, :from_curr, :to_curr, :price)""",
+            {
+                'date': '2025-01-15 10:05:00',  # Close to trade time
+                'from_curr': 'EUR',
+                'to_curr': 'USD',
+                'price': 1.10,
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        cost_data = trade_query.get_trade_cost('BTC', 'USD')
+
+        assert len(cost_data) == 1
+        trade = cost_data[0]
+        assert trade['date'] == '2025-01-15 10:00:00'
+        assert trade['curr'] == 'BTC'
+        assert trade['quantity'] == 1.0
+        assert trade['trade_curr'] == 'EUR'
+        assert trade['trade_quantity'] == 45000.0
+        assert trade['cost_curr'] == 'USD'
+        # unit_cost = trade_price * eur_usd_price = 45000 * 1.10 = 49500
+        assert trade['unit_cost'] == pytest.approx(49500.0)
+        assert trade['total_cost'] == pytest.approx(49500.0)  # 49500 * 1.0
+        assert trade['cost_curr_quote_date'] == '2025-01-15 10:05:00'  # Price date
+
+        backend.close()
+
+    def test_trade_cost_missing_price(self):
+        """Test get_trade_cost when price lookup returns None."""
+        backend = SqliteBackend(':memory:')
+
+        # Buy 1.0 BTC for 45000 EUR, but no EUR/USD price available
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'EUR',
+                'sell': 45000.0,
+                'fee_curr': 'EUR',
+                'fee': 10.0,
+                'exchange': 'Kraken',
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        cost_data = trade_query.get_trade_cost('BTC', 'USD')
+
+        assert len(cost_data) == 1
+        trade = cost_data[0]
+        assert trade['date'] == '2025-01-15 10:00:00'
+        assert trade['curr'] == 'BTC'
+        assert trade['quantity'] == 1.0
+        assert trade['trade_curr'] == 'EUR'
+        assert trade['trade_quantity'] == 45000.0
+        assert trade['cost_curr'] == 'USD'
+        assert trade['unit_cost'] is None  # No price available
+        assert trade['total_cost'] is None  # No price available
+        assert trade['cost_curr_quote_date'] is None  # No price available
+
+        backend.close()
+
+    def test_trade_cost_multiple_mixed_currencies(self):
+        """Test get_trade_cost with multiple trades in different currencies."""
+        backend = SqliteBackend(':memory:')
+
+        # Trade 1: Buy 1.0 BTC for 50000 USD (direct)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-15 10:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 1.0,
+                'sell_curr': 'USD',
+                'sell': 50000.0,
+                'fee_curr': 'USD',
+                'fee': 10.0,
+                'exchange': 'Coinbase',
+            }
+        )
+
+        # Trade 2: Buy 0.5 BTC for 22500 EUR (requires conversion)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-16 12:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'BTC',
+                'buy': 0.5,
+                'sell_curr': 'EUR',
+                'sell': 22500.0,
+                'fee_curr': 'EUR',
+                'fee': 5.0,
+                'exchange': 'Kraken',
+            }
+        )
+
+        # Trade 3: Sell 0.3 BTC for 15600 USD (direct, negative quantity)
+        backend.execute(
+            """INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell, fee_curr, fee, exchange)
+               VALUES (:createddate, :trans_type, :buy_curr, :buy, :sell_curr, :sell, :fee_curr, :fee, :exchange)""",
+            {
+                'createddate': '2025-01-17 14:00:00',
+                'trans_type': 'Trade',
+                'buy_curr': 'USD',
+                'buy': 15600.0,
+                'sell_curr': 'BTC',
+                'sell': 0.3,
+                'fee_curr': 'USD',
+                'fee': 3.0,
+                'exchange': 'Coinbase',
+            }
+        )
+
+        # Add EUR/USD price for second trade
+        backend.execute(
+            """INSERT INTO pair_price (date, from_curr, to_curr, price)
+               VALUES (:date, :from_curr, :to_curr, :price)""",
+            {
+                'date': '2025-01-16 12:05:00',
+                'from_curr': 'EUR',
+                'to_curr': 'USD',
+                'price': 1.12,
+            }
+        )
+        backend.commit()
+
+        trade_query = TradeQuery(backend)
+        cost_data = trade_query.get_trade_cost('BTC', 'USD')
+
+        assert len(cost_data) == 3
+
+        # First trade: direct USD
+        assert cost_data[0]['date'] == '2025-01-15 10:00:00'
+        assert cost_data[0]['quantity'] == 1.0
+        assert cost_data[0]['unit_cost'] == 50000.0
+        assert cost_data[0]['total_cost'] == 50000.0
+
+        # Second trade: EUR converted to USD (45000 EUR/BTC * 1.12 = 50400 USD/BTC)
+        assert cost_data[1]['date'] == '2025-01-16 12:00:00'
+        assert cost_data[1]['quantity'] == 0.5
+        assert cost_data[1]['trade_curr'] == 'EUR'
+        assert cost_data[1]['unit_cost'] == pytest.approx(50400.0)  # 45000 * 1.12
+        assert cost_data[1]['total_cost'] == pytest.approx(25200.0)  # 50400 * 0.5
+
+        # Third trade: sell (negative quantity), direct USD
+        assert cost_data[2]['date'] == '2025-01-17 14:00:00'
+        assert cost_data[2]['quantity'] == -0.3
+        assert cost_data[2]['unit_cost'] == 52000.0  # 15600 / 0.3
+        assert cost_data[2]['total_cost'] == 15600.0  # 52000 * abs(-0.3)
+
+        backend.close()
+
+    def test_trade_cost_empty_trades(self):
+        """Test get_trade_cost returns empty list when no trades exist."""
+        backend = SqliteBackend(':memory:')
+
+        trade_query = TradeQuery(backend)
+        cost_data = trade_query.get_trade_cost('BTC', 'USD')
+
+        assert cost_data == []
+
+        backend.close()

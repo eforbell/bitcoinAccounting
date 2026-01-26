@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..backend import DatabaseBackend
+    from .price import PriceLookup
 
 
 class TradeQuery:
@@ -19,13 +20,23 @@ class TradeQuery:
     perspective (buy vs sell) relative to the coin being queried.
     """
 
-    def __init__(self, backend: DatabaseBackend) -> None:
+    def __init__(
+        self,
+        backend: DatabaseBackend,
+        price_lookup: PriceLookup | None = None
+    ) -> None:
         """Initialize the trade query handler.
 
         Args:
             backend: Database backend to use for queries
+            price_lookup: Optional PriceLookup instance for cost calculations.
+                         If None, a new instance will be created.
         """
         self.backend = backend
+        if price_lookup is None:
+            from .price import PriceLookup
+            price_lookup = PriceLookup(backend)
+        self.price_lookup = price_lookup
 
     def get_trades(self, coin: str) -> list[dict[str, Any]]:
         """Get all trades involving a specific coin.
@@ -83,3 +94,84 @@ class TradeQuery:
 
         results = self.backend.execute(query, {"coin": coin})
         return [dict(row) for row in results]
+
+    def get_trade_cost(
+        self,
+        coin: str,
+        cost_currency: str = 'USD'
+    ) -> list[dict[str, Any]]:
+        """Get trade history with cost basis information.
+
+        For each trade, calculates the cost in a specified currency.
+        Handles cross-currency trades by looking up prices.
+
+        Args:
+            coin: The currency code to get trades for (e.g., 'BTC', 'ETH')
+            cost_currency: Currency to express costs in (default: 'USD')
+
+        Returns:
+            List of trade dictionaries with cost information ordered by date.
+            Each dict contains:
+            - date: Transaction timestamp (ISO 8601 string)
+            - curr: The coin being queried
+            - quantity: Amount of coin (positive=buy, negative=sell)
+            - trade_curr: The counter currency
+            - trade_quantity: Amount of counter currency
+            - cost_curr: The currency costs are expressed in
+            - unit_cost: Cost per unit of coin in cost_currency (None if price unavailable)
+            - total_cost: Total cost of trade in cost_currency (None if price unavailable)
+            - cost_curr_quote_date: Timestamp of price used for conversion (trade date if direct)
+
+            Returns empty list [] if no trades found.
+        """
+        trades = self.get_trades(coin)
+        result = []
+
+        for trade in trades:
+            trade_date = trade['date']
+            trade_curr = trade['from_curr']
+            trade_quantity = trade['from_quantity']
+            quantity = trade['to_quantity']
+
+            # Determine if we need price conversion
+            if trade_curr == cost_currency:
+                # Direct trade in cost currency - use trade price directly
+                unit_cost = trade['price']
+                total_cost = unit_cost * abs(quantity)
+                cost_curr_quote_date = trade_date
+            else:
+                # Need to convert from trade_curr to cost_currency
+                price = self.price_lookup.get_price(
+                    trade_curr,
+                    cost_currency,
+                    trade_date
+                )
+
+                if price is None:
+                    # No price available for conversion
+                    unit_cost = None
+                    total_cost = None
+                    cost_curr_quote_date = None
+                else:
+                    # Calculate cost using the looked-up price
+                    unit_cost = trade['price'] * price
+                    total_cost = unit_cost * abs(quantity)
+                    cost_curr_quote_date = self.price_lookup.get_price_date(
+                        trade_curr,
+                        cost_currency,
+                        trade_date
+                    )
+
+            result.append({
+                'date': trade_date,
+                'curr': coin,
+                'quantity': quantity,
+                'trade_curr': trade_curr,
+                'trade_quantity': trade_quantity,
+                'cost_curr': cost_currency,
+                'unit_cost': unit_cost,
+                'total_cost': total_cost,
+                'cost_curr_quote_date': cost_curr_quote_date
+            })
+
+        return result

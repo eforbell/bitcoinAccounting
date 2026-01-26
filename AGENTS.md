@@ -210,3 +210,71 @@ def get_trades(self, coin: str) -> list[dict[str, Any]]:
 ```
 
 **Required imports**: `from typing import Any` when using `dict[str, Any]`
+
+## Dependency Injection for Composed Query Classes
+
+**Pattern**: Query classes that depend on other query classes should accept optional dependencies via constructor:
+
+```python
+class TradeQuery:
+    def __init__(
+        self,
+        backend: DatabaseBackend,
+        price_lookup: PriceLookup | None = None
+    ) -> None:
+        self.backend = backend
+        if price_lookup is None:
+            price_lookup = PriceLookup(backend)
+        self.price_lookup = price_lookup
+```
+
+**Benefits**:
+- Testability: Can inject mock PriceLookup for isolated testing
+- Flexibility: Caller can provide custom implementation if needed
+- Convenience: Auto-creates dependency if not provided (zero-config for simple use)
+
+**Design Decision**: Always provide default None and auto-create in constructor. This balances testability with ease of use.
+
+## Floating-Point Comparison in Tests
+
+**Issue**: Direct equality checks fail for floating-point arithmetic due to precision errors:
+
+```python
+assert trade['unit_cost'] == 49500.0  # FAILS: 49500.00000000001 == 49500.0
+```
+
+**Solution**: Use `pytest.approx()` for floating-point comparisons:
+
+```python
+assert trade['unit_cost'] == pytest.approx(49500.0)
+assert trade['total_cost'] == pytest.approx(25200.0)
+```
+
+**When to use**: Any test assertion involving calculated float values (prices, costs, balances with division/multiplication). Not needed for integer comparisons or exact float literals stored directly.
+
+## Cross-Currency Cost Calculations
+
+**Pattern**: When calculating costs across different currencies, chain lookups to convert:
+
+```python
+# Trade: BTC bought with EUR, need cost in USD
+# Step 1: Get EUR/BTC price from trade data
+eur_per_btc = trade['price']  # From trade record
+
+# Step 2: Lookup EUR/USD conversion rate
+eur_to_usd = price_lookup.get_price('EUR', 'USD', trade_date)
+
+# Step 3: Calculate USD cost
+if eur_to_usd is not None:
+    usd_per_btc = eur_per_btc * eur_to_usd
+    total_cost = usd_per_btc * abs(quantity)
+else:
+    usd_per_btc = None
+    total_cost = None
+```
+
+**Key Insights**:
+- Always use `abs(quantity)` for total_cost calculation (cost is always positive, even for sells)
+- Propagate None through calculations: if any price lookup fails, set all derived values to None
+- Store the actual price date used for conversion (`cost_curr_quote_date`) for audit trails
+- Direct trades in the target currency skip the lookup (e.g., USD trade with USD cost_currency)
