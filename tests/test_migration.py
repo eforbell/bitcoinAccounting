@@ -3,6 +3,7 @@
 import os
 import tempfile
 from datetime import datetime
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,6 +16,7 @@ from src.python.db import (
 )
 from src.python.db.migration import (
     convert_row_timestamps,
+    convert_value_for_sqlite,
     get_table_count,
     migrate_table,
     migrate_postgres_to_sqlite,
@@ -39,14 +41,34 @@ class TestTimestampConversion:
         assert convert_timestamp_to_iso8601(None) is None
         assert convert_timestamp_to_iso8601(['list']) == ['list']
 
+    def test_convert_decimal_to_float(self) -> None:
+        """Test converting Decimal object to float for SQLite compatibility."""
+        dec = Decimal('123.456789')
+        result = convert_value_for_sqlite(dec)
+        assert result == 123.456789
+        assert isinstance(result, float)
+
+    def test_convert_value_handles_multiple_types(self) -> None:
+        """Test that convert_value_for_sqlite handles datetime, Decimal, and other types."""
+        dt = datetime(2025, 6, 15, 14, 30, 45)
+        dec = Decimal('99.99')
+
+        assert convert_value_for_sqlite(dt) == '2025-06-15 14:30:45'
+        assert convert_value_for_sqlite(dec) == 99.99
+        assert isinstance(convert_value_for_sqlite(dec), float)
+        assert convert_value_for_sqlite('string') == 'string'
+        assert convert_value_for_sqlite(42) == 42
+        assert convert_value_for_sqlite(None) is None
+
     def test_convert_row_timestamps(self) -> None:
-        """Test converting all timestamps in a row dictionary."""
+        """Test converting all PostgreSQL types in a row dictionary."""
         dt = datetime(2025, 1, 15, 10, 30, 0)
+        dec = Decimal('99.5')
         row = {
             'id': 1,
             'name': 'Test',
             'created_at': dt,
-            'value': 99.5,
+            'value': dec,
             'is_active': True
         }
         result = convert_row_timestamps(row)
@@ -55,6 +77,7 @@ class TestTimestampConversion:
         assert result['name'] == 'Test'
         assert result['created_at'] == '2025-01-15 10:30:00'
         assert result['value'] == 99.5
+        assert isinstance(result['value'], float)
         assert result['is_active'] is True
 
     def test_convert_row_with_no_timestamps(self) -> None:

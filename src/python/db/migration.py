@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from .backend import DatabaseBackend
@@ -16,8 +17,29 @@ from .sqlite import SqliteBackend
 TABLES_TO_MIGRATE = ['coins', 'wallets', 'ledger', 'pair_price']
 
 
+def convert_value_for_sqlite(value: Any) -> Any:
+    """Convert PostgreSQL-specific types to SQLite-compatible types.
+
+    Args:
+        value: Value to potentially convert. Handles:
+               - datetime → ISO 8601 string
+               - Decimal → float
+               - Other types → unchanged
+
+    Returns:
+        Converted value compatible with SQLite parameter binding
+    """
+    if isinstance(value, datetime):
+        return value.strftime('%Y-%m-%d %H:%M:%S')
+    elif isinstance(value, Decimal):
+        return float(value)
+    return value
+
+
 def convert_timestamp_to_iso8601(value: Any) -> Any:
     """Convert PostgreSQL timestamp to ISO 8601 string for SQLite.
+
+    Deprecated: Use convert_value_for_sqlite instead.
 
     Args:
         value: Value to potentially convert. If it's a datetime, converts to
@@ -26,21 +48,21 @@ def convert_timestamp_to_iso8601(value: Any) -> Any:
     Returns:
         Converted value (string if datetime, original value otherwise)
     """
-    if isinstance(value, datetime):
-        return value.strftime('%Y-%m-%d %H:%M:%S')
-    return value
+    return convert_value_for_sqlite(value)
 
 
 def convert_row_timestamps(row: dict[str, Any]) -> dict[str, Any]:
-    """Convert all datetime values in a row to ISO 8601 strings.
+    """Convert all PostgreSQL-specific types in a row to SQLite-compatible types.
+
+    Converts datetime to ISO 8601 strings and Decimal to float.
 
     Args:
         row: Dictionary of column values
 
     Returns:
-        Dictionary with datetime values converted to strings
+        Dictionary with PostgreSQL types converted to SQLite-compatible types
     """
-    return {key: convert_timestamp_to_iso8601(value) for key, value in row.items()}
+    return {key: convert_value_for_sqlite(value) for key, value in row.items()}
 
 
 def get_table_count(backend: DatabaseBackend, table_name: str) -> int:

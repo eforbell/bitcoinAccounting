@@ -405,20 +405,29 @@ class MigrationResult:
 
 **Key Insights**:
 - Convert PostgreSQL datetime objects to ISO 8601 strings during migration
+- Convert PostgreSQL Decimal objects to float for SQLite compatibility
+- SQLite parameter binding cannot handle Decimal types - must convert to float
 - Use `force` flag to handle existing file (default: abort if exists)
 - Use `dry_run` flag to preview migration without writing data
 - Clean up partial SQLite file on migration failure
 - Skip migration with warning if PostgreSQL ledger is empty
 - Verify row counts after migration to ensure data integrity
 
-## Timestamp Conversion for Migration
+## Type Conversion for Migration (PostgreSQL to SQLite)
 
-**Pattern**: Convert datetime objects to ISO 8601 strings for SQLite compatibility:
+**Critical Issue**: PostgreSQL returns Decimal objects for NUMERIC/FLOAT8 columns, but SQLite parameter binding cannot handle Decimal types. This causes "Error binding parameter :name - probably unsupported type" errors.
+
+**Pattern**: Convert all PostgreSQL-specific types to SQLite-compatible types:
 
 ```python
-def convert_timestamp_to_iso8601(value: Any) -> Any:
+from decimal import Decimal
+
+def convert_value_for_sqlite(value: Any) -> Any:
+    """Convert PostgreSQL types to SQLite-compatible types."""
     if isinstance(value, datetime):
         return value.strftime('%Y-%m-%d %H:%M:%S')
+    elif isinstance(value, Decimal):
+        return float(value)
     return value
 ```
 
@@ -426,8 +435,13 @@ def convert_timestamp_to_iso8601(value: Any) -> Any:
 
 ```python
 def convert_row_timestamps(row: dict[str, Any]) -> dict[str, Any]:
-    return {key: convert_timestamp_to_iso8601(value) for key, value in row.items()}
+    return {key: convert_value_for_sqlite(value) for key, value in row.items()}
 ```
+
+**Types that need conversion**:
+- `datetime` → ISO 8601 string (`'2025-01-28 10:30:00'`)
+- `Decimal` → float (PostgreSQL NUMERIC/FLOAT8 columns)
+- `str`, `int`, `float`, `bool`, `None` → unchanged (compatible with both)
 
 ## CLI Script Pattern
 
