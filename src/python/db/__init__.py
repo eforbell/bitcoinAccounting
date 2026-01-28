@@ -9,6 +9,11 @@ import os
 
 from .backend import DatabaseBackend
 from .exceptions import DatabaseError
+from .migration import (
+    MigrationResult,
+    convert_timestamp_to_iso8601,
+    migrate_postgres_to_sqlite,
+)
 from .postgres import PostgresBackend
 from .queries.balance import BalanceCalculator
 from .queries.basis import BasisCalculator
@@ -59,4 +64,7 @@ __all__ = [
     'IncomeQuery',
     'PriceLookup',
     'TradeQuery',
+    'MigrationResult',
+    'convert_timestamp_to_iso8601',
+    'migrate_postgres_to_sqlite',
 ]

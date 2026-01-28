@@ -386,3 +386,66 @@ crypto.execute_trade(...)  # Insert real data
 - Tests actual database behavior, not mocks
 - Catches SQL errors and type conversion issues
 - Works identically for SQLite and PostgreSQL backends
+
+## PostgreSQL to SQLite Migration Tool
+
+**Pattern**: Use a MigrationResult class to track migration progress and verification:
+
+```python
+class MigrationResult:
+    def add_table_result(self, table: str, source_count: int, migrated_count: int) -> None:
+        """Track row counts for verification."""
+
+    def verify(self) -> bool:
+        """Verify all source counts match migrated counts."""
+
+    def summary(self) -> str:
+        """Generate human-readable summary."""
+```
+
+**Key Insights**:
+- Convert PostgreSQL datetime objects to ISO 8601 strings during migration
+- Use `force` flag to handle existing file (default: abort if exists)
+- Use `dry_run` flag to preview migration without writing data
+- Clean up partial SQLite file on migration failure
+- Skip migration with warning if PostgreSQL ledger is empty
+- Verify row counts after migration to ensure data integrity
+
+## Timestamp Conversion for Migration
+
+**Pattern**: Convert datetime objects to ISO 8601 strings for SQLite compatibility:
+
+```python
+def convert_timestamp_to_iso8601(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.strftime('%Y-%m-%d %H:%M:%S')
+    return value
+```
+
+**Apply to all row values before inserting into SQLite**:
+
+```python
+def convert_row_timestamps(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: convert_timestamp_to_iso8601(value) for key, value in row.items()}
+```
+
+## CLI Script Pattern
+
+**Pattern**: Use argparse for command-line arguments with descriptive help:
+
+```python
+#!/usr/bin/env python3
+import argparse
+import _bootstrap  # Adds src/python to sys.path
+
+parser = argparse.ArgumentParser(description="...")
+parser.add_argument('--output', '-o', help='...')
+parser.add_argument('--dry-run', '-n', action='store_true', help='...')
+parser.add_argument('--force', '-f', action='store_true', help='...')
+```
+
+**Best Practices**:
+- Include long and short flag variants (--output, -o)
+- Use `action='store_true'` for boolean flags
+- Return exit codes: 0 for success, 1 for errors
+- Print errors to stderr with `file=sys.stderr`

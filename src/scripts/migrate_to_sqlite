@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""Migrate data from PostgreSQL to SQLite database.
+
+This script transfers all data from an existing PostgreSQL database to a new
+SQLite database file. Useful for users who want to switch to the simpler
+SQLite backend.
+
+Usage:
+    migrate_to_sqlite [--output PATH] [--dry-run] [--force]
+
+Options:
+    --output PATH  Target SQLite file path (default: ~/.cryptoaccounting/ledger.db)
+    --dry-run      Count rows and report what would be migrated, without writing
+    --force        Overwrite target file if it exists
+
+Environment Variables:
+    PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE - PostgreSQL connection
+
+Example:
+    # Preview migration without making changes
+    migrate_to_sqlite --dry-run
+
+    # Migrate to default location
+    migrate_to_sqlite
+
+    # Migrate to custom location
+    migrate_to_sqlite --output /path/to/ledger.db
+
+    # Force overwrite existing file
+    migrate_to_sqlite --force
+"""
+
+import argparse
+import sys
+
+import _bootstrap
+from db import PostgresBackend, DatabaseError
+from db.migration import migrate_postgres_to_sqlite
+from db.schema import get_sqlite_path
+
+
+def main() -> int:
+    """Run the migration tool.
+
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    parser = argparse.ArgumentParser(
+        description="Migrate data from PostgreSQL to SQLite database",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__
+    )
+    parser.add_argument(
+        '--output', '-o',
+        metavar='PATH',
+        default=None,
+        help='Target SQLite file path (default: ~/.cryptoaccounting/ledger.db)'
+    )
+    parser.add_argument(
+        '--dry-run', '-n',
+        action='store_true',
+        help='Show what would be migrated without making changes'
+    )
+    parser.add_argument(
+        '--force', '-f',
+        action='store_true',
+        help='Overwrite target file if it exists'
+    )
+
+    args = parser.parse_args()
+
+    # Determine target path
+    sqlite_path = args.output if args.output else get_sqlite_path()
+
+    # Connect to PostgreSQL
+    print("Connecting to PostgreSQL...")
+    try:
+        pg_backend = PostgresBackend()
+    except DatabaseError as e:
+        print(f"ERROR: Failed to connect to PostgreSQL: {e}", file=sys.stderr)
+        print("\nMake sure PostgreSQL environment variables are set:", file=sys.stderr)
+        print("  PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE", file=sys.stderr)
+        return 1
+
+    try:
+        if args.dry_run:
+            print(f"\nDRY RUN: Checking what would be migrated to {sqlite_path}\n")
+        else:
+            print(f"\nMigrating data to: {sqlite_path}\n")
+
+        # Run migration
+        result = migrate_postgres_to_sqlite(
+            pg_backend=pg_backend,
+            sqlite_path=sqlite_path,
+            force=args.force,
+            dry_run=args.dry_run
+        )
+
+        # Print summary
+        print(result.summary())
+
+        if args.dry_run:
+            print("\n(No changes made - this was a dry run)")
+
+        if result.success:
+            if not args.dry_run:
+                print(f"\nMigration complete! Your data is now in: {sqlite_path}")
+                print("\nTo use SQLite backend, set environment variable:")
+                print("  export DB_BACKEND=sqlite")
+                print(f"  export SQLITE_DB_PATH={sqlite_path}")
+            return 0
+        else:
+            print(f"\nMigration failed: {result.error}", file=sys.stderr)
+            return 1
+
+    except FileExistsError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    except DatabaseError as e:
+        print(f"ERROR: Migration failed: {e}", file=sys.stderr)
+        return 1
+    finally:
+        pg_backend.close()
+
+
+if __name__ == '__main__':
+    sys.exit(main())
