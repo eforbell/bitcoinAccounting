@@ -541,3 +541,43 @@ withdrawal_amount = transferred_amount + fee_amount
 - Complex scripts: Verify primary workflow completes successfully
 
 **Total test count**: 19 integration tests covering 16 CLI scripts
+
+## User Documentation Best Practices
+
+**Pattern**: When documenting a new feature that replaces or supplements existing functionality, organize documentation to guide users to the best path first:
+
+**Structure for dual-option features**:
+1. **Intro**: Update project description to be option-neutral
+2. **Quick Start**: Lead with the simpler/recommended option
+3. **Alternative Options**: Document other approaches clearly labeled
+4. **Choosing Between Options**: Explicit comparison with use cases
+5. **Migration Guide**: Step-by-step migration from old to new approach
+6. **Troubleshooting**: Common issues specific to each option
+
+**SQL-012 Example**: SQLite vs PostgreSQL documentation
+- Lead with SQLite (zero-config, easier for most users)
+- Include PostgreSQL as "Option 2: For Advanced Users"
+- Provide explicit "Choosing SQLite vs PostgreSQL" section
+- Include complete migration guide with verification steps
+- Add troubleshooting for both backends
+
+**Environment Variable Documentation**:
+- Group by purpose (database selection, SQLite config, PostgreSQL config)
+- Show default values explicitly
+- Include example values for clarity
+- Explain when each variable is required vs optional
+
+**Migration Documentation Pattern**:
+1. Preview command (--dry-run)
+2. Actual migration command
+3. Verification steps (numbered list)
+4. Rollback or troubleshooting if issues found
+5. Permanence step (update shell profile)
+
+**Troubleshooting Section Pattern**:
+- Use clear symptom headers ("Database is locked", not "Error handling")
+- Include **Cause** and **Solution** subsections
+- Provide copy-paste ready command examples
+- Link related concepts where appropriate
+
+**Key Principle**: Optimize for user success on first attempt. Make the easiest path obvious, while documenting advanced options completely.
