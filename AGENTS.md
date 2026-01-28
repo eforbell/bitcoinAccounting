@@ -449,3 +449,95 @@ parser.add_argument('--force', '-f', action='store_true', help='...')
 - Use `action='store_true'` for boolean flags
 - Return exit codes: 0 for success, 1 for errors
 - Print errors to stderr with `file=sys.stderr`
+
+## CLI Script Integration Testing
+
+**Pattern**: Test CLI script functionality by testing the underlying CryptoAccounts methods with in-memory SQLite:
+
+```python
+def test_balance_script():
+    backend = SqliteBackend(':memory:', auto_create_tables=True)
+    crypto = CryptoAccounts(backend)
+
+    # Test the methods used by the script
+    crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 1), buy=0.5, buy_curr='BTC')
+    balance = crypto.get_balance('BTC')
+    assert balance == 0.5
+```
+
+**Why not subprocess scripts directly?**:
+- Many scripts have interactive prompts (input/PromptSession)
+- Testing methods provides better isolation and error messages
+- Faster execution (no process spawning overhead)
+- Same code paths exercised (scripts just call these methods)
+
+## Understanding CryptoAccounts API Return Types
+
+**Common return types that differ from typical patterns**:
+
+1. **get_transactions(coin: str) → tuple**:
+   - Returns `(headers_list, transactions_list)`
+   - `headers_list`: List of column names
+   - `transactions_list`: List of transaction dicts
+   - Example: `headers, txs = crypto.get_transactions('BTC')`
+
+2. **get_sales_for_1099b(coin, tax_year, wallet) → tuple**:
+   - Returns `(form_b_rows, summary_rows)`
+   - Two different formats for different export types
+   - Both are lists of dicts
+
+3. **forecast_capital_gains_fifo(coin, quantity, sale_price_usd, wallet) → tuple**:
+   - Returns complex tuple structure (not dict)
+   - Just verify it returns something (implementation may change)
+
+4. **get_wallets(active_only=False) → list**:
+   - May return empty list if wallets table not populated
+   - Wallets can exist implicitly in ledger without wallets table entry
+
+5. **get_wallet_balance(coin, wallet) → float**:
+   - Note parameter order: `coin` first, then `wallet`
+   - Different from get_balance_by_account(coin, account)
+
+6. **add_price_pair(pair_date, to_curr, from_curr, price)**:
+   - Parameter is `pair_date`, not `date`
+   - Use named parameters for clarity
+
+## Fee Handling in Ledger
+
+**Critical Understanding**: Fees are tracked separately but NOT deducted from balance calculations
+
+**Pattern**: When recording a trade with fees:
+
+```python
+crypto.execute_trade(
+    buy=0.1, buy_curr='BTC',
+    sell=5000, sell_curr='USD',
+    fee=0.0001, fee_curr='BTC'
+)
+# Balance will be 0.1 BTC, not 0.0999
+# The fee field is for tracking/reporting only
+```
+
+**Why**: The buy/sell amounts represent the actual amounts exchanged. Fees are recorded for tax and reporting purposes but are already reflected in the buy/sell amounts or handled separately depending on the transaction type.
+
+**Example from tests**:
+```python
+# Transfer with fee: sell includes transferred amount AND fee
+withdrawal_amount = transferred_amount + fee_amount
+```
+
+## Testing CLI Scripts with SQLite Backend
+
+**Success criteria for SQL-011**:
+- All 16 CLI scripts' core functionality verified
+- Tests use real in-memory SQLite database
+- No mocking of database calls
+- Each test class covers one script's primary operations
+- Tests verify method calls succeed without errors
+
+**Coverage approach**:
+- Read-only scripts: Verify method executes and returns expected type
+- Write scripts: Verify data persists correctly after operation
+- Complex scripts: Verify primary workflow completes successfully
+
+**Total test count**: 19 integration tests covering 16 CLI scripts
