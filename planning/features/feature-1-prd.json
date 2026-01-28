@@ -437,7 +437,7 @@
         "Update any existing documentation referencing PostgreSQL-only setup"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Final story. User-facing documentation."
     }
   ],

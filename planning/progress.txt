@@ -423,3 +423,37 @@
 
 ---
 
+## 2026-01-28 - SQL-012
+
+- What was implemented:
+  - Completely rewrote README.md with dual SQLite/PostgreSQL documentation
+  - Added "Quick Start" section with SQLite as Option 1 (zero-config, recommended)
+  - Added PostgreSQL as Option 2 (for advanced users with specific needs)
+  - Documented all environment variables with defaults and examples
+  - Created "Choosing SQLite vs PostgreSQL" decision guide with clear use cases
+  - Added complete "Migrating from PostgreSQL to SQLite" guide with verification steps
+  - Added comprehensive troubleshooting section covering common issues
+  - Reorganized workflow section by functional categories (recording, checking, tax, validation)
+  - Updated testing section with current test counts (125 tests, 6 skipped)
+  - Updated schema section to explain both SQLite and PostgreSQL approaches
+  - Added user documentation best practices to AGENTS.md
+
+- Files changed:
+  - `README.md` (major rewrite - 374 insertions, 51 deletions)
+  - `AGENTS.md` (added documentation patterns section)
+  - `planning/features/feature-1-prd.json` (marked SQL-012 as passes: true)
+
+- **Learnings:**
+  - Documentation structure matters: lead with simplest option, then alternatives
+  - For dual-option features, always include explicit "Choosing between X and Y" section
+  - Migration guides need preview (dry-run), execution, and verification steps
+  - Troubleshooting should use symptom-based headers, not technical error codes
+  - Environment variable docs should group by purpose and show defaults explicitly
+  - Quick start sections should be copy-paste ready with minimal explanation
+  - Updated project description from "Postgres-first" to database-agnostic
+  - Organized workflow by user goals (recording, checking, tax) not technical categories
+  - Testing section now reflects full test suite (125 tests vs original 15)
+  - All tests passing, mypy --strict passes, ready for merge
+
+---
+
