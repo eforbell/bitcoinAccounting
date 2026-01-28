@@ -331,3 +331,45 @@
   - Interest income requires both crypto.interest() AND add_price_pair() for cost basis
 
 ---
+
+## 2026-01-28 - SQL-010
+
+- What was implemented:
+  - Created `src/python/db/migration.py` with `migrate_postgres_to_sqlite()` function
+  - Created `src/scripts/migrate_to_sqlite` CLI script with argparse
+  - MigrationResult class for tracking progress and verification
+  - `convert_timestamp_to_iso8601()` function for datetime to ISO 8601 conversion
+  - `convert_row_timestamps()` function to process all row values
+  - `get_table_count()` function for row counting
+  - `migrate_table()` function for individual table migration
+  - Support for --dry-run flag (preview without writing)
+  - Support for --force flag (overwrite existing file)
+  - Support for --output flag (custom target path)
+  - Row count verification after migration
+  - Clean up partial SQLite file on migration failure
+  - Skip migration with warning if PostgreSQL ledger is empty
+  - Exported new functions from db/__init__.py
+
+- Files changed:
+  - `src/python/db/migration.py` (new)
+  - `src/python/db/__init__.py` (modified - export migration functions)
+  - `src/scripts/migrate_to_sqlite` (new - executable CLI script)
+  - `tests/test_migration.py` (new - 21 comprehensive tests)
+  - `AGENTS.md` (updated - migration patterns)
+
+- **Test Results:**
+  - 106 tests passing total (18 new migration tests)
+  - 3 PostgreSQL migration tests skipped (PGHOST not set)
+  - All previous tests still passing
+
+- **Learnings:**
+  - PostgreSQL datetime objects need explicit conversion to ISO 8601 strings for SQLite compatibility
+  - Use MigrationResult class to track table-by-table progress and enable verification
+  - argparse with short and long flags (--output/-o) provides good CLI UX
+  - Dry-run mode is essential for migration tools - users want to preview before committing
+  - FileExistsError provides clear feedback when target exists without --force
+  - Clean up partial files on failure to avoid corrupted state
+  - PostgreSQL column introspection uses information_schema.columns, SQLite uses PRAGMA table_info()
+  - Reserved words like "group" need quoting in column lists
+
+---

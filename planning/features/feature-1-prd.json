@@ -384,7 +384,7 @@
         "Integration test: migrate sample data, verify queries return same results"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "Requires PostgreSQL access. Skip tests with pytest.mark.skipif when PGHOST not set."
     },
     {
