@@ -19,6 +19,20 @@ from .backend import DatabaseBackend
 from .exceptions import DatabaseError
 
 
+def _convert_named_params(query: str) -> str:
+    """Convert :named placeholders to %(name)s format for psycopg2.
+
+    Args:
+        query: SQL query with :named placeholders
+
+    Returns:
+        Query with %(name)s placeholders
+    """
+    import re
+    # Match :name but not ::cast (PostgreSQL cast syntax)
+    return re.sub(r'(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)', r'%(\1)s', query)
+
+
 class PostgresBackend(DatabaseBackend):
     """PostgreSQL database backend.
 
@@ -69,7 +83,10 @@ class PostgresBackend(DatabaseBackend):
 
         try:
             cursor = self.connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cursor.execute(query, params)
+            cursor.execute(_convert_named_params(query), params)
+            # Check if query returns results (SELECT) vs no results (INSERT/UPDATE/DELETE)
+            if cursor.description is None:
+                return []
             rows = cursor.fetchall()
             # Convert RealDictRow objects to regular dictionaries
             return [dict(row) for row in rows]
@@ -94,7 +111,10 @@ class PostgresBackend(DatabaseBackend):
 
         try:
             cursor = self.connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cursor.execute(query, params)
+            cursor.execute(_convert_named_params(query), params)
+            # Check if query returns results (SELECT) vs no results (INSERT/UPDATE/DELETE)
+            if cursor.description is None:
+                return None
             row = cursor.fetchone()
             return dict(row) if row else None
         except psycopg2.Error as e:

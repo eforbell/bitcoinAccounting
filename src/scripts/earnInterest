@@ -33,10 +33,10 @@ while True:
         print(f"Amount: {amount}")
         print(f"Type: {interest_type}")
         print(f"Date: {tx_date}")
-        
-    confirm = yes_no_dialog(title="Record Income", text="Is this correct?").run()
 
-    if confirm:
+        confirm = yes_no_dialog(title="Record Income", text="Is this correct?").run()
+
+        if confirm:
             crypto = CryptoAccounts()
             try:
                 crypto.interest(

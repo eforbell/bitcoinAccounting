@@ -34,49 +34,45 @@ def parse_sparrow_csv(filepath):
 def get_db_transactions(wallet, coin='BTC'):
     """Get all database transactions for a wallet."""
     crypto = CryptoAccounts()
-    cur = crypto.connection.cursor()
-    
+
     query = """
-        SELECT 
+        SELECT
             id, createddate, trans_type,
             COALESCE(buy, 0) as buy, buy_curr,
             COALESCE(sell, 0) as sell, sell_curr,
             COALESCE(fee, 0) as fee, fee_curr,
             comment, transactionid
         FROM ledger
-        WHERE exchange = %s
-            AND (buy_curr = %s OR sell_curr = %s OR fee_curr = %s)
+        WHERE exchange = :wallet
+            AND (buy_curr = :coin OR sell_curr = :coin OR fee_curr = :coin)
         ORDER BY createddate, id
     """
-    
-    cur.execute(query, (wallet, coin, coin, coin))
-    rows = cur.fetchall()
-    
+
+    rows = crypto.backend.execute(query, {'wallet': wallet, 'coin': coin})
+
     transactions = []
     for row in rows:
-        tx_id, date, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, comment, txid = row
-        
         # Calculate net effect
         # Note: fee column is for tracking only - fees already included in buy/sell amounts
-        credit = Decimal(str(buy)) if buy_curr == coin else Decimal('0')
-        debit = Decimal(str(sell)) if sell_curr == coin else Decimal('0')
-        fee_amt = Decimal(str(fee)) if fee_curr == coin else Decimal('0')
-        
+        credit = Decimal(str(row['buy'])) if row['buy_curr'] == coin else Decimal('0')
+        debit = Decimal(str(row['sell'])) if row['sell_curr'] == coin else Decimal('0')
+        fee_amt = Decimal(str(row['fee'])) if row['fee_curr'] == coin else Decimal('0')
+
         # Net value = credits - debits (fees already in buy/sell)
         net_value = credit - debit
-        
+
         transactions.append({
-            'id': tx_id,
-            'date': date,
-            'type': trans_type,
+            'id': row['id'],
+            'date': row['createddate'],
+            'type': row['trans_type'],
             'net_value': net_value,
             'credit': credit,
             'debit': debit,
             'fee': fee_amt,
-            'comment': comment,
-            'txid': txid
+            'comment': row['comment'],
+            'txid': row['transactionid']
         })
-    
+
     crypto.close()
     return transactions
 

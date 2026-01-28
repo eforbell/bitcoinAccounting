@@ -115,53 +115,47 @@ def main():
         print(f"\n{'=' * 90}")
         print(f"Transfer Validation for {coin}")
         print(f"{'=' * 90}\n")
-        
-        cur = crypto.connection.cursor()
-        
+
         # Get all withdrawals
         withdrawal_query = """
             SELECT id, createddate, sell, sell_curr, fee, fee_curr, exchange, comment
             FROM ledger
-            WHERE trans_type = 'Withdrawal' 
-                AND sell_curr = %s
+            WHERE trans_type = 'Withdrawal'
+                AND sell_curr = :coin
             ORDER BY createddate ASC
         """
-        cur.execute(withdrawal_query, (coin,))
-        withdrawal_rows = cur.fetchall()
-        
+        withdrawal_rows = crypto.backend.execute(withdrawal_query, {'coin': coin})
+
         withdrawals = []
         for row in withdrawal_rows:
-            tx_id, date, amount, curr, fee, fee_curr, wallet, comment = row
             withdrawals.append({
-                'id': tx_id,
-                'date': date,
-                'amount': float(amount) if amount else 0.0,
-                'fee': float(fee) if (fee and fee_curr == coin) else 0.0,
-                'wallet': wallet,
-                'comment': comment,
+                'id': row['id'],
+                'date': row['createddate'],
+                'amount': float(row['sell']) if row['sell'] else 0.0,
+                'fee': float(row['fee']) if (row['fee'] and row['fee_curr'] == coin) else 0.0,
+                'wallet': row['exchange'],
+                'comment': row['comment'],
                 'type': 'Withdrawal'
             })
-        
+
         # Get all deposits
         deposit_query = """
             SELECT id, createddate, buy, buy_curr, exchange, comment
             FROM ledger
             WHERE trans_type = 'Deposit'
-                AND buy_curr = %s
+                AND buy_curr = :coin
             ORDER BY createddate ASC
         """
-        cur.execute(deposit_query, (coin,))
-        deposit_rows = cur.fetchall()
-        
+        deposit_rows = crypto.backend.execute(deposit_query, {'coin': coin})
+
         deposits = []
         for row in deposit_rows:
-            tx_id, date, amount, curr, wallet, comment = row
             deposits.append({
-                'id': tx_id,
-                'date': date,
-                'amount': float(amount) if amount else 0.0,
-                'wallet': wallet,
-                'comment': comment,
+                'id': row['id'],
+                'date': row['createddate'],
+                'amount': float(row['buy']) if row['buy'] else 0.0,
+                'wallet': row['exchange'],
+                'comment': row['comment'],
                 'type': 'Deposit'
             })
         
