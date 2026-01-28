@@ -123,6 +123,7 @@ class TradeQuery:
             - unit_cost: Cost per unit of coin in cost_currency (None if price unavailable)
             - total_cost: Total cost of trade in cost_currency (None if price unavailable)
             - cost_curr_quote_date: Timestamp of price used for conversion (trade date if direct)
+            - exchange: Wallet/exchange name where trade occurred
 
             Returns empty list [] if no trades found.
         """
@@ -173,7 +174,8 @@ class TradeQuery:
                 'cost_curr': cost_currency,
                 'unit_cost': unit_cost,
                 'total_cost': total_cost,
-                'cost_curr_quote_date': cost_curr_quote_date
+                'cost_curr_quote_date': cost_curr_quote_date,
+                'exchange': trade.get('exchange')
             })
 
         return result

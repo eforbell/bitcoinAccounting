@@ -28,27 +28,25 @@ def get_exchange_purchase_history(crypto, coin, exchange):
     Returns:
         (total_purchased, current_balance, total_usd_spent)
     """
-    # Get all Trade transactions with USD cost conversion
+    # Get all trades for this coin at this exchange with proper USD cost conversion
+    # Uses TradeQuery.get_trade_cost() which handles:
     # - USD: direct value
     # - Stablecoins (USDC, GUSD, BUSD, USDT): treat as 1:1 USD
-    # - Other crypto: look up historical USD price from pair_price table
-    # Note: Using subquery approach that works with both SQLite and PostgreSQL
-    query = """
-        SELECT SUM(buy) as total_bought,
-               SUM(CASE
-                   WHEN sell_curr = 'USD' THEN sell
-                   WHEN sell_curr IN ('USDC', 'GUSD', 'BUSD', 'USDT') THEN sell
-                   ELSE 0
-               END) as usd_value
-        FROM ledger
-        WHERE exchange = :exchange
-          AND trans_type = 'Trade'
-          AND buy_curr = :coin
-    """
+    # - Other currencies: look up historical USD price from pair_price table
+    all_trades = crypto.trade_query.get_trade_cost(coin, cost_currency='USD')
 
-    result = crypto.backend.execute_one(query, {'exchange': exchange, 'coin': coin})
-    total_purchased = float(result['total_bought']) if result and result['total_bought'] else 0
-    total_usd_spent = float(result['usd_value']) if result and result['usd_value'] else 0
+    # Filter to this exchange and purchases only (quantity > 0)
+    exchange_purchases = [
+        t for t in all_trades
+        if t.get('exchange') == exchange and t.get('quantity', 0) > 0
+    ]
+
+    # Calculate totals
+    total_purchased = sum(t['quantity'] for t in exchange_purchases)
+    total_usd_spent = sum(
+        t['total_cost'] for t in exchange_purchases
+        if t.get('total_cost') is not None
+    )
 
     # Get current balance
     current_balance = crypto.get_wallet_balance(coin, exchange)

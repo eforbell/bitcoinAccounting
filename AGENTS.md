@@ -595,3 +595,51 @@ withdrawal_amount = transferred_amount + fee_amount
 - Link related concepts where appropriate
 
 **Key Principle**: Optimize for user success on first attempt. Make the easiest path obvious, while documenting advanced options completely.
+
+## Cross-Currency Trade Cost Calculations - CRITICAL
+
+**Anti-Pattern**: Using raw SQL queries that only handle USD/stablecoins directly:
+
+```sql
+-- ❌ WRONG - Only counts USD and stablecoins, sets other currencies to 0
+SELECT SUM(CASE
+    WHEN sell_curr = 'USD' THEN sell
+    WHEN sell_curr IN ('USDC', 'GUSD', 'BUSD', 'USDT') THEN sell
+    ELSE 0  -- This causes massive underreporting!
+END) as usd_value
+FROM ledger WHERE trans_type = 'Trade' AND buy_curr = :coin
+```
+
+**Problem**: Trades in EUR, GBP, or other crypto are counted as $0 cost, drastically underreporting cost basis.
+
+**Example Impact**:
+- Kraken: Should be $35,033 → Incorrectly shows $7,193 (79% underreported)
+- Total basis: Should be $44,141 → Incorrectly shows $41,151 (7% underreported)
+
+**Correct Pattern**: Use `TradeQuery.get_trade_cost()` which does proper price lookups:
+
+```python
+# ✅ CORRECT - Uses price lookup for all currencies
+all_trades = crypto.trade_query.get_trade_cost(coin, cost_currency='USD')
+exchange_purchases = [
+    t for t in all_trades
+    if t.get('exchange') == exchange and t.get('quantity', 0) > 0
+]
+total_usd_spent = sum(
+    t['total_cost'] for t in exchange_purchases
+    if t.get('total_cost') is not None
+)
+```
+
+**How it works**:
+- USD trades → use direct value
+- Stablecoins → treat as 1:1 USD
+- EUR/GBP/other fiat → look up exchange rate from `pair_price` table
+- Other crypto → look up price in USD from `pair_price` table
+
+**Critical for**:
+- `exchange_liquidity` script - shows cost basis by exchange
+- `export_1099b` script - generates tax reports
+- Any cost basis calculations
+
+**Always**: Use query class abstractions (`TradeQuery`, `BasisCalculator`) instead of raw SQL for cost calculations. The query classes handle cross-currency conversion correctly.
