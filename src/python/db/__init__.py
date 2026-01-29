@@ -6,6 +6,16 @@ Supports multiple database backends (SQLite, PostgreSQL) with a unified interfac
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+# Load .env file if python-dotenv is available
+try:
+    from dotenv import load_dotenv
+    # Look for .env in repository root (3 levels up from this file)
+    env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+    load_dotenv(dotenv_path=env_path, override=False)
+except ImportError:
+    pass  # python-dotenv not installed
 
 from .backend import DatabaseBackend
 from .exceptions import DatabaseError

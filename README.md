@@ -70,16 +70,24 @@ psql -U <db-admin> -d crypto -f src/sql/functions.sql
 python -m pip install -r requirements.txt
 ```
 
-4. Configure PostgreSQL connection via environment variables:
+4. Configure PostgreSQL connection:
+
+**IMPORTANT: Use .env file for credentials - NEVER commit credentials to git**
 
 ```bash
-export DB_BACKEND=postgres
-export PGHOST=localhost
-export PGPORT=5432
-export PGUSER=bitcoin_accounting
-export PGPASSWORD=strong-password
-export PGDATABASE=crypto
+# Copy the example file
+cp .env.example .env
+
+# Edit .env and fill in your credentials:
+# DB_BACKEND=postgres
+# PGHOST=localhost
+# PGPORT=5432
+# PGUSER=bitcoin_accounting
+# PGPASSWORD=your-secure-password
+# PGDATABASE=crypto
 ```
+
+The `.env` file is automatically loaded by all scripts and is in `.gitignore` to prevent accidental commits.
 
 ## Environment Variables
 

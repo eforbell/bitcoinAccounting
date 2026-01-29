@@ -3,3 +3,4 @@ pandas
 matplotlib
 prompt_toolkit
 requests
+python-dotenv

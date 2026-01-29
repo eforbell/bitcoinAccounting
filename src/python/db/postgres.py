@@ -41,18 +41,39 @@ class PostgresBackend(DatabaseBackend):
     """
 
     def __init__(self) -> None:
-        """Initialize PostgreSQL backend using environment variables."""
+        """Initialize PostgreSQL backend using environment variables.
+
+        Required environment variables:
+        - PGHOST: PostgreSQL server hostname/IP
+        - PGUSER: PostgreSQL username
+        - PGPASSWORD: PostgreSQL password
+        - PGDATABASE: Database name
+
+        Optional:
+        - PGPORT: Port (default: 5432)
+        - PGSSLMODE: SSL mode (e.g., 'require', 'verify-full')
+        """
         if psycopg2 is None:
             raise DatabaseError(
                 "psycopg2 is not installed. Install with: pip install psycopg2-binary"
             )
 
+        # Require critical credentials from environment
+        required_vars = ['PGHOST', 'PGUSER', 'PGPASSWORD', 'PGDATABASE']
+        missing = [var for var in required_vars if not os.getenv(var)]
+        if missing:
+            raise DatabaseError(
+                f"Missing required environment variables: {', '.join(missing)}. "
+                "Set these in your environment or .env file. "
+                "See .env.example for template."
+            )
+
         params: dict[str, Any] = {
-            'host': os.getenv('PGHOST', '192.0.2.10'),
+            'host': os.getenv('PGHOST'),
             'port': os.getenv('PGPORT', '5432'),
-            'user': os.getenv('PGUSER', 'bitcoin_accounting'),
-            'password': os.getenv('PGPASSWORD', 'REDACTED-ROTATED'),
-            'database': os.getenv('PGDATABASE', 'postgres'),
+            'user': os.getenv('PGUSER'),
+            'password': os.getenv('PGPASSWORD'),
+            'database': os.getenv('PGDATABASE'),
             'connect_timeout': 5
         }
 
