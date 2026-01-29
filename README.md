@@ -69,7 +69,7 @@ The `tables.sql` file creates all required tables:
 - `pair_price` - Historical price data for cost basis calculations
 - `wallets` - Wallet/account metadata (matches ledger.exchange field)
 
-**Note**: The `functions.sql` and `wallets_table.sql` files are deprecated. All stored procedures have been migrated to Python query classes, and the wallets table is now included in `tables.sql`.
+All query logic is implemented in Python for database-agnostic support (works with both SQLite and PostgreSQL).
 
 3. Install Python dependencies:
 
@@ -305,9 +305,8 @@ For detailed script documentation and quick reference, see [SCRIPTS_UPDATE.md](S
 
 ### PostgreSQL
 - Tables defined in `src/sql/tables.sql`
-- Functions defined in `src/sql/functions.sql`
 - Must be manually applied (see Quick Start above)
-- Query logic uses stored procedures
+- Query logic uses Python classes (same as SQLite)
 
 ### Core Tables (Both Backends)
 

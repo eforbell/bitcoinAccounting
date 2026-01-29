@@ -16,9 +16,9 @@ wallet_balance_*.csv
 # Allow example files in docs
 !docs/examples/*.csv
 
-# Personal wallet configuration (keep generic template only)
-src/sql/wallets_table_missing.sql
-src/sql/wallets_table_personal.sql
+# Personal wallet INSERT statements (if users create custom wallet data files)
+src/sql/wallets_personal.sql
+src/sql/wallets_insert_*.sql
 
 # Distribution / packaging
 build/
