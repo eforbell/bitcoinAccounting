@@ -23,7 +23,9 @@ try:
 	print("Ledger\t" + f"{(crypto.get_balance_by_account(coin, 'Ledger-2')):.8f}")
 	print("-" * 65)
 	print("Total\t" + f"{(crypto.get_balance(coin)):.8f}")
-	print("Basis\t" + f"{(crypto.get_basis(coin)):.2f}")
+	basis = crypto.get_basis(coin)
+	basis_str = f"{basis:.2f}" if basis is not None else "N/A"
+	print("Basis\t" + basis_str)
 	print("*" * 65)
 	print()
 finally:

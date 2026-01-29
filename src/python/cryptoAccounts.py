@@ -1,77 +1,92 @@
-import psycopg2
+from __future__ import annotations
+
 import csv
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from db import DatabaseBackend
 
 now = datetime.now()
 
 class CryptoAccounts(object):
 
-    def __init__(self):
-        # Use config.connect() to centralize DB credentials and allow environment overrides
-        from config import connect
-        self.connection = connect()
+    def __init__(self, backend: DatabaseBackend | None = None):
+        """Initialize CryptoAccounts with a database backend.
 
+        Args:
+            backend: DatabaseBackend instance. If None, uses get_backend() to create default.
+        """
+        if backend is None:
+            from db import get_backend
+            backend = get_backend()
+
+        self.backend = backend
+
+        # Create query helper instances
+        from db import PriceLookup, BalanceCalculator, TradeQuery, BasisCalculator, IncomeQuery
+        self.price_lookup = PriceLookup(backend)
+        self.balance_calc = BalanceCalculator(backend)
+        self.trade_query = TradeQuery(backend, self.price_lookup)
+        self.basis_calc = BasisCalculator(self.trade_query)
+        self.income_query = IncomeQuery(backend, self.price_lookup)
+
+        # Keep connection attribute for backward compatibility with tests
+        self.connection = None
 
     def close(self):
-        self.connection.close()
+        self.backend.close()
 
     def get_balance(self, coin = 'BTC'):
         """Get total balance across all wallets for a coin.
-        
+
         Fees are already included in buy/sell amounts, not subtracted separately.
-        
+        Stake transactions are excluded from the balance calculation.
+
         Args:
             coin: Currency code (e.g., 'BTC', 'USD')
-            
+
         Returns:
             float: Total balance
         """
-        cur = self.connection.cursor()
-        query = """
-            SELECT 
-                COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
-                COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0)
-            FROM ledger
-        """
-        cur.execute(query, (coin, coin))
-        result = cur.fetchone()
-        balance = float(result[0]) if result and result[0] else 0.0
+        balance = self.balance_calc.get_balance(coin)
         # Return 0 for very small amounts (dust)
         return balance if abs(balance) > 0.0000000000001 else 0.0
 
     def get_balance_by_account(self, coin = 'BTC', account = 'Vault'):
         """Get balance for a specific account/wallet.
-        
+
         Fees are already included in buy/sell amounts, not subtracted separately.
-        
+
         Args:
             coin: Currency code (e.g., 'BTC', 'USD')
             account: Wallet/exchange name
-            
+
         Returns:
             float: Account balance
         """
-        cur = self.connection.cursor()
         query = """
-            SELECT 
-                COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
-                COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0)
+            SELECT
+                COALESCE(SUM(CASE WHEN buy_curr = :coin THEN buy ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN sell_curr = :coin THEN sell ELSE 0 END), 0)
             FROM ledger
-            WHERE exchange = %s
+            WHERE exchange = :account
         """
-        cur.execute(query, (coin, coin, account))
-        result = cur.fetchone()
-        balance = float(result[0]) if result and result[0] else 0.0
+        result = self.backend.execute_scalar(query, {"coin": coin, "account": account})
+        balance = float(result) if result is not None else 0.0
         # Return 0 for very small amounts (dust)
         return balance if abs(balance) > 0.0000000000001 else 0.0
 
     def get_basis(self, coin = 'BTC'):
-        cur = self.connection.cursor()
-        query = "select get_avg_purchase_price('" + coin + "')"
-        cur.execute(query)
-        rows = cur.fetchall()
-        for row in rows:
-            return row[0]
+        """Get the average purchase price (cost basis) for a coin.
+
+        Args:
+            coin: Currency code (e.g., 'BTC', 'ETH')
+
+        Returns:
+            float or None: Average purchase price in USD, or None if no purchases exist
+        """
+        return self.basis_calc.get_avg_purchase_price(coin, 'USD')
 
     def get_bitcoin_price(self):
         import requests
@@ -96,40 +111,51 @@ class CryptoAccounts(object):
             return f"Error fetching price: {e}"
             
     def get_transactions(self, coin = None):
-        cur = self.connection.cursor()
-        baseQuery = "select l.trans_type \"Type\", l.buy \"Buy\", l.buy_curr \"Buy Cur.\", l.sell \"Sell\", l.sell_curr \"Sell Cur.\", l.fee \"Fee\", l.fee_curr \"Fee Cur.\", l.exchange \"Exchange\", l.\"group\" \"Group\", l.\"comment\" \"Comment\", l.createddate \"Date\" from ledger l"
+        """Get all transactions, optionally filtered by coin.
+
+        Args:
+            coin: Optional currency code to filter by (e.g., 'BTC', 'ETH')
+
+        Returns:
+            tuple: (column_names, transactions)
+                - column_names: List of column names
+                - transactions: List of transaction dictionaries
+        """
+        baseQuery = '''select l.trans_type "Type", l.buy "Buy", l.buy_curr "Buy Cur.", l.sell "Sell", l.sell_curr "Sell Cur.", l.fee "Fee", l.fee_curr "Fee Cur.", l.exchange "Exchange", l."group" "Group", l."comment" "Comment", l.createddate "Date" from ledger l'''
         if coin is not None:
-            cur.execute(baseQuery + " where l.buy_curr = %s or l.sell_curr = %s order by createddate", (coin, coin))
+            query = baseQuery + " where l.buy_curr = :coin or l.sell_curr = :coin order by createddate"
+            rows = self.backend.execute(query, {"coin": coin})
         else:
-            cur.execute(baseQuery + " order by createddate")
-        rows = cur.fetchall()
-        colnames = [desc[0] for desc in cur.description]
-        transactions = []
-        for row in rows:
-            transaction = {}
-            for i, colname in enumerate(colnames):
-                transaction[colname] = row[i]
-            transactions.append(transaction)
+            query = baseQuery + " order by createddate"
+            rows = self.backend.execute(query)
+
+        transactions = [dict(row) for row in rows]
+        colnames = list(transactions[0].keys()) if transactions else []
         return colnames, transactions
     def print_trades(self, coin = 'BTC'):
-        cur = self.connection.cursor()
-        baseQuery = "select date, quantity, unit_cost, total_cost, exchange from get_trade_cost_new(%s, %s)  order by date desc"
-        cur.execute(baseQuery, (coin, 'USD'))
-        rows = cur.fetchall()
-        cols = [desc[0] for desc in cur.description]
-        #for col in colnames:
-        #    print(col, end=" ")
-        #print()
-        print(str(cols[0])+"\t\t",cols[1],cols[2],cols[3],cols[4],sep="\t")
-        for row in rows:
-           quantity = "{:.8f}".format(row[1])
-           cost = "{:.2f}".format(row[2])
-           total_cost = "{:.2f}".format(row[3])+"\t"
-           if len(row) > 4:
-               exchange = row[4]
-           else:
-               exchange = "(Unknown)"
-           print(str(row[0]),quantity,cost,total_cost,exchange,sep="\t")
+        """Print trade history with cost basis for a coin.
+
+        Args:
+            coin: Currency code to display trades for (e.g., 'BTC', 'ETH')
+        """
+        trades = self.trade_query.get_trade_cost(coin, 'USD')
+        # Sort by date descending
+        trades_sorted = sorted(trades, key=lambda t: t['date'], reverse=True)
+
+        if not trades_sorted:
+            return
+
+        # Print header
+        print("date\t\tquantity\tunit_cost\ttotal_cost\texchange")
+
+        # Print each trade
+        for trade in trades_sorted:
+            date = str(trade['date'])
+            quantity = "{:.8f}".format(trade['quantity'])
+            unit_cost = "{:.2f}".format(trade['unit_cost']) if trade['unit_cost'] is not None else "N/A"
+            total_cost = "{:.2f}".format(trade['total_cost']) if trade['total_cost'] is not None else "N/A"
+            exchange = trade.get('exchange', '(Unknown)')
+            print(f"{date}\t{quantity}\t{unit_cost}\t{total_cost}\t{exchange}", sep="\t")
     def export_transactions_csv(self, out_file, coin = None):
         colnames, transactions = self.get_transactions(coin)
         with open(out_file, 'w', newline='') as csv_out:
@@ -139,12 +165,18 @@ class CryptoAccounts(object):
                 trans_writer.writerow(transaction)
 
     def import_transactions(self, colnames, transactions):
-        cur = self.connection.cursor()
         for transaction in transactions:
             if transaction['trans_type'] == "Interest Income" or transaction['trans_type'] == "Interest" or transaction['trans_type'] == 'Staking':
-                query = self.getInterestIncomeQuery()
+                query = "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", \"comment\") values (:createddate, 'Interest Income', :buy, :buy_curr, :exchange, :group, :comment)"
                 transaction['trans_type'] = "Interest Income"
-                cur.execute(query, (transaction['created_date'], transaction['buy'], transaction['buy_curr'], transaction['exchange'], transaction['group'],transaction['comment']))
+                self.backend.execute(query, {
+                    "createddate": transaction['created_date'],
+                    "buy": transaction['buy'],
+                    "buy_curr": transaction['buy_curr'],
+                    "exchange": transaction['exchange'],
+                    "group": transaction['group'],
+                    "comment": transaction.get('comment', '')
+                })
                 price_query = self.getPricePairQuery()
                 if 'usd_equivalent' in transaction:
                     usd_equiv = transaction['usd_equivalent']
@@ -153,15 +185,29 @@ class CryptoAccounts(object):
                     except(ValueError):
                         usd_equiv = float(usd_equiv[1:])
                     conv_price = float(usd_equiv)/float(transaction['buy'])
-                    cur.execute(price_query, ('USD', conv_price, transaction['buy_curr'], transaction['created_date']));
+                    self.backend.execute(price_query, {
+                        "to_curr": 'USD',
+                        "price": conv_price,
+                        "from_curr": transaction['buy_curr'],
+                        "date": transaction['created_date']
+                    })
             elif transaction['trans_type'] == "Mining":
                 query = self.getMiningQuery()
-                cur.execute(query, (transaction['created_date'], transaction['buy'], transaction['buy_curr'], transaction['exchange'], transaction['group'], transaction['transactionid']))
+                self.backend.execute(query, {
+                    "createddate": transaction['created_date'],
+                    "buy": transaction['buy'],
+                    "buy_curr": transaction['buy_curr'],
+                    "exchange": transaction['exchange'],
+                    "group": transaction['group'],
+                    "transactionid": transaction['transactionid']
+                })
             elif transaction['trans_type'] == "Deposit":
                 query = self.getDepositQuery()
+                # Note: This case is incomplete in original code - query defined but not executed
             elif transaction['trans_type'] == "Withdrawal":
                 query = self.getWithdrawQuery()
-        self.connection.commit()
+                # Note: This case is incomplete in original code - query defined but not executed
+        self.backend.commit()
 
     def import_transactions_rvn_mining(self, in_file):
         colnames = ['Confirmed','Date','Type','Label','Address','Amount (RVN)','Asset','ID']
@@ -277,66 +323,71 @@ class CryptoAccounts(object):
 
         withdrawQuery = self.getWithdrawQuery()
         depositQuery =  self.getDepositQuery()
-        cur = self.connection.cursor()
-        cur.execute(withdrawQuery, (str(withdraw_date), tx_amount+fee_amount, tx_coin, fee_amount, fee_coin, from_exchange, from_group))
-        cur.execute(depositQuery, (str(deposit_date), tx_amount, tx_coin, to_exchange, to_group))
-        self.connection.commit()
+        self.backend.execute(withdrawQuery, {
+            "createddate": str(withdraw_date),
+            "sell": tx_amount+fee_amount,
+            "sell_curr": tx_coin,
+            "fee": fee_amount,
+            "fee_curr": fee_coin,
+            "exchange": from_exchange,
+            "group": from_group
+        })
+        self.backend.execute(depositQuery, {
+            "createddate": str(deposit_date),
+            "buy": tx_amount,
+            "buy_curr": tx_coin,
+            "exchange": to_exchange,
+            "group": to_group
+        })
+        self.backend.commit()
 
     def deposit(self, deposit_date=now, buy=0, buy_curr="USD", exchange="Strike", group=""):
-        cur = self.connection.cursor()
-        cur.execute(
+        self.backend.execute(
             self.getDepositQuery(),
-            (deposit_date, buy, buy_curr, exchange, group))
-        self.connection.commit()
+            {"createddate": deposit_date, "buy": buy, "buy_curr": buy_curr, "exchange": exchange, "group": group})
+        self.backend.commit()
 
     def withdraw(self, withdraw_date=now, sell=0, sell_curr="USD", fee=0.0, fee_curr="USD", exchange="Strike", group=""):
-        cur = self.connection.cursor()
-        cur.execute(
+        self.backend.execute(
             self.getWithdrawQuery(),
-            (withdraw_date, sell, sell_curr, fee, fee_curr, exchange, group))
-        self.connection.commit()
+            {"createddate": withdraw_date, "sell": sell, "sell_curr": sell_curr, "fee": fee, "fee_curr": fee_curr, "exchange": exchange, "group": group})
+        self.backend.commit()
 
     def interest(self, interest_date=now, buy=0.0, buy_curr="USD", exchange="River", group=""):
-        cur = self.connection.cursor()
-        cur.execute(
+        self.backend.execute(
             self.getInterestIncomeQuery(),
-            (interest_date, buy, buy_curr, exchange, group))
-        self.connection.commit()
+            {"createddate": interest_date, "buy": buy, "buy_curr": buy_curr, "exchange": exchange, "group": group})
+        self.backend.commit()
 
     def execute_trade(self, trade_date=now, buy=0.0, buy_curr="BTC", sell=0.0, sell_curr="USD", fee=0.0, fee_curr="USD",
                       exchange="Strike", group=""):
-        cur = self.connection.cursor()
-        cur.execute(
+        self.backend.execute(
             self.getTradeQuery(),
-            (trade_date, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, group))
-        self.connection.commit()
+            {"createddate": trade_date, "buy": buy, "buy_curr": buy_curr, "sell": sell, "sell_curr": sell_curr, "fee": fee, "fee_curr": fee_curr, "exchange": exchange, "group": group})
+        self.backend.commit()
 
     def add_price_pair(self, pair_date=now, to_curr="BTC", from_curr="USD", price=0.0):
-        cur = self.connection.cursor()
         price_query = self.getPricePairQuery()
-        cur.execute(price_query, (from_curr, price, to_curr, pair_date));
-        self.connection.commit()
+        self.backend.execute(price_query, {"to_curr": to_curr, "price": price, "from_curr": from_curr, "date": pair_date})
+        self.backend.commit()
 
     def getDepositQuery(self):
-        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (%s, 'Deposit', %s, %s, %s, %s)"
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (:createddate, 'Deposit', :buy, :buy_curr, :exchange, :group)"
 
     def getWithdrawQuery(self):
-        return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (%s, 'Withdrawal', %s, %s, %s, %s, %s, %s)"
+        return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (:createddate, 'Withdrawal', :sell, :sell_curr, :fee, :fee_curr, :exchange, :group)"
 
     def getInterestIncomeQuery(self):
-        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", \"comment\") values (%s, 'Interest Income', %s, %s, %s, %s, %s)"
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (:createddate, 'Interest Income', :buy, :buy_curr, :exchange, :group)"
 
     def getMiningQuery(self):
-        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", transactionid) values (%s, 'Mining', %s, %s, %s, %s, %s)"
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", transactionid) values (:createddate, 'Mining', :buy, :buy_curr, :exchange, :group, :transactionid)"
 
     def getTradeQuery(self):
-        return "insert into ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (%s, 'Trade', %s, %s, %s, %s, %s, %s, %s, %s)"
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (:createddate, 'Trade', :buy, :buy_curr, :sell, :sell_curr, :fee, :fee_curr, :exchange, :group)"
 
     def getPricePairQuery(self):
-        return "insert into pair_price (to_curr, price, from_curr, date) values (%s, %s, %s, %s)"
-
-    def getInterestIncomeQuery(self):
-        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (%s, 'Interest Income', %s, %s, %s, %s)"
+        return "insert into pair_price (to_curr, price, from_curr, date) values (:to_curr, :price, :from_curr, :date)"
 
     def get_sales_for_1099b(self, coin='BTC', tax_year=2024, wallet=None):
         """
@@ -370,74 +421,52 @@ class CryptoAccounts(object):
                 UserWarning
             )
         
-        cur = self.connection.cursor()
-        
-        # Get all purchases (trades) with cost basis calculated using get_trade_cost_new
-        # Filter by wallet if specified for per-wallet FIFO
-        wallet_filter_sql = "AND exchange = %s" if wallet else ""
-        trade_purchase_query = f"""
-            SELECT date, quantity, unit_cost, total_cost, exchange
-            FROM get_trade_cost_new(%s, 'USD')
-            WHERE quantity > 0 {wallet_filter_sql}
-            ORDER BY date ASC
-        """
-        
-        # Get interest income separately (not included in get_trade_cost_new)
-        interest_purchase_query = f"""
-            SELECT l.createddate as date, l.buy as quantity, 
-                   COALESCE(pp.price, 0) as unit_cost,
-                   COALESCE(l.buy * pp.price, 0) as total_cost,
-                   l.exchange
-            FROM ledger l
-            LEFT JOIN pair_price pp ON pp.from_curr = l.buy_curr 
-                AND pp.to_curr = 'USD' 
-                AND pp.date::date = l.createddate::date
-            WHERE l.buy_curr = %s 
-                AND l.trans_type = 'Interest Income'
-                AND l.buy > 0
-                {wallet_filter_sql}
-            ORDER BY l.createddate ASC
-        """
-        
-        # Get ALL sales through the end of the tax year (not just sales IN the tax year)
-        # This is critical for FIFO: we must account for all prior year sales that
-        # consumed the purchase queue before we calculate basis for the current tax year
-        sale_query = f"""
-            SELECT createddate, sell as quantity, exchange, id
-            FROM ledger
-            WHERE sell_curr = %s 
-                AND trans_type = 'Trade'
-                AND sell > 0
-                AND createddate <= %s
-                {wallet_filter_sql}
-            ORDER BY createddate ASC
-        """
-        
-        # Execute queries with wallet parameter if specified
+        # Get all purchases (trades) with cost basis using TradeQuery
+        all_trade_costs = self.trade_query.get_trade_cost(coin, 'USD')
+
+        # Filter to purchases only (quantity > 0) and apply wallet filter
         if wallet:
-            cur.execute(trade_purchase_query, (coin, wallet))
-            trade_purchases = cur.fetchall()
-            
-            cur.execute(interest_purchase_query, (coin, wallet))
-            interest_purchases = cur.fetchall()
+            trade_purchases = [
+                (t['date'], t['quantity'], t['unit_cost'] or 0, t['total_cost'] or 0, t.get('exchange', ''))
+                for t in all_trade_costs
+                if t['quantity'] > 0 and t.get('exchange') == wallet
+            ]
         else:
-            cur.execute(trade_purchase_query, (coin,))
-            trade_purchases = cur.fetchall()
-            
-            cur.execute(interest_purchase_query, (coin,))
-            interest_purchases = cur.fetchall()
-        
+            trade_purchases = [
+                (t['date'], t['quantity'], t['unit_cost'] or 0, t['total_cost'] or 0, t.get('exchange', ''))
+                for t in all_trade_costs
+                if t['quantity'] > 0
+            ]
+
+        # Get interest income using IncomeQuery
+        all_interest = self.income_query.get_interest_income(coin, 'USD')
+
+        # Apply wallet filter if specified
+        if wallet:
+            interest_purchases = [
+                (i['date'], i['to_quantity'], i['unit_cost'] or 0, i['total_cost'] or 0, i.get('exchange', ''))
+                for i in all_interest
+                if i.get('exchange') == wallet
+            ]
+        else:
+            interest_purchases = [
+                (i['date'], i['to_quantity'], i['unit_cost'] or 0, i['total_cost'] or 0, i.get('exchange', ''))
+                for i in all_interest
+            ]
+
+
         # Combine and sort all purchases by date
         all_purchases = list(trade_purchases) + list(interest_purchases)
         all_purchases.sort(key=lambda x: x[0])  # Sort by date
-        
-        # Get sales through end of tax year
+
+        # Get ALL sales through the end of the tax year using TradeQuery
+        # This is critical for FIFO: we must account for all prior year sales that
+        # consumed the purchase queue before we calculate basis for the current tax year
         tax_year_end = datetime(tax_year, 12, 31, 23, 59, 59)
-        if wallet:
-            cur.execute(sale_query, (coin, tax_year_end, wallet))
-        else:
-            cur.execute(sale_query, (coin, tax_year_end))
-        sales = cur.fetchall()
+        sales_data = self.trade_query.get_sales(coin, str(tax_year_end), wallet)
+
+        # Convert to tuple format for compatibility with existing logic
+        sales = [(s['createddate'], s['quantity'], s['exchange'], s['id']) for s in sales_data]
         
         if not sales:
             return [], []
@@ -446,10 +475,14 @@ class CryptoAccounts(object):
         purchase_queue = []
         for purchase in all_purchases:
             purchase_date, quantity, unit_cost, total_cost, exchange = purchase
-            
+
+            # Parse date if it's a string (from SQLite)
+            if isinstance(purchase_date, str):
+                purchase_date = datetime.fromisoformat(purchase_date.replace('Z', '+00:00'))
+
             # unit_cost and total_cost are already calculated
             unit_cost_val = float(unit_cost) if unit_cost else 0.0
-            
+
             purchase_queue.append({
                 'date': purchase_date,
                 'quantity_remaining': float(quantity),
@@ -467,37 +500,38 @@ class CryptoAccounts(object):
         for sale in sales:
             sale_date, sale_quantity, sale_exchange, sale_id = sale
             sale_quantity = float(sale_quantity)
-            
+
+            # Parse date if it's a string (from SQLite)
+            if isinstance(sale_date, str):
+                sale_date = datetime.fromisoformat(sale_date.replace('Z', '+00:00'))
+
             # Check if this sale is within the tax year we're reporting
             sale_in_tax_year = (sale_date >= tax_year_start and sale_date <= tax_year_end)
             
             # Get proceeds only if we need to report this sale
             if sale_in_tax_year:
-                # Get proceeds (what we sold the coin for in USD)
-                proceeds_query = """
-                    SELECT unit_cost, total_cost
-                    FROM get_trade_cost_new(%s, 'USD')
-                    WHERE date = %s AND quantity < 0
-                    LIMIT 1
-                """
-                cur.execute(proceeds_query, (coin, sale_date))
-                proceeds_result = cur.fetchone()
-                
-                if proceeds_result and proceeds_result[1]:
-                    proceeds_total = abs(float(proceeds_result[1]))
-                    proceeds_per_unit = abs(float(proceeds_result[0]))
-                else:
-                    # Try pair_price as fallback
-                    price_query = """
-                        SELECT price FROM pair_price
-                        WHERE to_curr = 'USD' AND from_curr = %s
-                            AND date::date = %s::date
-                        LIMIT 1
-                    """
-                    cur.execute(price_query, (coin, sale_date))
-                    price_result = cur.fetchone()
-                    proceeds_per_unit = float(price_result[0]) if price_result else 0.0
-                    proceeds_total = sale_quantity * proceeds_per_unit
+                # Get proceeds (what we sold the coin for in USD) using TradeQuery
+                # Find this specific sale in the trade cost data
+                sale_found = False
+                for t in all_trade_costs:
+                    t_date = t['date']
+                    if isinstance(t_date, str):
+                        t_date = datetime.fromisoformat(t_date.replace('Z', '+00:00'))
+
+                    if t_date == sale_date and t['quantity'] < 0:
+                        proceeds_total = abs(float(t['total_cost'])) if t['total_cost'] is not None else 0.0
+                        proceeds_per_unit = abs(float(t['unit_cost'])) if t['unit_cost'] is not None else 0.0
+                        sale_found = True
+                        break
+
+                if not sale_found:
+                    # Fallback: use price lookup - convert datetime to string for price lookup
+                    proceeds_per_unit = self.price_lookup.get_price(coin, 'USD', sale_date.isoformat() if isinstance(sale_date, datetime) else sale_date)
+                    if proceeds_per_unit is not None:
+                        proceeds_total = sale_quantity * proceeds_per_unit
+                    else:
+                        proceeds_per_unit = 0.0
+                        proceeds_total = 0.0
             
             # Match this sale with purchases using FIFO
             quantity_to_match = sale_quantity
@@ -599,80 +633,56 @@ class CryptoAccounts(object):
             - summary_dict: Summary statistics (totals, short/long breakdown)
         """
         from datetime import datetime
-        
-        cur = self.connection.cursor()
-        
-        # Build wallet filter clause
-        wallet_filter_sql = "AND exchange = %s" if wallet else ""
-        
-        # Get all purchases (same logic as 1099-B export)
-        trade_purchase_query = f"""
-            SELECT date, quantity, unit_cost, total_cost, exchange
-            FROM get_trade_cost_new(%s, 'USD')
-            WHERE quantity > 0 {wallet_filter_sql}
-            ORDER BY date ASC
-        """
-        
-        interest_purchase_query = f"""
-            SELECT l.createddate as date, l.buy as quantity, 
-                   COALESCE(pp.price, 0) as unit_cost,
-                   COALESCE(l.buy * pp.price, 0) as total_cost,
-                   l.exchange
-            FROM ledger l
-            LEFT JOIN pair_price pp ON pp.from_curr = l.buy_curr 
-                AND pp.to_curr = 'USD' 
-                AND pp.date::date = l.createddate::date
-            WHERE l.buy_curr = %s 
-                AND l.trans_type = 'Interest Income'
-                AND l.buy > 0
-                {wallet_filter_sql}
-            ORDER BY l.createddate ASC
-        """
-        
+
+        # Get all purchases using query abstractions
+        all_trade_costs = self.trade_query.get_trade_cost(coin, 'USD')
+        all_interest = self.income_query.get_interest_income(coin, 'USD')
+
+        # Filter to purchases only and apply wallet filter
         if wallet:
-            cur.execute(trade_purchase_query, (coin, wallet))
-            trade_purchases = cur.fetchall()
-            
-            cur.execute(interest_purchase_query, (coin, wallet))
-            interest_purchases = cur.fetchall()
+            trade_purchases = [
+                (t['date'], t['quantity'], t['unit_cost'] or 0, t['total_cost'] or 0, t.get('exchange', ''))
+                for t in all_trade_costs
+                if t['quantity'] > 0 and t.get('exchange') == wallet
+            ]
+            interest_purchases = [
+                (i['date'], i['to_quantity'], i['unit_cost'] or 0, i['total_cost'] or 0, i.get('exchange', ''))
+                for i in all_interest
+                if i.get('exchange') == wallet
+            ]
         else:
-            cur.execute(trade_purchase_query, (coin,))
-            trade_purchases = cur.fetchall()
-            
-            cur.execute(interest_purchase_query, (coin,))
-            interest_purchases = cur.fetchall()
-        
+            trade_purchases = [
+                (t['date'], t['quantity'], t['unit_cost'] or 0, t['total_cost'] or 0, t.get('exchange', ''))
+                for t in all_trade_costs
+                if t['quantity'] > 0
+            ]
+            interest_purchases = [
+                (i['date'], i['to_quantity'], i['unit_cost'] or 0, i['total_cost'] or 0, i.get('exchange', ''))
+                for i in all_interest
+            ]
+
         # Combine and sort all purchases by date
         all_purchases = list(trade_purchases) + list(interest_purchases)
         all_purchases.sort(key=lambda x: x[0])
-        
+
         if not all_purchases:
             return [], {}
-        
-        # Get all sales through today to consume FIFO queue properly
-        # Filter by wallet if specified
-        sale_query = f"""
-            SELECT createddate, sell as quantity, exchange, id
-            FROM ledger
-            WHERE sell_curr = %s 
-                AND trans_type = 'Trade'
-                AND sell > 0
-                {wallet_filter_sql}
-            ORDER BY createddate ASC
-        """
-        
-        if wallet:
-            cur.execute(sale_query, (coin, wallet))
-        else:
-            cur.execute(sale_query, (coin,))
-        historical_sales = cur.fetchall()
+
+        # Get all historical sales using TradeQuery
+        sales_data = self.trade_query.get_sales(coin, wallet=wallet)
+        historical_sales = [(s['createddate'], s['quantity'], s['exchange'], s['id']) for s in sales_data]
         
         # Build purchase queue
         purchase_queue = []
         for purchase in all_purchases:
             purchase_date, qty, unit_cost, total_cost, exchange = purchase
+
+            # Parse date if it's a string (from SQLite)
+            if isinstance(purchase_date, str):
+                purchase_date = datetime.fromisoformat(purchase_date.replace('Z', '+00:00'))
+
             unit_cost_val = float(unit_cost) if unit_cost else 0.0
-            
+
             purchase_queue.append({
                 'date': purchase_date,
                 'quantity_remaining': float(qty),
@@ -685,11 +695,11 @@ class CryptoAccounts(object):
             sale_date, sale_quantity, sale_exchange, sale_id = sale
             sale_quantity = float(sale_quantity)
             quantity_to_match = sale_quantity
-            
+
             for purchase in purchase_queue:
                 if quantity_to_match <= 0:
                     break
-                
+
                 if purchase['quantity_remaining'] > 0:
                     match_quantity = min(quantity_to_match, purchase['quantity_remaining'])
                     purchase['quantity_remaining'] -= match_quantity
@@ -777,85 +787,81 @@ class CryptoAccounts(object):
 
     def get_wallets(self, active_only=False):
         """Get list of all wallets with metadata (if wallets table exists).
-        
+
         Args:
             active_only: If True, only return active wallets. Default False returns all.
         """
-        cur = self.connection.cursor()
-        
-        # Check if wallets table exists
-        cur.execute("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' 
+        # Check if wallets table exists (backend-specific)
+        from db import SqliteBackend
+        if isinstance(self.backend, SqliteBackend):
+            # SQLite: check sqlite_master
+            check_query = """
+                SELECT COUNT(*) FROM sqlite_master
+                WHERE type='table' AND name='wallets'
+            """
+        else:
+            # PostgreSQL: check information_schema
+            check_query = """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
                 AND table_name = 'wallets'
-            )
-        """)
-        wallets_table_exists = cur.fetchone()[0]
-        
-        if wallets_table_exists:
+            """
+
+        table_exists = self.backend.execute_scalar(check_query) > 0
+
+        if table_exists:
             # Get wallet metadata from wallets table
-            active_filter = "WHERE active = true" if active_only else ""
+            active_filter = "WHERE active = 1" if active_only else ""  # Use 1 for boolean (works in both backends)
             query = f"""
                 SELECT wallet_id, wallet_type, custody, description, active
                 FROM wallets
                 {active_filter}
                 ORDER BY wallet_id
             """
-            cur.execute(query)
-            return [{'wallet_id': row[0], 'type': row[1], 'custody': row[2], 
-                    'description': row[3], 'active': row[4]} 
-                   for row in cur.fetchall()]
+            rows = self.backend.execute(query)
+            return [{'wallet_id': row['wallet_id'], 'type': row['wallet_type'], 'custody': row['custody'],
+                    'description': row['description'], 'active': row['active']}
+                   for row in rows]
         else:
             # Fallback: get distinct exchange values from ledger
-            cur.execute("""
-                SELECT DISTINCT exchange 
-                FROM ledger 
+            query = """
+                SELECT DISTINCT exchange
+                FROM ledger
                 WHERE exchange IS NOT NULL
                 ORDER BY exchange
-            """)
-            return [{'wallet_id': row[0], 'type': 'unknown', 'custody': 'unknown',
+            """
+            rows = self.backend.execute(query)
+            return [{'wallet_id': row['exchange'], 'type': 'unknown', 'custody': 'unknown',
                     'description': None, 'active': True}
-                   for row in cur.fetchall()]
+                   for row in rows]
     
     def get_wallet_balance(self, coin='BTC', wallet=None):
         """
         Get balance for a specific wallet, or all wallets if wallet=None.
-        
+
         Returns:
             If wallet specified: float (balance)
             If wallet=None: dict {wallet_id: balance}
         """
-        cur = self.connection.cursor()
-        
         if wallet:
-            # Balance for specific wallet
-            # Note: Fees are already included in buy/sell amounts, not subtracted separately
-            query = """
-                SELECT 
-                    COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
-                    COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0)
-                FROM ledger
-                WHERE exchange = %s
-            """
-            cur.execute(query, (coin, coin, wallet))
-            result = cur.fetchone()[0]
-            return float(result) if result else 0.0
+            # Balance for specific wallet - use get_balance_by_account
+            return self.get_balance_by_account(coin, wallet)
         else:
             # Balance for all wallets
             # Note: Fees are already included in buy/sell amounts, not subtracted separately
             query = """
-                SELECT 
+                SELECT
                     exchange,
-                    COALESCE(SUM(CASE WHEN buy_curr = %s THEN buy ELSE 0 END), 0) -
-                    COALESCE(SUM(CASE WHEN sell_curr = %s THEN sell ELSE 0 END), 0) as balance
+                    COALESCE(SUM(CASE WHEN buy_curr = :coin THEN buy ELSE 0 END), 0) -
+                    COALESCE(SUM(CASE WHEN sell_curr = :coin THEN sell ELSE 0 END), 0) as balance
                 FROM ledger
                 WHERE exchange IS NOT NULL
                 GROUP BY exchange
                 ORDER BY exchange
             """
-            cur.execute(query, (coin, coin))
-            return {row[0]: float(row[1]) for row in cur.fetchall()}
+            rows = self.backend.execute(query, {"coin": coin})
+            return {row['exchange']: float(row['balance']) for row in rows}
 
 
 

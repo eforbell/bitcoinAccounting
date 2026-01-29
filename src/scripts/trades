@@ -24,8 +24,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()#!/usr/bin/python3
-import sys
-from cryptoAccounts import CryptoAccounts
-crypto = CryptoAccounts()
-crypto.print_trades()
+    main()

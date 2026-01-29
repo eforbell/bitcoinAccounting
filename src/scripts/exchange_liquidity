@@ -28,36 +28,25 @@ def get_exchange_purchase_history(crypto, coin, exchange):
     Returns:
         (total_purchased, current_balance, total_usd_spent)
     """
-    cur = crypto.connection.cursor()
-
-    # Get all Trade transactions with USD cost conversion
+    # Get all trades for this coin at this exchange with proper USD cost conversion
+    # Uses TradeQuery.get_trade_cost() which handles:
     # - USD: direct value
     # - Stablecoins (USDC, GUSD, BUSD, USDT): treat as 1:1 USD
-    # - Other crypto: look up historical USD price from pair_price table
-    cur.execute("""
-        SELECT SUM(buy_amt), SUM(usd_value)
-        FROM (
-            SELECT DISTINCT ON (l.id)
-                   l.buy as buy_amt,
-                   CASE
-                       WHEN l.sell_curr = 'USD' THEN l.sell
-                       WHEN l.sell_curr IN ('USDC', 'GUSD', 'BUSD', 'USDT') THEN l.sell
-                       ELSE l.sell * COALESCE(pp.price, 0)
-                   END as usd_value
-            FROM ledger l
-            LEFT JOIN pair_price pp ON pp.from_curr = l.sell_curr
-                AND pp.to_curr = 'USD'
-                AND DATE(pp.date) = DATE(l.createddate)
-            WHERE l.exchange = %s
-              AND l.trans_type = 'Trade'
-              AND l.buy_curr = %s
-            ORDER BY l.id
-        ) trades
-    """, (exchange, coin))
+    # - Other currencies: look up historical USD price from pair_price table
+    all_trades = crypto.trade_query.get_trade_cost(coin, cost_currency='USD')
 
-    result = cur.fetchone()
-    total_purchased = float(result[0]) if result[0] else 0
-    total_usd_spent = float(result[1]) if result[1] else 0
+    # Filter to this exchange and purchases only (quantity > 0)
+    exchange_purchases = [
+        t for t in all_trades
+        if t.get('exchange') == exchange and t.get('quantity', 0) > 0
+    ]
+
+    # Calculate totals
+    total_purchased = sum(t['quantity'] for t in exchange_purchases)
+    total_usd_spent = sum(
+        t['total_cost'] for t in exchange_purchases
+        if t.get('total_cost') is not None
+    )
 
     # Get current balance
     current_balance = crypto.get_wallet_balance(coin, exchange)
@@ -96,21 +85,19 @@ def main():
             exchanges_to_check = [wallet]
         else:
             # Query all wallets from database
-            cur = crypto.connection.cursor()
             try:
                 # Try wallets table first (wallet_id is the wallet name)
-                cur.execute("SELECT wallet_id FROM wallets WHERE wallet_id IS NOT NULL ORDER BY wallet_id")
-                exchanges_to_check = [row[0] for row in cur.fetchall()]
+                rows = crypto.backend.execute("SELECT wallet_id FROM wallets WHERE wallet_id IS NOT NULL ORDER BY wallet_id")
+                exchanges_to_check = [row['wallet_id'] for row in rows]
                 if not exchanges_to_check:
                     # Fallback: get distinct exchanges from ledger
-                    crypto.connection.rollback()
-                    cur.execute("SELECT DISTINCT exchange FROM ledger WHERE exchange IS NOT NULL ORDER BY exchange")
-                    exchanges_to_check = [row[0] for row in cur.fetchall()]
+                    rows = crypto.backend.execute("SELECT DISTINCT exchange FROM ledger WHERE exchange IS NOT NULL ORDER BY exchange")
+                    exchanges_to_check = [row['exchange'] for row in rows]
             except:
                 # Fallback: get distinct exchanges from ledger
-                crypto.connection.rollback()
-                cur.execute("SELECT DISTINCT exchange FROM ledger WHERE exchange IS NOT NULL ORDER BY exchange")
-                exchanges_to_check = [row[0] for row in cur.fetchall()]
+                crypto.backend.rollback()
+                rows = crypto.backend.execute("SELECT DISTINCT exchange FROM ledger WHERE exchange IS NOT NULL ORDER BY exchange")
+                exchanges_to_check = [row['exchange'] for row in rows]
         
         for exchange in exchanges_to_check:
             purchased, balance, usd_spent = get_exchange_purchase_history(crypto, coin, exchange)

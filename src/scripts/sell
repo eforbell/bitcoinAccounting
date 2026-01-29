@@ -47,13 +47,14 @@ while True:
 		if record_tx == 'Y' or record_tx == 'y':
 			crypto = CryptoAccounts()
 			try:
-				# Step 1: Transfer BTC from wallet to exchange
+				# Step 1: Transfer BTC from wallet to exchange if source != exchange
 				# (done before the trade, with slight time delays)
-				withdraw_date = tx_date - timedelta(minutes=70)
-				deposit_date = tx_date - timedelta(minutes=10)
-				crypto.transfer_funds(
-					from_account=wallet_source,
-					to_account=exchange,
+				if wallet_source != exchange:
+					withdraw_date = tx_date - timedelta(minutes=70)
+					deposit_date = tx_date - timedelta(minutes=10)
+					crypto.transfer_funds(
+						from_account=wallet_source,
+						to_account=exchange,
 					withdraw_date=withdraw_date,
 					deposit_date=deposit_date,
 					tx_amount=float(quantity),

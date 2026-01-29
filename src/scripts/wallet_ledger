@@ -22,24 +22,27 @@ import _bootstrap
 from cryptoAccounts import CryptoAccounts
 from decimal import Decimal
 
-
+def usage():
+    print("Usage: wallet_ledger <WALLET> [COIN]")
+    print("Example: wallet_ledger CC BTC")
+    sys.exit(1)
+    
 def main():
     if len(sys.argv) < 2:
-        print("Usage: wallet_ledger <WALLET> [COIN]")
-        print("Example: wallet_ledger CC BTC")
-        sys.exit(1)
+        usage()
+    if sys.argv[1].startswith('--'):
+        print("Invalid argument")
+        usage()
     
     wallet = sys.argv[1]
     coin = sys.argv[2].upper() if len(sys.argv) > 2 else 'BTC'
     
     crypto = CryptoAccounts()
-    
+
     try:
-        cur = crypto.connection.cursor()
-        
         # Get all transactions for this wallet/coin, ordered by date ASC for balance calculation
         query = """
-            SELECT 
+            SELECT
                 id,
                 createddate,
                 trans_type,
@@ -52,14 +55,13 @@ def main():
                 comment,
                 transactionid
             FROM ledger
-            WHERE exchange = %s 
-                AND (buy_curr = %s OR sell_curr = %s OR fee_curr = %s)
+            WHERE exchange = :wallet
+                AND (buy_curr = :coin OR sell_curr = :coin OR fee_curr = :coin)
             ORDER BY createddate ASC, id ASC
         """
-        
-        cur.execute(query, (wallet, coin, coin, coin))
-        transactions = cur.fetchall()
-        
+
+        transactions = crypto.backend.execute(query, {'wallet': wallet, 'coin': coin})
+
         if not transactions:
             print(f"\nNo {coin} transactions found for wallet: {wallet}")
             sys.exit(0)
@@ -73,27 +75,25 @@ def main():
         running_balance = Decimal('0')
         
         for tx in transactions:
-            tx_id, date, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, comment, txid = tx
-            
             # Calculate credit/debit
             # Note: Fees are already included in buy/sell amounts
-            credit = Decimal(str(buy)) if buy_curr == coin else Decimal('0')
-            debit = Decimal(str(sell)) if sell_curr == coin else Decimal('0')
-            fee_amount = Decimal(str(fee)) if fee_curr == coin else Decimal('0')
+            credit = Decimal(str(tx['buy'])) if tx['buy_curr'] == coin else Decimal('0')
+            debit = Decimal(str(tx['sell'])) if tx['sell_curr'] == coin else Decimal('0')
+            fee_amount = Decimal(str(tx['fee'])) if tx['fee_curr'] == coin else Decimal('0')
             
             # Update running balance (fees already in buy/sell, don't subtract separately)
             running_balance += credit - debit
-            
+
             ledger_entries.append({
-                'id': tx_id,
-                'date': date,
-                'type': trans_type,
+                'id': tx['id'],
+                'date': tx['createddate'],
+                'type': tx['trans_type'],
                 'credit': credit,
                 'debit': debit,
                 'fee': fee_amount,
                 'balance': running_balance,
-                'comment': comment,
-                'txid': txid
+                'comment': tx['comment'],
+                'txid': tx['transactionid']
             })
         
         # Display in reverse chronological order (most recent first)

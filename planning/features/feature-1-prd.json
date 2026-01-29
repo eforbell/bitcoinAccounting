@@ -155,7 +155,7 @@
         "Skip PostgresBackend integration tests if PGHOST not set (use pytest.mark.skipif)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Foundation for all database operations. PostgreSQL not required for testing."
     },
     {
@@ -179,7 +179,7 @@
         "Unit tests: insert and query each table type"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Leverage existing test file's schema. INTEGER PRIMARY KEY auto-increments in SQLite without AUTOINCREMENT keyword."
     },
     {
@@ -207,7 +207,7 @@
         "  - Empty pair_price table returns None"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Critical function. Test thoroughly. The SQL must use strftime() which works on both backends."
     },
     {
@@ -233,7 +233,7 @@
         "  - Transfer sum with mixed transaction types"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Simple functions. Return 0.0 (not None) for empty results - this matches how balances should work."
     },
     {
@@ -258,7 +258,7 @@
         "  - Trades for different coins don't appear"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "The CASE logic determines buy vs sell perspective. Match PostgreSQL exactly."
     },
     {
@@ -282,7 +282,7 @@
         "  - Multiple trades with mixed currencies"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on SQL-003 (PriceLookup) and builds on SQL-005 (get_trades). Use dependency injection for testability."
     },
     {
@@ -306,7 +306,7 @@
         "  - All purchases missing price data: returns None"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "Returns None for no-data cases. Calling code must handle None appropriately."
     },
     {
@@ -331,7 +331,7 @@
         "  - No income returns empty list"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "In PostgreSQL, get_dividend_cost and get_interest_income are nearly identical. Keep both for compatibility."
     },
     {
@@ -357,7 +357,7 @@
         "New integration tests: create CryptoAccounts with SqliteBackend, exercise major methods"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "High-risk refactor. Convert queries incrementally, test after each change. All existing tests are the safety net."
     },
     {
@@ -384,7 +384,7 @@
         "Integration test: migrate sample data, verify queries return same results"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "Requires PostgreSQL access. Skip tests with pytest.mark.skipif when PGHOST not set."
     },
     {
@@ -414,7 +414,7 @@
         "Document any script-specific issues in code comments"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "Manual verification is acceptable for complex scripts. Automated tests for core functionality."
     },
     {
@@ -437,7 +437,7 @@
         "Update any existing documentation referencing PostgreSQL-only setup"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Final story. User-facing documentation."
     }
   ],

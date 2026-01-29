@@ -1,0 +1,12 @@
+{
+  "currentFeature": "feature-1",
+  "featureName": "SQLite Database Backend",
+  "prdPath": "planning/features/feature-1-prd.json",
+  "branch": "feature/sqlite-database-backend",
+  "status": "ready",
+  "completedFeatures": [
+    
+  ],
+  "futureEnhancements": [
+  ]
+}
