@@ -1,3 +1,30 @@
+-- ============================================================================
+-- DEPRECATED: This file is no longer used and can be safely removed.
+-- ============================================================================
+--
+-- All PostgreSQL stored procedures have been migrated to Python query classes
+-- in the src/python/db/queries/ package for database-agnostic support.
+--
+-- Migration mapping:
+--   get_price()                  -> PriceLookup.get_price()
+--   get_price_date()             -> PriceLookup.get_price_date()
+--   get_balance()                -> BalanceCalculator.get_balance()
+--   get_sum_of_all_transfers()   -> BalanceCalculator.get_sum_of_all_transfers()
+--   get_trades()                 -> TradeQuery.get_trades()
+--   get_trade_cost()             -> TradeQuery.get_trade_cost()
+--   get_trade_cost_new()         -> TradeQuery.get_trade_cost()
+--   get_interest_income()        -> IncomeQuery.get_interest_income()
+--   get_dividend_cost()          -> IncomeQuery.get_dividend_cost()
+--   get_avg_purchase_price()     -> BasisCalculator.get_avg_purchase_price()
+--   get_avg_purchase_price_new() -> BasisCalculator.get_avg_purchase_price()
+--
+-- These Python implementations support both SQLite and PostgreSQL backends.
+-- No code in the repository executes any of the functions defined below.
+--
+-- This file is kept temporarily for reference but will be removed in a future
+-- cleanup. Do NOT apply this file when setting up a new PostgreSQL database.
+-- ============================================================================
+
 CREATE OR REPLACE FUNCTION public.get_balance(coin character varying, OUT balance numeric)
  RETURNS numeric
  LANGUAGE plpgsql

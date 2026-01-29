@@ -56,13 +56,14 @@ CREATE USER bitcoin_accounting WITH PASSWORD 'strong-password';
 GRANT ALL PRIVILEGES ON DATABASE crypto TO bitcoin_accounting;
 ```
 
-2. Apply the schema (tables and functions):
+2. Apply the schema (tables only):
 
 ```bash
 # From the repository root
 psql -U <db-admin> -d crypto -f src/sql/tables.sql
-psql -U <db-admin> -d crypto -f src/sql/functions.sql
 ```
+
+**Note**: The `functions.sql` file is no longer needed. All stored procedures have been migrated to Python query classes for database-agnostic support.
 
 3. Install Python dependencies:
 
