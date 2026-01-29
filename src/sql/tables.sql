@@ -46,8 +46,36 @@ CREATE TABLE public.pair_price (
 	"date" date NULL
 );
 
+-- public.wallets definition
+
+-- Drop table
+
+-- DROP TABLE public.wallets;
+
+CREATE TABLE public.wallets (
+	wallet_id varchar(32) NOT NULL,
+	wallet_type varchar(20) NOT NULL,
+	custody varchar(20) NOT NULL,
+	description varchar(500) NULL,
+	seed_info varchar(500) NULL,
+	active bool DEFAULT true,
+	created_date timestamp DEFAULT CURRENT_TIMESTAMP,
+	notes text NULL,
+	CONSTRAINT wallets_pkey PRIMARY KEY (wallet_id)
+);
+
+COMMENT ON TABLE public.wallets IS 'Metadata about each wallet/account tracked in the ledger. Helps clarify IRS "account" classification for per-wallet basis tracking (required 2025+).';
+
+-- Example wallet data (uncomment and customize for your setup):
+-- INSERT INTO public.wallets (wallet_id, wallet_type, custody, description) VALUES
+--     ('Strike', 'exchange', 'custodial', 'Strike account - custodial exchange wallet'),
+--     ('River', 'exchange', 'custodial', 'River Financial account - custodial exchange wallet'),
+--     ('ColdCard', 'hardware', 'self-custodied', 'Hardware wallet - cold storage'),
+--     ('Phoenix', 'lightning', 'self-custodied', 'Phoenix Lightning wallet');
+
 
 GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.coins TO "bitcoin_accounting";
 GRANT UPDATE, SELECT, INSERT ON TABLE public.ledger TO "bitcoin_accounting";
 GRANT SELECT, USAGE ON SEQUENCE public.ledger_id_seq TO "bitcoin_accounting";
 GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.pair_price TO "bitcoin_accounting";
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.wallets TO "bitcoin_accounting";

@@ -56,14 +56,20 @@ CREATE USER bitcoin_accounting WITH PASSWORD 'strong-password';
 GRANT ALL PRIVILEGES ON DATABASE crypto TO bitcoin_accounting;
 ```
 
-2. Apply the schema (tables only):
+2. Apply the schema:
 
 ```bash
-# From the repository root
+# From the repository root - creates all 4 tables (coins, ledger, pair_price, wallets)
 psql -U <db-admin> -d crypto -f src/sql/tables.sql
 ```
 
-**Note**: The `functions.sql` file is no longer needed. All stored procedures have been migrated to Python query classes for database-agnostic support.
+The `tables.sql` file creates all required tables:
+- `coins` - Cryptocurrency metadata
+- `ledger` - Transaction history (buys, sells, transfers, etc.)
+- `pair_price` - Historical price data for cost basis calculations
+- `wallets` - Wallet/account metadata (matches ledger.exchange field)
+
+**Note**: The `functions.sql` and `wallets_table.sql` files are deprecated. All stored procedures have been migrated to Python query classes, and the wallets table is now included in `tables.sql`.
 
 3. Install Python dependencies:
 

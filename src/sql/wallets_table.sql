@@ -1,3 +1,18 @@
+-- ============================================================================
+-- DEPRECATED: This file has been consolidated into tables.sql
+-- ============================================================================
+--
+-- The wallets table is now included in tables.sql along with the other
+-- core tables (coins, ledger, pair_price).
+--
+-- For new PostgreSQL setup, use:
+--   psql -U admin -d crypto -f src/sql/tables.sql
+--
+-- This file is kept temporarily for reference but will be removed in a future
+-- cleanup. Do NOT apply this file separately - it will cause duplicate table
+-- errors since wallets is already in tables.sql.
+-- ============================================================================
+
 -- Wallet metadata table to clarify what each "exchange" label represents
 -- This helps distinguish between custodial accounts, self-custodied wallets, etc.
 
