@@ -17,6 +17,10 @@ import sys
 import _bootstrap
 from cryptoAccounts import CryptoAccounts
 
+def usage():
+    print("Usage: wallet_balances [COIN] [--all]")
+    print("Example: wallet_balances BTC --all")
+    sys.exit(1)
 
 def main():
     # Parse arguments
@@ -26,6 +30,9 @@ def main():
     for arg in sys.argv[1:]:
         if arg == '--all':
             show_all = True
+        elif arg.startswith('--'):
+            print("Invalid argument")
+            usage()
         else:
             coin = arg.upper()
     

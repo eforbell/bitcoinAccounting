@@ -22,12 +22,17 @@ import _bootstrap
 from cryptoAccounts import CryptoAccounts
 from decimal import Decimal
 
-
+def usage():
+    print("Usage: wallet_ledger <WALLET> [COIN]")
+    print("Example: wallet_ledger CC BTC")
+    sys.exit(1)
+    
 def main():
     if len(sys.argv) < 2:
-        print("Usage: wallet_ledger <WALLET> [COIN]")
-        print("Example: wallet_ledger CC BTC")
-        sys.exit(1)
+        usage()
+    if sys.argv[1].startswith('--'):
+        print("Invalid argument")
+        usage()
     
     wallet = sys.argv[1]
     coin = sys.argv[2].upper() if len(sys.argv) > 2 else 'BTC'
