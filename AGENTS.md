@@ -900,3 +900,29 @@ This pattern allows mypy to see types while handling missing dependencies gracef
 - Test empty data: returns appropriate error code
 - Test success path: create test database, run script, verify output files exist
 - Pass env vars: `env={"SQLITE_DB_PATH": str(db_path)}` to use test database
+
+### Timezone Handling with yfinance
+- **Critical Issue**: yfinance returns timezone-aware pandas DatetimeIndex (UTC)
+- Database datetimes are timezone-naive (no timezone info)
+- Comparison fails: "Invalid comparison between dtype=datetime64[ns, UTC] and datetime"
+- **Solution**: Strip timezone from pandas index after fetching:
+  ```python
+  if price_data.index.tz is not None:
+      price_data.index = price_data.index.tz_localize(None)
+  ```
+- Always do this immediately after fetching from yfinance
+- Alternative would be to make all datetime objects timezone-aware, but that's more complex
+
+### Import Compatibility Pattern
+- Challenge: Code needs to work in two contexts:
+  1. Tests: `from src.python.viz import BalanceChart`
+  2. CLI: sys.path has src/python, imports `from viz import BalanceChart`
+- **Solution**: Try/except imports:
+  ```python
+  try:
+      from src.python.db.backend import DatabaseBackend
+  except ModuleNotFoundError:
+      from db.backend import DatabaseBackend  # type: ignore[import]
+  ```
+- Primary import (src.python) for tests, fallback for CLI
+- Add `# type: ignore[import]` to fallback to satisfy mypy

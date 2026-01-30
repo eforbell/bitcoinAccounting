@@ -170,6 +170,11 @@ class PriceDataFetcher:
         needed_cols = ['open', 'high', 'low', 'close', 'volume']
         df = df[needed_cols]
 
+        # Convert timezone-aware index to timezone-naive
+        # yfinance returns UTC timezone-aware dates, but we need naive for comparisons
+        if hasattr(df.index, 'tz') and df.index.tz is not None:
+            df.index = pd.DatetimeIndex([dt.replace(tzinfo=None) for dt in df.index])
+
         return df
 
     def _load_cache(self) -> pd.DataFrame | None:
@@ -183,6 +188,12 @@ class PriceDataFetcher:
 
         try:
             df = pd.read_parquet(self.cache_file)
+
+            # Convert timezone-aware index to timezone-naive for consistency
+            # Old cached data may have timezone info, strip it for comparisons
+            if hasattr(df.index, 'tz') and df.index.tz is not None:
+                df.index = pd.DatetimeIndex([dt.replace(tzinfo=None) for dt in df.index])
+
             return df
         except Exception:
             # Cache file corrupted or unreadable - ignore it

@@ -65,8 +65,10 @@ class OrangePlot:
 
         # Convert timezone-aware index to timezone-naive for comparison compatibility
         # yfinance returns UTC timezone-aware dates, but our database dates are naive
-        if price_data.index.tz is not None:
-            price_data.index = price_data.index.tz_localize(None)
+        if hasattr(price_data.index, 'tz') and price_data.index.tz is not None:
+            # Remove timezone by converting to datetime objects without timezone
+            price_data = price_data.copy()
+            price_data.index = pd.DatetimeIndex([dt.replace(tzinfo=None) for dt in price_data.index])
 
         # Get trade cost data
         trades = self.trade_query.get_trade_cost("BTC", "USD")
