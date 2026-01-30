@@ -457,3 +457,48 @@
 
 ---
 
+
+## 2026-01-30 - VIZ-001
+
+- What was implemented:
+  - Created `src/python/viz/` package for Bitcoin portfolio visualizations
+  - `VizConfig` dataclass with validation for chart configuration:
+    - Date range (preset strings or tuple), output directory, chart types
+    - DPI validation (72-600), cost basis and log scale flags
+    - Post-init validation with clear error messages
+  - `PriceDataFetcher` class for BTC-USD price history:
+    - yfinance integration for Yahoo Finance API
+    - Local caching to `~/.cryptoaccounting/cache/btc_prices.parquet`
+    - Incremental fetching - only gets missing dates
+    - Graceful API failure handling with cache fallback
+  - 20 comprehensive unit tests covering all scenarios
+  - Added yfinance and pyarrow to requirements.txt
+
+- Files changed:
+  - `src/python/viz/__init__.py` (new)
+  - `src/python/viz/config.py` (new)
+  - `src/python/viz/data_fetcher.py` (new)
+  - `tests/test_viz.py` (new - 20 tests)
+  - `requirements.txt` (modified - added yfinance, pyarrow)
+  - `AGENTS.md` (updated - visualization patterns)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-001 passes: true)
+
+- **Learnings:**
+  - Parquet format requires pyarrow or fastparquet - not included in pandas by default
+  - yfinance returns capitalized column names ('Open', 'High') - must normalize to lowercase
+  - Cache strategy: merge old and new data with `pd.concat()`, deduplicate with `~index.duplicated(keep='last')`
+  - DataFrame index frequency attribute can differ after caching - use `check_freq=False` in test comparisons
+  - Optional dependency pattern: use TYPE_CHECKING to satisfy mypy while handling ImportError gracefully
+  - yfinance Ticker.history() returns empty DataFrame (not None) when no data - check with `df.empty`
+  - datetime and string dates: `datetime.fromisoformat(date_string)` handles both YYYY-MM-DD and datetime objects
+  - Cache directory creation: `Path.mkdir(parents=True, exist_ok=True)` creates parent dirs if needed
+  - Warning pattern: `import warnings; warnings.warn(msg, RuntimeWarning)` for non-fatal issues
+  - Test fixture pattern: `@pytest.fixture` with `tempfile.TemporaryDirectory()` for isolated cache testing
+
+- **Test Results:**
+  - 20 new visualization tests passing
+  - 153 total tests passing (125 from feature-1 + 11 1099b + 7 SQLite integration + 19 CLI + 20 viz)
+  - Zero regressions
+  - All tests execute in ~4 seconds
+
+---

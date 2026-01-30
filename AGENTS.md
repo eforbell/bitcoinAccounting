@@ -643,3 +643,40 @@ total_usd_spent = sum(
 - Any cost basis calculations
 
 **Always**: Use query class abstractions (`TradeQuery`, `BasisCalculator`) instead of raw SQL for cost calculations. The query classes handle cross-currency conversion correctly.
+
+## Visualization Package Patterns (VIZ-001)
+
+### Package Structure
+- Visualization code lives in `src/python/viz/` (parallel to `db/` package)
+- Follows same patterns as db package: `__init__.py` exports public API, implementation in submodules
+
+### Optional Dependencies with TYPE_CHECKING
+```python
+if TYPE_CHECKING:
+    import pandas as pd
+    import yfinance as yf
+else:
+    try:
+        import pandas as pd
+        import yfinance as yf
+    except ImportError:
+        pd = None  # type: ignore[assignment]
+        yf = None  # type: ignore[assignment]
+```
+This pattern allows mypy to see types while handling missing dependencies gracefully at runtime.
+
+### Price Data Caching Strategy
+- Cache location: `~/.cryptoaccounting/cache/btc_prices.parquet`
+- Format: Parquet (requires `pyarrow` or `fastparquet`)
+- Strategy: Load cache → Fetch only missing dates → Merge with `pd.concat()` → Deduplicate → Save
+- Graceful degradation: Use cached data with warning if API fails, error only if no cache available
+
+### yfinance Integration
+- Ticker: `yf.Ticker("BTC-USD").history(start, end)` for Bitcoin price data
+- Column normalization: API returns 'Open', 'High', etc. - normalize to lowercase ('open', 'high')
+- Expected columns: open, high, low, close, volume
+
+### Testing Patterns
+- Use temporary directories for cache in tests (`tempfile.TemporaryDirectory`)
+- Mock yfinance with `@patch('src.python.viz.data_fetcher.yf.Ticker')`
+- DataFrame comparisons: Use `pd.testing.assert_frame_equal(df1, df2, check_freq=False)` to ignore index frequency differences
