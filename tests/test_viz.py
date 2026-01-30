@@ -1,4 +1,4 @@
-"""Tests for visualization infrastructure (VIZ-001, VIZ-002, and VIZ-003)."""
+"""Tests for visualization infrastructure (VIZ-001, VIZ-002, VIZ-003, and VIZ-004)."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import pytest
 from src.python.db import SqliteBackend
 from src.python.viz.balance_chart import BalanceChart
 from src.python.viz.config import VizConfig
+from src.python.viz.custody_chart import CustodyChart
 from src.python.viz.data_fetcher import PriceDataFetcher
 from src.python.viz.orange_plot import OrangePlot
 
@@ -991,3 +992,349 @@ class TestBalanceChart:
         # Verify no 2021 trades included
         for point in balance_data:
             assert point['date'] <= end
+
+class TestCustodyChart:
+    """Tests for CustodyChart class (VIZ-004)."""
+
+    @pytest.fixture
+    def temp_output_dir(self) -> Path:
+        """Create a temporary output directory for testing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+
+    @pytest.fixture
+    def sample_backend_with_wallets(self) -> SqliteBackend:
+        """Create an in-memory SQLite backend with wallet metadata."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        # Add wallet metadata
+        backend.execute(
+            """
+            INSERT INTO wallets (wallet_id, wallet_type, custody, description, active) VALUES
+            ('Coldcard', 'hardware', 'self-custodied', 'Hardware wallet', 1),
+            ('Coinbase', 'exchange', 'custodial', 'Exchange account', 1),
+            ('Casa', 'multisig', 'multisig', '2-of-3 multisig', 1)
+            """
+        )
+
+        # Add sample BTC trades with different custody types
+        backend.execute(
+            """
+            INSERT INTO ledger (
+                createddate, trans_type, buy_curr, buy, sell_curr, sell,
+                fee_curr, fee, exchange, "group", comment
+            ) VALUES
+            -- Self-custodied: 0.5 BTC
+            (:date1, 'Trade', 'BTC', 0.5, 'USD', 5000.0, '', 0, 'Coldcard', '', ''),
+            -- Custodial: 0.3 BTC
+            (:date2, 'Trade', 'BTC', 0.3, 'USD', 3600.0, '', 0, 'Coinbase', '', ''),
+            -- Multisig: 0.2 BTC
+            (:date3, 'Trade', 'BTC', 0.2, 'USD', 3000.0, '', 0, 'Casa', '', ''),
+            -- Transfer from custodial to self-custodied: -0.1 from Coinbase
+            (:date4, 'Trade', 'USD', 1500.0, 'BTC', 0.1, '', 0, 'Coinbase', '', ''),
+            -- +0.1 to Coldcard
+            (:date5, 'Trade', 'BTC', 0.1, 'USD', 1500.0, '', 0, 'Coldcard', '', '')
+            """,
+            {
+                'date1': '2020-01-15 10:00:00',
+                'date2': '2020-06-01 14:30:00',
+                'date3': '2021-01-01 09:00:00',
+                'date4': '2021-06-01 12:00:00',
+                'date5': '2021-06-01 12:05:00',
+            }
+        )
+
+        return backend
+
+    @pytest.fixture
+    def sample_backend_no_wallets(self) -> SqliteBackend:
+        """Create backend with trades but no wallet metadata."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        # Add trades without wallet metadata
+        backend.execute(
+            """
+            INSERT INTO ledger (
+                createddate, trans_type, buy_curr, buy, sell_curr, sell,
+                fee_curr, fee, exchange, "group", comment
+            ) VALUES
+            (:date1, 'Trade', 'BTC', 0.5, 'USD', 5000.0, '', 0, 'UnknownExchange', '', '')
+            """,
+            {'date1': '2020-01-15 10:00:00'}
+        )
+
+        return backend
+
+    def test_custody_chart_basic_generation(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test basic custody chart generation with mixed custody types."""
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir
+        )
+
+        chart = CustodyChart(sample_backend_with_wallets, config)
+        output_path = chart.generate()
+
+        # Verify file was created
+        assert output_path.exists()
+        assert output_path.suffix == '.png'
+        assert 'btc_custody' in output_path.name
+
+    def test_custody_balance_calculation(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test custody balance calculation."""
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = CustodyChart(sample_backend_with_wallets, config)
+
+        start = datetime(2020, 1, 1)
+        end = datetime(2021, 12, 31)
+        custody_data = chart._get_custody_balances(start, end)
+
+        # Should have: start, 5 trades, end = 7 points
+        assert len(custody_data) >= 6
+
+        # Verify final balances
+        # Self-custodied: 0.5 + 0.1 = 0.6
+        # Custodial: 0.3 - 0.1 = 0.2
+        # Multisig: 0.2
+        final = custody_data[-1]
+        assert final['self-custodied'] == pytest.approx(0.6)
+        assert final['custodial'] == pytest.approx(0.2)
+        assert final['multisig'] == pytest.approx(0.2)
+        assert final['unknown'] == pytest.approx(0.0)
+
+    def test_custody_chart_empty_ledger(
+        self,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that empty ledger raises ValueError."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir
+        )
+
+        chart = CustodyChart(backend, config)
+
+        with pytest.raises(ValueError, match="No Bitcoin balance found"):
+            chart.generate()
+
+    def test_custody_chart_unknown_custody(
+        self,
+        sample_backend_no_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test custody chart with transactions lacking wallet metadata."""
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir
+        )
+
+        chart = CustodyChart(sample_backend_no_wallets, config)
+        output_path = chart.generate()
+
+        # Should succeed and show as "unknown" custody
+        assert output_path.exists()
+
+        # Verify custody data
+        start = datetime(2020, 1, 1)
+        end = datetime(2021, 1, 1)
+        custody_data = chart._get_custody_balances(start, end)
+
+        final = custody_data[-1]
+        assert final['unknown'] == pytest.approx(0.5)
+        assert final['self-custodied'] == pytest.approx(0.0)
+
+    def test_custody_chart_single_custody_type(
+        self,
+        temp_output_dir: Path
+    ) -> None:
+        """Test custody chart with all holdings in one custody type."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        # Add wallet
+        backend.execute(
+            """
+            INSERT INTO wallets (wallet_id, wallet_type, custody, description, active) VALUES
+            ('Coldcard', 'hardware', 'self-custodied', 'Hardware wallet', 1)
+            """
+        )
+
+        # Add trade
+        backend.execute(
+            """
+            INSERT INTO ledger (
+                createddate, trans_type, buy_curr, buy, sell_curr, sell,
+                fee_curr, fee, exchange, "group", comment
+            ) VALUES
+            (:date1, 'Trade', 'BTC', 1.0, 'USD', 10000.0, '', 0, 'Coldcard', '', '')
+            """,
+            {'date1': '2020-01-15 10:00:00'}
+        )
+
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir
+        )
+
+        chart = CustodyChart(backend, config)
+        output_path = chart.generate()
+
+        # Should show single area (not stacked)
+        assert output_path.exists()
+
+    def test_wallet_custody_map(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test wallet custody mapping."""
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = CustodyChart(sample_backend_with_wallets, config)
+
+        wallet_map = chart._get_wallet_custody_map()
+
+        assert wallet_map['Coldcard'] == 'self-custodied'
+        assert wallet_map['Coinbase'] == 'custodial'
+        assert wallet_map['Casa'] == 'multisig'
+
+    def test_wallet_custody_map_no_wallets_table(
+        self,
+        sample_backend_no_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test wallet custody mapping when wallets table is empty."""
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = CustodyChart(sample_backend_no_wallets, config)
+
+        wallet_map = chart._get_wallet_custody_map()
+
+        # Should return empty dict
+        assert wallet_map == {}
+
+    def test_resolve_date_range_all(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test resolving 'all' date range preset."""
+        config = VizConfig(date_range='all', output_dir=temp_output_dir)
+        chart = CustodyChart(sample_backend_with_wallets, config)
+
+        start, end = chart._resolve_date_range()
+
+        # Should span from first trade (2020-01-15) to now
+        assert start.year == 2020
+        assert start.month == 1
+        assert start.day == 15
+
+    def test_resolve_date_range_tuple(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test resolving tuple date range."""
+        start_date = datetime(2020, 6, 1)
+        end_date = datetime(2021, 6, 1)
+
+        config = VizConfig(
+            date_range=(start_date, end_date),
+            output_dir=temp_output_dir
+        )
+        chart = CustodyChart(sample_backend_with_wallets, config)
+
+        start, end = chart._resolve_date_range()
+
+        assert start == start_date
+        assert end == end_date
+
+    def test_output_path_includes_date(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that output path includes current date."""
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = CustodyChart(sample_backend_with_wallets, config)
+
+        output_path = chart._get_output_path()
+
+        today = datetime.now().strftime('%Y-%m-%d')
+        assert today in output_path.name
+        assert output_path.name.startswith('btc_custody_')
+        assert output_path.suffix == '.png'
+
+    def test_custom_dpi(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test custody chart with custom DPI."""
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir,
+            dpi=150
+        )
+
+        chart = CustodyChart(sample_backend_with_wallets, config)
+        output_path = chart.generate()
+
+        assert output_path.exists()
+
+    def test_custody_type_normalization(
+        self,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that custody types are normalized correctly."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        # Add wallets with various custody type names
+        backend.execute(
+            """
+            INSERT INTO wallets (wallet_id, wallet_type, custody, description, active) VALUES
+            ('HW1', 'hardware', 'self', 'Self custody variant', 1),
+            ('HW2', 'hardware', 'cold', 'Cold storage', 1),
+            ('EX1', 'exchange', 'exchange', 'Exchange variant', 1),
+            ('MS1', 'multisig', 'multi-sig', 'Multisig variant', 1)
+            """
+        )
+
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = CustodyChart(backend, config)
+
+        wallet_map = chart._get_wallet_custody_map()
+
+        # All should be normalized to standard types
+        assert wallet_map['HW1'] == 'self-custodied'
+        assert wallet_map['HW2'] == 'self-custodied'
+        assert wallet_map['EX1'] == 'custodial'
+        assert wallet_map['MS1'] == 'multisig'
+
+    def test_date_range_filtering(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that trades outside date range are excluded."""
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = CustodyChart(sample_backend_with_wallets, config)
+
+        # Filter to 2020 only
+        start = datetime(2020, 1, 1)
+        end = datetime(2020, 12, 31)
+        custody_data = chart._get_custody_balances(start, end)
+
+        # Should only include 2 trades from 2020
+        # Self-custodied: 0.5, Custodial: 0.3
+        final = custody_data[-1]
+        assert final['self-custodied'] == pytest.approx(0.5)
+        assert final['custodial'] == pytest.approx(0.3)
+        assert final['multisig'] == pytest.approx(0.0)  # 2021 trade excluded

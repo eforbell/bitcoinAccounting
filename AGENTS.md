@@ -772,3 +772,68 @@ This pattern allows mypy to see types while handling missing dependencies gracef
 - Always sorted by date
 - Include start point, all transaction points, and end point
 - Makes plotting straightforward: extract to parallel lists
+
+## VIZ-004: Custody Chart (Bitcoin Holdings by Custody Type)
+
+### Stacked Area Charts
+- Use `ax.stackplot()` for stacked areas:
+  ```python
+  ax.stackplot(
+      dates,
+      *[balances_by_type[ct] for ct in custody_types],
+      labels=[...],
+      colors=[...],
+      alpha=0.8
+  )
+  ```
+- Takes unpacked lists of values (one per custody type)
+- Stacks from bottom to top in order provided
+- Order matters: put most important (self-custodied) on bottom for visibility
+
+### Wallet Metadata Integration
+- JOIN ledger with wallets table: match ledger.exchange to wallets.wallet_id
+- Graceful degradation: if wallets table empty/missing, all transactions marked as "unknown"
+- Query pattern:
+  ```python
+  try:
+      wallets = backend.execute("SELECT wallet_id, custody FROM wallets WHERE active = 1")
+      # Build mapping dict
+  except Exception:
+      return {}  # No wallet data available
+  ```
+
+### Custody Type Normalization
+- Accept various naming conventions: "self", "cold", "hardware" → "self-custodied"
+- Accept "exchange", "hot" → "custodial"
+- Accept "multi-sig", "collaborative" → "multisig"
+- Use `.lower()` for case-insensitive matching
+- Unknown/unrecognized types → "unknown" category
+
+### Multi-dimensional Balance Tracking
+- Data structure: `[{'date': datetime, 'self-custodied': float, 'custodial': float, 'multisig': float, 'unknown': float}, ...]`
+- Update specific custody type balance on each transaction
+- Initialize all custody types to 0.0 at start
+- Copy current state on each transaction (snapshot)
+
+### Filtering Empty Categories
+- Before plotting, filter out custody types with zero final balance
+- Check: `current_totals[ct] > 0.00000001` (allow for floating point errors)
+- Single custody type case: stackplot works fine with single area (not truly "stacked")
+- Zero balance across all types: raise ValueError (no data to plot)
+
+### Self-Sovereignty Index
+- Metric: percentage of holdings in self-custody
+- Formula: `(self_custodied_balance / total_balance) * 100`
+- Display in subtitle as motivational indicator
+- Shows progress toward Bitcoin's core value proposition (self-sovereignty)
+
+### Color Palette (Custody Theme)
+- Green (#34C759): self-custodied (sovereignty, security)
+- Orange (#FF9500): custodial (convenience, counterparty risk)
+- Blue (#007AFF): multisig (collaborative security)
+- Gray (#8E8E93): unknown (missing metadata)
+
+### Legend with Current Balances
+- Include current balance in each label: "Self-Custodied: 0.60000000 BTC"
+- Use `.replace('-', ' ').title()` to format custody type names
+- Position: "upper left" so it doesn't obscure data

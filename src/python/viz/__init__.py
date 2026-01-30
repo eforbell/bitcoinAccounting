@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from .balance_chart import BalanceChart
 from .config import VizConfig
+from .custody_chart import CustodyChart
 from .data_fetcher import PriceDataFetcher
 from .orange_plot import OrangePlot
 
 __all__ = [
     'BalanceChart',
     'VizConfig',
+    'CustodyChart',
     'PriceDataFetcher',
     'OrangePlot',
 ]
