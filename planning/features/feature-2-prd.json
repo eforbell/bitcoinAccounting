@@ -239,7 +239,7 @@
         "Integration test: Generate chart with sample data, verify file created"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "This is the star feature! Emotional impact. Like Saylor's Strategy plot."
     },
     {

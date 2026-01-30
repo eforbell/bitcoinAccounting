@@ -502,3 +502,44 @@
   - All tests execute in ~4 seconds
 
 ---
+## 2026-01-30 - VIZ-002
+
+- What was implemented:
+  - Created `src/python/viz/orange_plot.py` with OrangePlot class
+  - generate() method creates matplotlib figure with:
+    - BTC-USD price history as orange line
+    - Purchases as orange scatter points (size proportional to BTC amount)
+    - Sales as green scatter points
+    - Optional running cost basis overlay (dashed blue line)
+    - Summary statistics: total invested, current value, unrealized gain %
+  - Date range resolution: supports presets ('ytd', '1y', '5y', 'all') and custom tuples
+  - Log scale Y-axis option via config.log_scale
+  - Running weighted average cost basis calculation
+  - Graceful handling of missing price data and empty ledger
+  - 13 comprehensive unit tests covering all scenarios
+
+- Files changed:
+  - `src/python/viz/orange_plot.py` (new - 423 lines)
+  - `src/python/viz/__init__.py` (modified - export OrangePlot)
+  - `tests/test_viz.py` (modified - added TestOrangePlot class with 13 tests)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-002 passes: true)
+  - `AGENTS.md` (updated - matplotlib patterns, scatter plots, cost basis calculations)
+
+- **Learnings:**
+  - Matplotlib scatter plot sizing: size parameter is in points^2, scale by 500 for visibility
+  - `zorder=5` ensures scatter points appear above line plots
+  - `fig.autofmt_xdate()` automatically formats and rotates date labels nicely
+  - Always close matplotlib figures: `plt.close(fig)` to free memory after saving
+  - Running cost basis: sort by date first, skip None prices, accumulate cost and quantity
+  - DataFrame index lookup: `df.index.get_indexer([date], method='nearest')[0]` finds closest date
+  - TradeQuery.get_trade_cost() calculates unit_cost differently for direct vs cross-currency trades:
+    - Direct (trade_curr == cost_currency): uses trade price (sell/buy ratio)
+    - Cross-currency: requires price lookup, may return None if unavailable
+  - Date range presets: 'ytd' = Jan 1 to now, '1y' = 365 days ago, '5y' = 1825 days ago, 'all' = min ledger date
+  - Unrealized gain calculation: `((current_value - total_invested) / total_invested) * 100`
+  - Color scheme: Orange (#FF9500) for Bitcoin, Green (#34C759) for sales ("greenbacks"), Blue (#007AFF) for cost basis
+  - Test edge cases: empty ledger (ValueError), missing price data (RuntimeError), cross-currency with no conversion
+  - 166 total tests passing (153 existing + 13 new OrangePlot tests), zero regressions
+
+---
+
