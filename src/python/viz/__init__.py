@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from .config import VizConfig
 from .data_fetcher import PriceDataFetcher
+from .orange_plot import OrangePlot
 
 __all__ = [
     'VizConfig',
     'PriceDataFetcher',
+    'OrangePlot',
 ]

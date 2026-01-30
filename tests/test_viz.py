@@ -1,4 +1,4 @@
-"""Tests for visualization infrastructure (VIZ-001)."""
+"""Tests for visualization infrastructure (VIZ-001 and VIZ-002)."""
 
 from __future__ import annotations
 
@@ -10,8 +10,10 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
+from src.python.db import SqliteBackend
 from src.python.viz.config import VizConfig
 from src.python.viz.data_fetcher import PriceDataFetcher
+from src.python.viz.orange_plot import OrangePlot
 
 
 class TestVizConfig:
@@ -301,3 +303,365 @@ class TestPriceDataFetcher:
         except RuntimeError:
             # Expected - no mock for yfinance, but date validation passed
             pass
+
+
+class TestOrangePlot:
+    """Tests for OrangePlot class (VIZ-002)."""
+
+    @pytest.fixture
+    def temp_output_dir(self) -> Path:
+        """Create a temporary output directory for testing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+
+    @pytest.fixture
+    def sample_backend(self) -> SqliteBackend:
+        """Create an in-memory SQLite backend with sample data."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        # Add sample BTC trades
+        backend.execute(
+            """
+            INSERT INTO ledger (
+                createddate, trans_type, buy_curr, buy, sell_curr, sell,
+                fee_curr, fee, exchange, "group", comment
+            ) VALUES
+            -- Purchase 1: 0.5 BTC at $10,000 on 2020-01-15
+            (:date1, 'Trade', 'BTC', 0.5, 'USD', 5000.0, '', 0, 'Coinbase', '', ''),
+            -- Purchase 2: 0.3 BTC at $12,000 on 2020-06-01
+            (:date2, 'Trade', 'BTC', 0.3, 'USD', 3600.0, '', 0, 'Coinbase', '', ''),
+            -- Sale 1: 0.1 BTC at $15,000 on 2021-01-01
+            (:date3, 'Trade', 'USD', 1500.0, 'BTC', 0.1, '', 0, 'Coinbase', '', '')
+            """,
+            {
+                'date1': '2020-01-15 10:00:00',
+                'date2': '2020-06-01 14:30:00',
+                'date3': '2021-01-01 09:00:00',
+            }
+        )
+
+        # Add price data for cost basis calculations
+        backend.execute(
+            """
+            INSERT INTO pair_price (date, to_curr, from_curr, price) VALUES
+            (:date1, 'BTC', 'USD', 10000.0),
+            (:date2, 'BTC', 'USD', 12000.0),
+            (:date3, 'BTC', 'USD', 15000.0)
+            """,
+            {
+                'date1': '2020-01-15 10:00:00',
+                'date2': '2020-06-01 14:30:00',
+                'date3': '2021-01-01 09:00:00',
+            }
+        )
+
+        return backend
+
+    @pytest.fixture
+    def sample_price_data(self) -> pd.DataFrame:
+        """Create sample BTC-USD price data."""
+        dates = pd.date_range('2020-01-01', '2021-12-31', freq='D')
+        df = pd.DataFrame({
+            'open': [10000.0 + i * 10 for i in range(len(dates))],
+            'high': [10100.0 + i * 10 for i in range(len(dates))],
+            'low': [9900.0 + i * 10 for i in range(len(dates))],
+            'close': [10050.0 + i * 10 for i in range(len(dates))],
+            'volume': [1000000.0] * len(dates)
+        }, index=dates)
+        return df
+
+    def test_orange_plot_basic_generation(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path,
+        sample_price_data: pd.DataFrame
+    ) -> None:
+        """Test basic orange plot generation with purchases."""
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir,
+            include_cost_basis=False
+        )
+
+        plot = OrangePlot(sample_backend, config)
+
+        # Mock price fetcher
+        with patch.object(plot.price_fetcher, 'fetch_btc_price_history') as mock_fetch:
+            mock_fetch.return_value = sample_price_data
+
+            output_path = plot.generate()
+
+            # Verify file was created
+            assert output_path.exists()
+            assert output_path.suffix == '.png'
+            assert 'btc_orange_plot' in output_path.name
+
+    def test_orange_plot_with_cost_basis(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path,
+        sample_price_data: pd.DataFrame
+    ) -> None:
+        """Test orange plot with cost basis overlay."""
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir,
+            include_cost_basis=True
+        )
+
+        plot = OrangePlot(sample_backend, config)
+
+        with patch.object(plot.price_fetcher, 'fetch_btc_price_history') as mock_fetch:
+            mock_fetch.return_value = sample_price_data
+
+            output_path = plot.generate()
+
+            assert output_path.exists()
+
+    def test_orange_plot_log_scale(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path,
+        sample_price_data: pd.DataFrame
+    ) -> None:
+        """Test orange plot with logarithmic Y-axis."""
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir,
+            log_scale=True
+        )
+
+        plot = OrangePlot(sample_backend, config)
+
+        with patch.object(plot.price_fetcher, 'fetch_btc_price_history') as mock_fetch:
+            mock_fetch.return_value = sample_price_data
+
+            output_path = plot.generate()
+
+            assert output_path.exists()
+
+    def test_orange_plot_empty_ledger(
+        self,
+        temp_output_dir: Path,
+        sample_price_data: pd.DataFrame
+    ) -> None:
+        """Test that empty ledger raises ValueError."""
+        # Create empty backend
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir
+        )
+
+        plot = OrangePlot(backend, config)
+
+        with patch.object(plot.price_fetcher, 'fetch_btc_price_history') as mock_fetch:
+            mock_fetch.return_value = sample_price_data
+
+            with pytest.raises(ValueError, match="No Bitcoin transactions found"):
+                plot.generate()
+
+    def test_orange_plot_no_price_data(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that missing price data raises RuntimeError."""
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir
+        )
+
+        plot = OrangePlot(sample_backend, config)
+
+        with patch.object(plot.price_fetcher, 'fetch_btc_price_history') as mock_fetch:
+            # Return empty DataFrame
+            mock_fetch.return_value = pd.DataFrame()
+
+            with pytest.raises(RuntimeError, match="No BTC-USD price data available"):
+                plot.generate()
+
+    def test_calculate_running_cost_basis(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test running cost basis calculation."""
+        config = VizConfig(output_dir=temp_output_dir)
+        plot = OrangePlot(sample_backend, config)
+
+        # Get purchases from sample data
+        from src.python.db.queries import TradeQuery
+        trade_query = TradeQuery(sample_backend)
+        trades = trade_query.get_trade_cost('BTC', 'USD')
+        purchases = [t for t in trades if t['quantity'] > 0]
+
+        # Calculate cost basis
+        cost_basis_data = plot._calculate_running_cost_basis(purchases)
+
+        # Should have 2 cost basis points (2 purchases)
+        assert len(cost_basis_data) == 2
+
+        # First purchase: 0.5 BTC at $10,000 = $10,000 basis
+        assert cost_basis_data[0]['basis'] == pytest.approx(10000.0)
+
+        # Second purchase: (0.5*10000 + 0.3*12000) / (0.5 + 0.3) = 10750
+        expected_basis = (0.5 * 10000 + 0.3 * 12000) / (0.5 + 0.3)
+        assert cost_basis_data[1]['basis'] == pytest.approx(expected_basis)
+
+    def test_calculate_running_cost_basis_skips_none_prices(
+        self,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that cost basis calculation skips purchases with None unit_cost."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        # Add a BTC-EUR trade (counter currency is EUR, not USD)
+        # Request costs in USD, but don't add EUR-USD price data
+        backend.execute(
+            """
+            INSERT INTO ledger (
+                createddate, trans_type, buy_curr, buy, sell_curr, sell,
+                fee_curr, fee, exchange, "group", comment
+            ) VALUES
+            (:date1, 'Trade', 'BTC', 0.5, 'EUR', 4500.0, '', 0, 'Kraken', '', '')
+            """,
+            {'date1': '2020-01-15 10:00:00'}
+        )
+
+        # Don't add EUR-USD price data - unit_cost will be None when requesting USD costs
+
+        config = VizConfig(output_dir=temp_output_dir)
+        plot = OrangePlot(backend, config)
+
+        from src.python.db.queries import TradeQuery
+        trade_query = TradeQuery(backend)
+        # Request costs in USD, but trade is in EUR and no EUR-USD price available
+        trades = trade_query.get_trade_cost('BTC', 'USD')
+        purchases = [t for t in trades if t['quantity'] > 0]
+
+        # Calculate cost basis
+        cost_basis_data = plot._calculate_running_cost_basis(purchases)
+
+        # Should be empty since unit_cost is None (no EUR-USD conversion available)
+        assert len(cost_basis_data) == 0
+
+    def test_filter_to_date_range(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test filtering trades to date range."""
+        config = VizConfig(output_dir=temp_output_dir)
+        plot = OrangePlot(sample_backend, config)
+
+        from src.python.db.queries import TradeQuery
+        trade_query = TradeQuery(sample_backend)
+        trades = trade_query.get_trade_cost('BTC', 'USD')
+
+        # Filter to 2020 only
+        start = datetime(2020, 1, 1)
+        end = datetime(2020, 12, 31)
+        filtered = plot._filter_to_date_range(trades, start, end)
+
+        # Should have 2 trades (2 purchases in 2020)
+        assert len(filtered) == 2
+
+        # Sale in 2021 should be excluded
+        for trade in filtered:
+            date = trade['date']
+            if isinstance(date, str):
+                date = datetime.fromisoformat(date.replace('Z', '+00:00'))
+            assert start <= date <= end
+
+    def test_resolve_date_range_all(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test resolving 'all' date range preset."""
+        config = VizConfig(date_range='all', output_dir=temp_output_dir)
+        plot = OrangePlot(sample_backend, config)
+
+        start, end = plot._resolve_date_range()
+
+        # Should span from first trade (2020-01-15) to now
+        assert start.year == 2020
+        assert start.month == 1
+        assert start.day == 15
+
+    def test_resolve_date_range_ytd(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test resolving 'ytd' date range preset."""
+        config = VizConfig(date_range='ytd', output_dir=temp_output_dir)
+        plot = OrangePlot(sample_backend, config)
+
+        start, end = plot._resolve_date_range()
+
+        # Should be Jan 1 of current year to now
+        now = datetime.now()
+        assert start.year == now.year
+        assert start.month == 1
+        assert start.day == 1
+
+    def test_resolve_date_range_tuple(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test resolving tuple date range."""
+        start_date = datetime(2020, 6, 1)
+        end_date = datetime(2021, 6, 1)
+
+        config = VizConfig(
+            date_range=(start_date, end_date),
+            output_dir=temp_output_dir
+        )
+        plot = OrangePlot(sample_backend, config)
+
+        start, end = plot._resolve_date_range()
+
+        assert start == start_date
+        assert end == end_date
+
+    def test_output_path_includes_date(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that output path includes current date."""
+        config = VizConfig(output_dir=temp_output_dir)
+        plot = OrangePlot(sample_backend, config)
+
+        output_path = plot._get_output_path()
+
+        today = datetime.now().strftime('%Y-%m-%d')
+        assert today in output_path.name
+        assert output_path.name.startswith('btc_orange_plot_')
+        assert output_path.suffix == '.png'
+
+    def test_custom_dpi(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path,
+        sample_price_data: pd.DataFrame
+    ) -> None:
+        """Test orange plot with custom DPI."""
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir,
+            dpi=150
+        )
+
+        plot = OrangePlot(sample_backend, config)
+
+        with patch.object(plot.price_fetcher, 'fetch_btc_price_history') as mock_fetch:
+            mock_fetch.return_value = sample_price_data
+
+            output_path = plot.generate()
+
+            assert output_path.exists()

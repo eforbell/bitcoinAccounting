@@ -680,3 +680,54 @@ This pattern allows mypy to see types while handling missing dependencies gracef
 - Use temporary directories for cache in tests (`tempfile.TemporaryDirectory`)
 - Mock yfinance with `@patch('src.python.viz.data_fetcher.yf.Ticker')`
 - DataFrame comparisons: Use `pd.testing.assert_frame_equal(df1, df2, check_freq=False)` to ignore index frequency differences
+
+## VIZ-002: Orange Plot (Personal Bitcoin Accumulation Visualization)
+
+### Matplotlib Chart Generation
+- Figure creation: `fig, ax = plt.subplots(figsize=(10, 6))` for presentation-ready charts
+- Close figures after saving: `plt.close(fig)` to free memory and prevent warnings
+- Save with high DPI: `fig.savefig(output_path, dpi=config.dpi, bbox_inches='tight')` for print quality
+- Auto-format dates: `fig.autofmt_xdate()` nicely rotates and aligns date labels
+
+### Scatter Plot Sizing
+- Size parameter is in points^2, scale for visibility: `size = btc_amount * 500`
+- Transparency helps with overlapping points: `alpha=0.6`
+- Edge colors provide definition: `edgecolors="black", linewidth=0.5`
+- `zorder=5` ensures scatter points appear above line plots
+
+### Running Cost Basis Calculation
+- Pattern: Iterate chronologically, maintain cumulative sums
+- Formula: `running_basis = cumulative_cost / cumulative_btc`
+- Skip None values: `if purchase["unit_cost"] is None: continue` before accumulation
+- Sort by date first: `sorted(purchases, key=lambda t: t["date"])` to ensure correct order
+
+### Date Range Resolution
+- Preset strings ('ytd', '1y', '5y', 'all') vs tuple (start, end)
+- 'ytd': Jan 1 of current year to now
+- '1y': today minus 365 days
+- '5y': today minus 5 years (1825 days)
+- 'all': First transaction date to now (query ledger for min date)
+
+### DataFrame Index Lookups
+- Use `get_indexer([date], method='nearest')` to find closest date in price data
+- Returns array of indices, access with `[0]` for single value
+- Then use `.iloc[idx]` to retrieve the row/value
+
+### Trade Data from Database
+- TradeQuery.get_trade_cost() returns unit_cost based on trade currency
+- Direct trades (trade_curr == cost_currency): unit_cost comes from trade price (sell/buy ratio)
+- Cross-currency trades: unit_cost requires price lookup, may be None if unavailable
+- Test missing prices: Use different currency (e.g., EUR trade, USD costs, no EUR-USD conversion)
+
+### Chart Annotation and Summary Stats
+- Calculate totals from purchase list: `sum(p["quantity"] for p in purchases)`
+- Current value: `total_btc * latest_price`
+- Unrealized gain %: `((current_value - total_invested) / total_invested) * 100`
+- Include sign: `gain_sign = "+" if gain >= 0 else ""`
+- Display in subtitle: Multi-line title with `\n` separator
+
+### Color Palette (Bitcoin Theme)
+- Orange (#FF9500): BTC price line, purchase markers (the "orange pill")
+- Green (#34C759): Sales markers (returning to "greenbacks")
+- Blue (#007AFF): Cost basis line (dashed)
+- Black edges: Definition on scatter points
