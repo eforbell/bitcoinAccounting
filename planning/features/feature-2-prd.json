@@ -109,10 +109,33 @@
       "naming": "btc_orange_plot_YYYY-MM-DD.png, btc_balance_YYYY-MM-DD.png, etc."
     },
     "costBasisOverlay": {
-      "decision": "Include cost basis line on orange plot using existing BasisCalculator",
-      "implementation": "Calculate running average cost basis at each date using get_avg_purchase_price()",
+      "decision": "Include cost basis line on orange plot using existing TradeQuery",
+      "implementation": {
+        "dataSource": "TradeQuery.get_trade_cost('BTC', 'USD') - already sorted by date",
+        "algorithm": "Calculate running weighted average at each purchase",
+        "formula": "Running Basis = (Cumulative USD Invested) / (Cumulative BTC Acquired)",
+        "pseudocode": [
+          "trades = trade_query.get_trade_cost('BTC', 'USD')",
+          "purchases = [t for t in trades if t['quantity'] > 0 and t['unit_cost'] is not None]",
+          "",
+          "running_basis = []",
+          "cumulative_cost = 0",
+          "cumulative_btc = 0",
+          "",
+          "for purchase in purchases:",
+          "    cumulative_cost += purchase['unit_cost'] * purchase['quantity']",
+          "    cumulative_btc += purchase['quantity']",
+          "    avg_basis = cumulative_cost / cumulative_btc",
+          "    running_basis.append({'date': purchase['date'], 'basis': avg_basis})"
+        ],
+        "edgeCases": [
+          "Skip purchases with unit_cost = None (missing price data)",
+          "Only count purchases (quantity > 0), not sales",
+          "Handle first purchase (division by zero prevention)"
+        ]
+      },
       "display": "Dashed blue line showing USD invested per BTC over time",
-      "note": "Only show if sufficient purchase data exists"
+      "note": "Shows how cost basis evolved - interesting for DCA through market cycles"
     },
     "dataQueries": {
       "decision": "Leverage existing query classes - no new database queries",
@@ -197,12 +220,15 @@
         "Constructor takes: backend (DatabaseBackend), config (VizConfig)",
         "generate() method creates matplotlib figure:",
         "  - Fetch BTC-USD price history for date range",
-        "  - Get BTC purchases from TradeQuery.get_trades('BTC') where quantity > 0",
-        "  - Get BTC sales from TradeQuery.get_trades('BTC') where quantity < 0",
+        "  - Get BTC trade costs from TradeQuery.get_trade_cost('BTC', 'USD')",
+        "  - Filter to purchases (quantity > 0) and sales (quantity < 0)",
         "  - Plot BTC-USD price as orange line",
         "  - Overlay purchases as large orange scatter points (size = BTC amount * scale_factor)",
         "  - Overlay sales as green scatter points",
-        "  - Optional: Add cost basis line using BasisCalculator",
+        "  - Optional: Add cost basis line using running calculation (see costBasisOverlay in keyDecisions):",
+        "    - Iterate through purchases chronologically",
+        "    - Calculate running weighted average: cumulative_cost / cumulative_btc",
+        "    - Plot as dashed blue line showing basis evolution over time",
         "  - Add grid, legend, title, axis labels",
         "  - Support log scale via config.log_scale",
         "Save to config.output_dir / 'btc_orange_plot_{date}.png'",
