@@ -731,3 +731,44 @@ This pattern allows mypy to see types while handling missing dependencies gracef
 - Green (#34C759): Sales markers (returning to "greenbacks")
 - Blue (#007AFF): Cost basis line (dashed)
 - Black edges: Definition on scatter points
+
+## VIZ-003: Balance Chart (Bitcoin Stack Growth Over Time)
+
+### Area Chart with Fill
+- Plot line and fill area simultaneously:
+  ```python
+  ax.plot(dates, balances, color='#FF9500', linewidth=2.5, label='BTC Balance')
+  ax.fill_between(dates, balances, alpha=0.3, color='#FF9500', label='Accumulated BTC')
+  ```
+- `fill_between()` creates shaded area under curve
+- Use `alpha=0.3` for semi-transparent fill that doesn't obscure data
+
+### Cumulative Balance Calculation
+- Pattern: Initialize at 0, iterate chronologically, sum quantities
+- Add start point (date=start, balance=0) and end point (date=end, balance=final)
+- This creates smooth line from origin to current date
+- Sort trades by date BEFORE accumulation: `sorted(trades, key=lambda t: t['date'])`
+
+### Milestone Markers (Horizontal Lines)
+- Use `ax.axhline()` for horizontal reference lines
+- Style: `linestyle=':'` (dotted), `alpha=0.5`, `color='gray'`
+- Add text labels on right side: `ax.text(end_date, milestone, ' X.XX BTC', ha='left')`
+- Standard Bitcoin milestones: 0.01, 0.1, 0.5, 1, 2, 5, 10, 21, 50, 100
+- Only show milestones up to 110% of max balance
+
+### Negative Balance Detection
+- Check during calculation loop: `if balance < -0.00000001`
+- Allow small negative values for floating point errors
+- Issue warning with `warnings.warn(msg, RuntimeWarning)`
+- Continue processing (don't fail) - negative balance may be data error but chart is still useful
+
+### Single Transaction Edge Case
+- Still creates valid chart: start point (0) → transaction point → end point (final)
+- Results in simple 2-segment line
+- No special handling needed with start/end point pattern
+
+### Balance Data Structure
+- List of dicts: `[{'date': datetime, 'balance': float}, ...]`
+- Always sorted by date
+- Include start point, all transaction points, and end point
+- Makes plotting straightforward: extract to parallel lists

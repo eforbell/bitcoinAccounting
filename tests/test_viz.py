@@ -1,4 +1,4 @@
-"""Tests for visualization infrastructure (VIZ-001 and VIZ-002)."""
+"""Tests for visualization infrastructure (VIZ-001, VIZ-002, and VIZ-003)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 from src.python.db import SqliteBackend
+from src.python.viz.balance_chart import BalanceChart
 from src.python.viz.config import VizConfig
 from src.python.viz.data_fetcher import PriceDataFetcher
 from src.python.viz.orange_plot import OrangePlot
@@ -665,3 +666,328 @@ class TestOrangePlot:
             output_path = plot.generate()
 
             assert output_path.exists()
+
+class TestBalanceChart:
+    """Tests for BalanceChart class (VIZ-003)."""
+
+    @pytest.fixture
+    def temp_output_dir(self) -> Path:
+        """Create a temporary output directory for testing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+
+    @pytest.fixture
+    def sample_backend(self) -> SqliteBackend:
+        """Create an in-memory SQLite backend with sample data."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        # Add sample BTC trades over time
+        backend.execute(
+            """
+            INSERT INTO ledger (
+                createddate, trans_type, buy_curr, buy, sell_curr, sell,
+                fee_curr, fee, exchange, "group", comment
+            ) VALUES
+            -- Purchase 1: 0.5 BTC on 2020-01-15
+            (:date1, 'Trade', 'BTC', 0.5, 'USD', 5000.0, '', 0, 'Coinbase', '', ''),
+            -- Purchase 2: 0.3 BTC on 2020-06-01
+            (:date2, 'Trade', 'BTC', 0.3, 'USD', 3600.0, '', 0, 'Coinbase', '', ''),
+            -- Purchase 3: 0.2 BTC on 2021-01-01
+            (:date3, 'Trade', 'BTC', 0.2, 'USD', 3000.0, '', 0, 'Coinbase', '', ''),
+            -- Sale 1: 0.1 BTC on 2021-06-01
+            (:date4, 'Trade', 'USD', 1500.0, 'BTC', 0.1, '', 0, 'Coinbase', '', '')
+            """,
+            {
+                'date1': '2020-01-15 10:00:00',
+                'date2': '2020-06-01 14:30:00',
+                'date3': '2021-01-01 09:00:00',
+                'date4': '2021-06-01 12:00:00',
+            }
+        )
+
+        return backend
+
+    def test_balance_chart_basic_generation(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test basic balance chart generation."""
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir
+        )
+
+        chart = BalanceChart(sample_backend, config)
+        output_path = chart.generate()
+
+        # Verify file was created
+        assert output_path.exists()
+        assert output_path.suffix == '.png'
+        assert 'btc_balance' in output_path.name
+
+    def test_cumulative_balance_calculation(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test cumulative balance calculation."""
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = BalanceChart(sample_backend, config)
+
+        from src.python.db.queries import TradeQuery
+        trade_query = TradeQuery(sample_backend)
+        trades = trade_query.get_trades('BTC')
+
+        start = datetime(2020, 1, 1)
+        end = datetime(2021, 12, 31)
+        balance_data = chart._calculate_cumulative_balance(trades, start, end)
+
+        # Should have: start point, 4 trades, end point = 6 points
+        assert len(balance_data) >= 5
+
+        # Verify cumulative balance progression
+        # Start: 0, +0.5, +0.3, +0.2, -0.1 = 0.9 final
+        final_balance = balance_data[-1]['balance']
+        assert final_balance == pytest.approx(0.9)
+
+    def test_balance_chart_empty_ledger(
+        self,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that empty ledger raises ValueError."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir
+        )
+
+        chart = BalanceChart(backend, config)
+
+        with pytest.raises(ValueError, match="No Bitcoin transactions found"):
+            chart.generate()
+
+    def test_balance_chart_single_transaction(
+        self,
+        temp_output_dir: Path
+    ) -> None:
+        """Test balance chart with single transaction."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        # Add single trade
+        backend.execute(
+            """
+            INSERT INTO ledger (
+                createddate, trans_type, buy_curr, buy, sell_curr, sell,
+                fee_curr, fee, exchange, "group", comment
+            ) VALUES
+            (:date1, 'Trade', 'BTC', 1.0, 'USD', 10000.0, '', 0, 'Coinbase', '', '')
+            """,
+            {'date1': '2020-01-15 10:00:00'}
+        )
+
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir
+        )
+
+        chart = BalanceChart(backend, config)
+        output_path = chart.generate()
+
+        assert output_path.exists()
+
+    def test_balance_chart_negative_balance_warning(
+        self,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that negative balance triggers warning."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        # Add trades that result in negative balance
+        backend.execute(
+            """
+            INSERT INTO ledger (
+                createddate, trans_type, buy_curr, buy, sell_curr, sell,
+                fee_curr, fee, exchange, "group", comment
+            ) VALUES
+            -- Purchase 0.5 BTC
+            (:date1, 'Trade', 'BTC', 0.5, 'USD', 5000.0, '', 0, 'Coinbase', '', ''),
+            -- Sell 1.0 BTC (more than we have!)
+            (:date2, 'Trade', 'USD', 10000.0, 'BTC', 1.0, '', 0, 'Coinbase', '', '')
+            """,
+            {
+                'date1': '2020-01-15 10:00:00',
+                'date2': '2020-06-01 14:30:00',
+            }
+        )
+
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir
+        )
+
+        chart = BalanceChart(backend, config)
+
+        # Should warn about negative balance
+        with pytest.warns(RuntimeWarning, match="Negative balance detected"):
+            output_path = chart.generate()
+
+        assert output_path.exists()
+
+    def test_milestone_calculation(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test milestone marker calculation."""
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = BalanceChart(sample_backend, config)
+
+        # Test with 0.9 BTC final balance
+        milestones = chart._calculate_milestones(0.9)
+
+        # Should include: 0.01, 0.1, 0.5
+        assert 0.01 in milestones
+        assert 0.1 in milestones
+        assert 0.5 in milestones
+
+        # Should not include 1 BTC (above max)
+        assert 1 not in milestones
+
+    def test_milestone_calculation_high_balance(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test milestone calculation with high balance."""
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = BalanceChart(sample_backend, config)
+
+        # Test with 150 BTC
+        milestones = chart._calculate_milestones(150)
+
+        # Should include standard milestones
+        assert 21 in milestones  # Special Bitcoin number
+        assert 100 in milestones
+
+    def test_resolve_date_range_all(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test resolving 'all' date range preset."""
+        config = VizConfig(date_range='all', output_dir=temp_output_dir)
+        chart = BalanceChart(sample_backend, config)
+
+        from src.python.db.queries import TradeQuery
+        trade_query = TradeQuery(sample_backend)
+        trades = trade_query.get_trades('BTC')
+
+        start, end = chart._resolve_date_range(trades)
+
+        # Should span from first trade (2020-01-15) to now
+        assert start.year == 2020
+        assert start.month == 1
+        assert start.day == 15
+
+    def test_resolve_date_range_ytd(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test resolving 'ytd' date range preset."""
+        config = VizConfig(date_range='ytd', output_dir=temp_output_dir)
+        chart = BalanceChart(sample_backend, config)
+
+        from src.python.db.queries import TradeQuery
+        trade_query = TradeQuery(sample_backend)
+        trades = trade_query.get_trades('BTC')
+
+        start, end = chart._resolve_date_range(trades)
+
+        # Should be Jan 1 of current year to now
+        now = datetime.now()
+        assert start.year == now.year
+        assert start.month == 1
+        assert start.day == 1
+
+    def test_resolve_date_range_tuple(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test resolving tuple date range."""
+        start_date = datetime(2020, 6, 1)
+        end_date = datetime(2021, 6, 1)
+
+        config = VizConfig(
+            date_range=(start_date, end_date),
+            output_dir=temp_output_dir
+        )
+        chart = BalanceChart(sample_backend, config)
+
+        from src.python.db.queries import TradeQuery
+        trade_query = TradeQuery(sample_backend)
+        trades = trade_query.get_trades('BTC')
+
+        start, end = chart._resolve_date_range(trades)
+
+        assert start == start_date
+        assert end == end_date
+
+    def test_output_path_includes_date(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that output path includes current date."""
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = BalanceChart(sample_backend, config)
+
+        output_path = chart._get_output_path()
+
+        today = datetime.now().strftime('%Y-%m-%d')
+        assert today in output_path.name
+        assert output_path.name.startswith('btc_balance_')
+        assert output_path.suffix == '.png'
+
+    def test_custom_dpi(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test balance chart with custom DPI."""
+        config = VizConfig(
+            date_range='all',
+            output_dir=temp_output_dir,
+            dpi=150
+        )
+
+        chart = BalanceChart(sample_backend, config)
+        output_path = chart.generate()
+
+        assert output_path.exists()
+
+    def test_date_range_filtering(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that trades outside date range are excluded."""
+        config = VizConfig(output_dir=temp_output_dir)
+        chart = BalanceChart(sample_backend, config)
+
+        from src.python.db.queries import TradeQuery
+        trade_query = TradeQuery(sample_backend)
+        trades = trade_query.get_trades('BTC')
+
+        # Filter to 2020 only
+        start = datetime(2020, 1, 1)
+        end = datetime(2020, 12, 31)
+        balance_data = chart._calculate_cumulative_balance(trades, start, end)
+
+        # Should only include 2 trades from 2020 (+ start/end points)
+        # Verify no 2021 trades included
+        for point in balance_data:
+            assert point['date'] <= end
