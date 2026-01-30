@@ -1,0 +1,394 @@
+{
+  "branchName": "feature/bitcoin-visualizations",
+  "projectName": "Bitcoin Portfolio Visualizations",
+  "description": "Generate compelling visual insights into Bitcoin accumulation strategy and holdings with focus on personal 'orange plot' (Saylor-style) showing purchases against BTC-USD price history",
+  "principles": [
+    "Bitcoin-first focus - all visualizations centered on BTC",
+    "Data-driven insights - every chart tells a clear story about your stack",
+    "Use existing query infrastructure - no new database queries needed",
+    "Simple PNG outputs - easy to share, embed in reports, post to social media",
+    "Smart defaults with configurability - works out of box, customizable for power users",
+    "Comprehensive test coverage - all chart generation logic tested"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "plotting": "matplotlib (existing)",
+    "dataManipulation": "pandas (existing)",
+    "priceData": "yfinance (new - Yahoo Finance API)",
+    "pdfGeneration": "reportlab (optional - for VIZ-006 enhancement)",
+    "testing": "pytest + pytest-cov"
+  },
+  "testingRequirements": {
+    "coverage": "Minimum 85% line coverage for visualization code",
+    "unitTests": "Test data transformation and calculation logic",
+    "integrationTests": "Test chart generation with sample data (verify files created)",
+    "edgeCases": "Empty ledger, single transaction, missing price data, future dates",
+    "visualRegression": "Manual review of generated PNGs (automated pixel-diff testing optional)"
+  },
+  "fileStructure": {
+    "description": "New visualization package lives in src/python/viz/ package",
+    "layout": {
+      "src/python/viz/": {
+        "__init__.py": "Exports: OrangePlot, BalanceChart, CustodyChart, VizConfig",
+        "config.py": "VizConfig dataclass: date ranges, output paths, chart styling",
+        "data_fetcher.py": "PriceDataFetcher class: fetch BTC-USD from yfinance, cache locally",
+        "orange_plot.py": "OrangePlot class: generate Saylor-style purchase visualization",
+        "balance_chart.py": "BalanceChart class: BTC balance growth over time",
+        "custody_chart.py": "CustodyChart class: stacked area chart by custody type",
+        "report.py": "OPTIONAL (VIZ-006): PDF report generator combining all charts"
+      },
+      "src/scripts/": {
+        "btc_viz": "NEW - CLI script to generate visualizations"
+      },
+      "tests/": {
+        "test_viz_data.py": "NEW - test data fetching and transformation",
+        "test_orange_plot.py": "NEW - test orange plot logic",
+        "test_balance_chart.py": "NEW - test balance chart generation",
+        "test_custody_chart.py": "NEW - test custody breakdown",
+        "fixtures/": {
+          "sample_ledger.json": "Sample transaction data for testing",
+          "sample_btc_prices.json": "Cached BTC-USD prices for offline tests"
+        }
+      },
+      "output/": {
+        "viz/": "Default output directory for generated charts (in .gitignore)"
+      }
+    }
+  },
+  "keyDecisions": {
+    "priceDataSource": {
+      "decision": "Use yfinance library for BTC-USD historical prices",
+      "rationale": "Free, reliable, widely used. User confirmed yfinance works for BTC-USD from separate effort.",
+      "caching": "Cache fetched price data locally to avoid repeated API calls",
+      "ticker": "BTC-USD on Yahoo Finance"
+    },
+    "dateRanges": {
+      "decision": "Configurable date ranges with smart presets",
+      "presets": {
+        "ytd": "Year-to-date (Jan 1 of current year to today)",
+        "1y": "Last 365 days",
+        "5y": "Last 5 years",
+        "all": "From first transaction to today (default)"
+      },
+      "custom": "Support --start-date and --end-date flags for custom ranges"
+    },
+    "chartStyling": {
+      "orangePlot": {
+        "background": "White or light gray",
+        "priceLinе": "Orange line (BTC price history)",
+        "buyMarkers": "Large orange dots (size proportional to BTC amount)",
+        "sellMarkers": "Green dots (returning to 'greenbacks')",
+        "costBasisLine": "Dashed blue line (if implemented)",
+        "title": "Personal Orange Plot - Bitcoin Accumulation Strategy",
+        "xAxis": "Date",
+        "yAxis": "BTC-USD Price (log scale optional)"
+      },
+      "balanceChart": {
+        "line": "Orange line showing cumulative BTC balance",
+        "fill": "Light orange area under curve",
+        "title": "Bitcoin Balance Growth Over Time",
+        "xAxis": "Date",
+        "yAxis": "BTC Balance"
+      },
+      "custodyChart": {
+        "areas": "Stacked areas by custody type (self-custodied on bottom, custodial on top)",
+        "colors": {
+          "self-custodied": "Green (sovereignty)",
+          "custodial": "Orange (risk/convenience)",
+          "multisig": "Blue (collaborative security)"
+        },
+        "title": "Bitcoin Holdings by Custody Type",
+        "xAxis": "Date",
+        "yAxis": "BTC Balance"
+      }
+    },
+    "outputFormat": {
+      "primary": "PNG files (one per chart)",
+      "resolution": "300 DPI for print quality",
+      "dimensions": "10x6 inches (standard presentation size)",
+      "naming": "btc_orange_plot_YYYY-MM-DD.png, btc_balance_YYYY-MM-DD.png, etc."
+    },
+    "costBasisOverlay": {
+      "decision": "Include cost basis line on orange plot using existing BasisCalculator",
+      "implementation": "Calculate running average cost basis at each date using get_avg_purchase_price()",
+      "display": "Dashed blue line showing USD invested per BTC over time",
+      "note": "Only show if sufficient purchase data exists"
+    },
+    "dataQueries": {
+      "decision": "Leverage existing query classes - no new database queries",
+      "sources": {
+        "purchases": "TradeQuery.get_trades('BTC') filtered to quantity > 0",
+        "sales": "TradeQuery.get_trades('BTC') filtered to quantity < 0",
+        "balance": "BalanceCalculator.get_balance('BTC') at each date",
+        "custody": "Join ledger with wallets table on exchange = wallet_id",
+        "costBasis": "BasisCalculator.get_avg_purchase_price('BTC') at each date"
+      }
+    },
+    "errorHandling": {
+      "missingPriceData": "Warn user, generate chart with available data",
+      "emptyLedger": "Show friendly message: 'No Bitcoin transactions found. Start stacking!'",
+      "apiFailure": "Fall back to cached data if available, clear error message otherwise",
+      "invalidDateRange": "Validate start < end, dates not in future"
+    }
+  },
+  "cliInterface": {
+    "script": "src/scripts/btc_viz",
+    "examples": [
+      "btc_viz                          # Generate all charts, all-time data",
+      "btc_viz --range ytd              # Year-to-date only",
+      "btc_viz --range 5y               # Last 5 years",
+      "btc_viz --chart orange           # Only orange plot",
+      "btc_viz --chart balance          # Only balance chart",
+      "btc_viz --start-date 2023-01-01 --end-date 2023-12-31  # Custom range",
+      "btc_viz --output ~/Desktop/      # Custom output directory",
+      "btc_viz --no-cost-basis          # Skip cost basis overlay"
+    ],
+    "flags": {
+      "--range": "Date range preset: ytd, 1y, 5y, all (default: all)",
+      "--start-date": "Custom start date (YYYY-MM-DD)",
+      "--end-date": "Custom end date (YYYY-MM-DD, default: today)",
+      "--chart": "Specific chart to generate: orange, balance, custody, all (default: all)",
+      "--output": "Output directory (default: output/viz/)",
+      "--no-cost-basis": "Disable cost basis overlay on orange plot",
+      "--log-scale": "Use logarithmic Y-axis for orange plot",
+      "--format": "Output format: png (default), svg (future)",
+      "--dpi": "Resolution in DPI (default: 300)"
+    },
+    "output": {
+      "success": "Generated charts in output/viz/:\n  - btc_orange_plot_2026-01-28.png\n  - btc_balance_2026-01-28.png\n  - btc_custody_2026-01-28.png",
+      "summary": "Date range: 2020-01-01 to 2026-01-28 (6 years)\nTransactions: 47 purchases, 3 sales\nTotal invested: $85,234.50\nCurrent value: $127,483.00 (+49.5%)"
+    }
+  },
+  "userStories": [
+    {
+      "id": "VIZ-001",
+      "title": "Visualization infrastructure and price data fetching",
+      "acceptanceCriteria": [
+        "Create src/python/viz/ package with __init__.py",
+        "Create viz/config.py with VizConfig dataclass:",
+        "  - date_range: str (preset) or tuple of dates",
+        "  - output_dir: Path",
+        "  - chart_types: List[str]",
+        "  - include_cost_basis: bool",
+        "  - log_scale: bool",
+        "  - dpi: int",
+        "Create viz/data_fetcher.py with PriceDataFetcher class:",
+        "  - fetch_btc_price_history(start_date, end_date) -> pd.DataFrame",
+        "  - Uses yfinance to fetch BTC-USD ticker data",
+        "  - Returns DataFrame with columns: date, open, high, low, close, volume",
+        "  - Caches data locally to ~/.cryptoaccounting/cache/btc_prices.parquet",
+        "  - Only re-fetches data for dates not in cache",
+        "  - Handles API failures gracefully with clear error messages",
+        "Add yfinance to requirements.txt",
+        "Unit tests: PriceDataFetcher with mocked yfinance",
+        "Unit tests: Cache read/write logic",
+        "Unit tests: Date range validation",
+        "Unit tests: Error handling for API failures"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Foundation for all visualizations. yfinance is well-established library."
+    },
+    {
+      "id": "VIZ-002",
+      "title": "Orange Plot - Personal Bitcoin accumulation visualization",
+      "acceptanceCriteria": [
+        "Create viz/orange_plot.py with OrangePlot class",
+        "Constructor takes: backend (DatabaseBackend), config (VizConfig)",
+        "generate() method creates matplotlib figure:",
+        "  - Fetch BTC-USD price history for date range",
+        "  - Get BTC purchases from TradeQuery.get_trades('BTC') where quantity > 0",
+        "  - Get BTC sales from TradeQuery.get_trades('BTC') where quantity < 0",
+        "  - Plot BTC-USD price as orange line",
+        "  - Overlay purchases as large orange scatter points (size = BTC amount * scale_factor)",
+        "  - Overlay sales as green scatter points",
+        "  - Optional: Add cost basis line using BasisCalculator",
+        "  - Add grid, legend, title, axis labels",
+        "  - Support log scale via config.log_scale",
+        "Save to config.output_dir / 'btc_orange_plot_{date}.png'",
+        "Annotation: Show total BTC purchased, total USD invested on chart",
+        "Edge case: Handle empty ledger (no transactions)",
+        "Edge case: Handle missing price data for some dates",
+        "Unit tests: Data transformation logic (trades to scatter points)",
+        "Integration test: Generate chart with sample data, verify file created"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This is the star feature! Emotional impact. Like Saylor's Strategy plot."
+    },
+    {
+      "id": "VIZ-003",
+      "title": "Balance growth chart - BTC stack over time",
+      "acceptanceCriteria": [
+        "Create viz/balance_chart.py with BalanceChart class",
+        "Constructor takes: backend (DatabaseBackend), config (VizConfig)",
+        "generate() method creates matplotlib figure:",
+        "  - Get all BTC transactions ordered by date",
+        "  - Calculate cumulative balance at each transaction date",
+        "  - Plot balance as orange line chart",
+        "  - Fill area under curve with light orange",
+        "  - Add milestone markers (e.g., 0.1 BTC, 1 BTC, 10 BTC)",
+        "  - Show current balance in title or annotation",
+        "  - Add grid, legend, title, axis labels",
+        "Save to config.output_dir / 'btc_balance_{date}.png'",
+        "Edge case: Single transaction (show as single point + projection)",
+        "Edge case: Balance goes negative (shouldn't happen, but show warning)",
+        "Unit tests: Cumulative balance calculation",
+        "Integration test: Generate chart, verify file exists"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Simple but powerful - shows your stack growth at a glance."
+    },
+    {
+      "id": "VIZ-004",
+      "title": "Custody breakdown - Stacked area chart by wallet type",
+      "acceptanceCriteria": [
+        "Create viz/custody_chart.py with CustodyChart class",
+        "Constructor takes: backend (DatabaseBackend), config (VizConfig)",
+        "generate() method creates matplotlib figure:",
+        "  - Query ledger JOIN wallets on exchange = wallet_id",
+        "  - Group BTC balance by custody type (self-custodied, custodial, multisig) over time",
+        "  - Create stacked area chart:",
+        "    - Green: self-custodied (on bottom)",
+        "    - Orange: custodial",
+        "    - Blue: multisig",
+        "  - Add legend showing current balance per custody type",
+        "  - Add annotations for major custody transitions",
+        "  - Title: 'Bitcoin Holdings by Custody Type'",
+        "Save to config.output_dir / 'btc_custody_{date}.png'",
+        "Edge case: Transactions with no wallet metadata (unknown custody = gray)",
+        "Edge case: All in one custody type (show single area, not stack)",
+        "Unit tests: Balance grouping by custody type",
+        "Integration test: Generate chart with mixed custody transactions"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Shows progress toward self-sovereignty. Motivational."
+    },
+    {
+      "id": "VIZ-005",
+      "title": "CLI script and documentation",
+      "acceptanceCriteria": [
+        "Create src/scripts/btc_viz executable script",
+        "Script imports _bootstrap (for db and viz packages)",
+        "Parse command-line arguments:",
+        "  - --range: ytd, 1y, 5y, all (default: all)",
+        "  - --start-date, --end-date: custom date range",
+        "  - --chart: orange, balance, custody, all (default: all)",
+        "  - --output: output directory",
+        "  - --no-cost-basis: disable cost basis overlay",
+        "  - --log-scale: use log Y-axis",
+        "  - --dpi: output resolution",
+        "Convert args to VizConfig object",
+        "Instantiate appropriate chart classes based on --chart flag",
+        "Call generate() on each chart",
+        "Print summary:",
+        "  - Date range covered",
+        "  - Number of transactions",
+        "  - Total BTC purchased/sold",
+        "  - Total USD invested",
+        "  - Current value (if price data available)",
+        "  - Output file paths",
+        "Error handling: Missing database, no transactions, API failures",
+        "Update README.md with visualization section and btc_viz examples",
+        "Add output/viz/ to .gitignore",
+        "Integration test: Run btc_viz with sample database, verify all charts generated"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Brings it all together. User-facing interface must be polished."
+    },
+    {
+      "id": "VIZ-006",
+      "title": "OPTIONAL: PDF report generation combining all charts",
+      "acceptanceCriteria": [
+        "Create viz/report.py with PDFReport class",
+        "Requires reportlab library (add to requirements.txt)",
+        "generate() method creates multi-page PDF:",
+        "  - Cover page: Title, date range, summary stats",
+        "  - Page 2: Orange plot (full page)",
+        "  - Page 3: Balance chart + custody chart (half page each)",
+        "  - Page 4: Optional text summary and insights",
+        "Save to config.output_dir / 'btc_report_{date}.pdf'",
+        "Add --pdf flag to btc_viz script",
+        "Update documentation with PDF example",
+        "Unit tests: PDF generation (verify file created, not corrupted)"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Enhancement. PDF makes it easy to share with accountant, financial advisor, or just archive."
+    }
+  ],
+  "futureEnhancements": [
+    "Interactive Plotly charts (hover for transaction details)",
+    "Multi-coin support (ETH, other assets)",
+    "Performance metrics dashboard (IRR, Sharpe ratio, etc.)",
+    "Export charts as SVG for vector graphics",
+    "Web-based dashboard with live updates",
+    "Comparison with major Bitcoin holders (MicroStrategy, Tesla, etc.)",
+    "DCA simulation: 'What if I had bought $X every week since Y?'",
+    "Tax-year specific visualizations for IRS reporting"
+  ],
+  "riskAssessment": {
+    "high": [
+      "yfinance API reliability - data source could change or rate limit",
+      "Chart rendering edge cases - matplotlib quirks with empty data, extreme values"
+    ],
+    "medium": [
+      "Date range calculations - timezone handling, DST transitions",
+      "Custody grouping - incomplete wallet metadata in existing ledgers"
+    ],
+    "low": [
+      "Color scheme preferences - users may want customization",
+      "PDF generation - reportlab dependency adds complexity"
+    ]
+  },
+  "designMockups": {
+    "orangePlot": {
+      "description": "Line chart with scatter overlay",
+      "elements": [
+        "Background: White",
+        "BTC-USD price line: Thick orange line (#FF9500)",
+        "Purchase markers: Large orange circles (size = BTC amount)",
+        "Sale markers: Medium green circles (#34C759)",
+        "Cost basis line (optional): Dashed blue line (#007AFF)",
+        "Grid: Light gray dotted lines",
+        "Title: 'Personal Orange Plot - Bitcoin Accumulation'",
+        "Subtitle: 'Total Invested: $X | Current Value: $Y | Unrealized Gain: +Z%'",
+        "X-axis: Date (smart tick intervals based on range)",
+        "Y-axis: USD (linear or log scale)",
+        "Legend: Top-right, shows price, purchases, sales, cost basis"
+      ]
+    },
+    "balanceChart": {
+      "description": "Area chart showing cumulative BTC balance",
+      "elements": [
+        "Background: White",
+        "Balance line: Thick orange line with filled area below",
+        "Fill: Light orange gradient (darker at top)",
+        "Milestone markers: Dotted horizontal lines at 0.1, 1, 10 BTC",
+        "Current balance annotation: Large text at top-right",
+        "Title: 'Bitcoin Stack Growth Over Time'",
+        "X-axis: Date",
+        "Y-axis: BTC"
+      ]
+    },
+    "custodyChart": {
+      "description": "Stacked area chart by custody type",
+      "elements": [
+        "Background: White",
+        "Areas stacked (bottom to top):",
+        "  - Self-custodied: Green (#34C759)",
+        "  - Custodial: Orange (#FF9500)",
+        "  - Multisig: Blue (#007AFF)",
+        "  - Unknown: Gray (#8E8E93)",
+        "Legend: Shows current BTC balance per custody type",
+        "Title: 'Bitcoin Holdings by Custody Type'",
+        "Subtitle: 'Self-Sovereignty Index: X% self-custodied'",
+        "X-axis: Date",
+        "Y-axis: BTC"
+      ]
+    }
+  }
+}
