@@ -4,3 +4,5 @@ matplotlib
 prompt_toolkit
 requests
 python-dotenv
+yfinance
+pyarrow
