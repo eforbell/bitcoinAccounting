@@ -543,3 +543,45 @@
 
 ---
 
+## 2026-01-30 - VIZ-003
+
+- What was implemented:
+  - Created `src/python/viz/balance_chart.py` with BalanceChart class
+  - generate() method creates matplotlib area chart with:
+    - Orange line showing cumulative BTC balance over time
+    - Filled area under curve (light orange with alpha=0.3)
+    - Milestone markers: dotted horizontal lines at 0.01, 0.1, 0.5, 1, 2, 5, 10, 21, 50, 100 BTC
+    - Text labels for each milestone on right side
+    - Current balance displayed in subtitle
+    - Grid and legend
+  - Cumulative balance calculation from trade history
+  - Start point (date=start, balance=0) and end point (date=end, balance=final)
+  - Date range resolution: supports presets and custom tuples
+  - Negative balance detection with RuntimeWarning
+  - Handles single transaction edge case
+  - 13 comprehensive unit tests covering all scenarios
+
+- Files changed:
+  - `src/python/viz/balance_chart.py` (new - 273 lines)
+  - `src/python/viz/__init__.py` (modified - export BalanceChart)
+  - `tests/test_viz.py` (modified - added TestBalanceChart class with 13 tests)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-003 passes: true)
+  - `AGENTS.md` (updated - area charts, milestone markers, negative balance detection)
+
+- **Learnings:**
+  - Area charts: Use `ax.plot()` for line, then `ax.fill_between()` for shaded area
+  - `fill_between(dates, balances, alpha=0.3, color='#FF9500')` creates semi-transparent fill
+  - Cumulative calculation pattern: initialize at 0, sort by date, accumulate quantities
+  - Start/end points create smooth line: [(start, 0), ...transactions..., (end, final)]
+  - Milestone markers: `ax.axhline(y=milestone, linestyle=':', alpha=0.5, color='gray')`
+  - Text labels on right: `ax.text(end_date, milestone, ' X.XX BTC', ha='left', va='center')`
+  - Standard Bitcoin milestones: 0.01 (1M sats), 0.1 (10M sats), 1, 10, 21 (special), 50, 100
+  - Milestone calculation: show up to 110% of max balance, add 100-unit intervals for high balances
+  - Negative balance check: `if balance < -0.00000001` (allow floating point errors)
+  - Use `warnings.warn(msg, RuntimeWarning)` for negative balance - continues processing
+  - Single transaction edge case: works naturally with start/end point pattern (3 points total)
+  - Date range filtering: skip trades outside range during cumulative calculation
+  - 179 total tests passing (166 existing + 13 new BalanceChart tests), zero regressions
+
+---
+

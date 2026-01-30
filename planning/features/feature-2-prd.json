@@ -263,7 +263,7 @@
         "Integration test: Generate chart, verify file exists"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Simple but powerful - shows your stack growth at a glance."
     },
     {
