@@ -837,3 +837,66 @@ This pattern allows mypy to see types while handling missing dependencies gracef
 - Include current balance in each label: "Self-Custodied: 0.60000000 BTC"
 - Use `.replace('-', ' ').title()` to format custody type names
 - Position: "upper left" so it doesn't obscure data
+
+## VIZ-005: CLI Script (btc_viz - Brings It All Together)
+
+### Argparse CLI Pattern
+- Use `argparse.ArgumentParser()` with `formatter_class=argparse.RawDescriptionHelpFormatter` for formatted epilog
+- Mutually exclusive groups: `parser.add_mutually_exclusive_group()` for `--range` vs `--start-date`
+- Action flags: `action="store_true"` for boolean flags like `--no-cost-basis`
+- Choices validation: `choices=['ytd', '1y', '5y', 'all']` for enum-like arguments
+- Type conversion: `type=int` for numeric arguments like `--dpi`
+
+### Argument Validation
+- Separate validation function: `validate_arguments(args)` after parsing
+- Check logical constraints: `--start-date` requires `--end-date`
+- Validate formats: `datetime.strptime(date_str, "%Y-%m-%d")` catches bad formats
+- Check ranges: dates not in future, DPI between 72-600
+- Raise `ValueError` with clear message on validation failure
+
+### Date Range Resolution
+- Convert preset strings to actual date tuples: "ytd" → (Jan 1, today)
+- Custom dates: parse with `datetime.strptime()`, default end to `datetime.now()`
+- Return union type: `str | tuple[datetime, datetime]` for flexibility
+- Pass through to VizConfig which handles both formats
+
+### Chart Generation Orchestration
+- Loop through requested chart types: ["orange", "balance", "custody"]
+- Try/except per chart: don't let one failure stop others
+- Track generated charts: `dict[str, Path]` mapping chart type to output file
+- Track errors separately: continue on error, report at end
+- Print progress: "Generating orange plot..." with ✓/✗ indicators
+
+### Summary Statistics
+- Optional summary (don't fail if it errors)
+- Query trades, calculate totals, get current price
+- Display: date range, transaction counts, total BTC, total USD, current value, unrealized gain
+- List generated chart paths with checkmarks
+- Use separator lines (=====) for visual structure
+
+### Exit Codes
+- 0: Success (all requested charts generated)
+- 1: Argument validation error
+- 2: No transaction data
+- 3: All chart generation failed
+- 130: KeyboardInterrupt (Ctrl+C)
+
+### Error Handling Strategy
+- `ValueError`: Validation errors (exit 1)
+- `RuntimeError` with "No Bitcoin transactions": No data (exit 2)
+- `KeyboardInterrupt`: User cancelled (exit 130)
+- Other exceptions: Unexpected error with traceback (exit 3)
+- Partial success: Generate what we can, warn about failures, exit 0
+
+### Module Imports in Scripts
+- Add `src/python` to `sys.path`: `sys.path.insert(0, str(Path(__file__).parent.parent / "python"))`
+- Use package imports: `from db import get_backend` (not `from src.python.db`)
+- Add `from __future__ import annotations` for Python 3.9 compatibility with `|` union syntax
+
+### Testing CLI Scripts
+- Use `subprocess.run()` to invoke script (more realistic than importing)
+- Test help flag: `--help` returns 0 and shows usage
+- Test validation: invalid arguments return exit code 1
+- Test empty data: returns appropriate error code
+- Test success path: create test database, run script, verify output files exist
+- Pass env vars: `env={"SQLITE_DB_PATH": str(db_path)}` to use test database

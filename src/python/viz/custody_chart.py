@@ -14,8 +14,8 @@ import matplotlib.pyplot as plt
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
-    from src.python.db.backend import DatabaseBackend
-    from src.python.viz.config import VizConfig
+    from db.backend import DatabaseBackend
+    from viz.config import VizConfig
 
 
 class CustodyChart:
