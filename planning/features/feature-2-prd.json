@@ -374,7 +374,7 @@
         "  - VizConfig construction from args"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Brings it all together. User-facing interface must be polished."
     },
     {

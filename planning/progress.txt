@@ -632,3 +632,64 @@
 
 ---
 
+## 2026-01-30 - VIZ-005
+
+- What was implemented:
+  - Created `src/scripts/btc_viz` executable CLI script (374 lines)
+  - Comprehensive argument handling with argparse:
+    - Date range presets: ytd, 1y, 5y, all (default)
+    - Custom date ranges: --start-date, --end-date (mutually exclusive with --range)
+    - Chart selection: orange, balance, custody, all (default)
+    - Output directory: --output (default: output/viz/)
+    - Display options: --no-cost-basis, --log-scale, --dpi
+  - Argument validation with clear error messages:
+    - Date format validation (YYYY-MM-DD)
+    - Logical constraints (start <= end, no future dates)
+    - DPI range validation (72-600)
+  - Date range resolution: converts presets to datetime tuples
+  - Chart generation orchestration:
+    - Loops through requested chart types
+    - Try/except per chart (partial success OK)
+    - Tracks generated charts and errors separately
+    - Progress indicators: "Generating orange plot..." with ✓/✗
+  - Summary statistics output:
+    - Date range, transaction counts
+    - Total BTC acquired, total USD invested
+    - Current BTC-USD price and value
+    - Unrealized gain percentage
+    - List of generated chart files with checkmarks
+  - Exit codes: 0=success, 1=arg error, 2=no data, 3=failure, 130=interrupted
+  - Fixed imports in viz modules for CLI compatibility
+  - 5 comprehensive CLI tests using subprocess
+
+- Files changed:
+  - `src/scripts/btc_viz` (new - executable CLI script)
+  - `tests/test_btc_viz_cli.py` (new - 5 CLI tests)
+  - `src/python/viz/balance_chart.py` (modified - fixed imports)
+  - `src/python/viz/custody_chart.py` (modified - fixed imports)
+  - `src/python/viz/orange_plot.py` (modified - fixed imports)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-005 passes: true)
+  - `AGENTS.md` (updated - CLI patterns, argparse, testing)
+
+- **Learnings:**
+  - Argparse patterns: `formatter_class=argparse.RawDescriptionHelpFormatter` for multi-line epilog
+  - Mutually exclusive arguments: `parser.add_mutually_exclusive_group()` for --range vs --start-date
+  - Boolean flags: `action="store_true"` creates True/False flag (default False)
+  - Enum validation: `choices=['ytd', '1y', '5y', 'all']` restricts to valid values
+  - Separate validation function: `validate_arguments(args)` after parsing for complex logic
+  - Date validation: `datetime.strptime(date_str, "%Y-%m-%d")` catches bad formats with ValueError
+  - Exit codes: 0=success, 1=user error, 2=no data, 3=system error, 130=interrupt (Unix conventions)
+  - Partial success pattern: continue generating charts even if one fails, report errors at end
+  - Summary is optional: wrap in try/except, use warnings.warn() if it fails (don't block success)
+  - Progress indicators: print "Generating X plot..." before each chart, then ✓/✗ after
+  - CLI script imports: add src/python to sys.path, then use package imports (`from db import get_backend`)
+  - Python 3.9: need `from __future__ import annotations` for `|` union syntax in function signatures
+  - Import fix pattern: viz modules need package-level imports (`from db.queries import`) not absolute (`from src.python.db.queries`)
+  - Testing CLI scripts: use `subprocess.run()` to invoke script (more realistic than importing as module)
+  - Test pattern: create test database, run script with `env={"SQLITE_DB_PATH": db_path}`, verify output files
+  - subprocess.run parameters: `capture_output=True, text=True` captures stdout/stderr as strings
+  - Test assertions: check exit code, check stdout/stderr content, check output files exist
+  - 197 total tests passing (192 existing + 5 new CLI tests), zero regressions
+
+---
+
