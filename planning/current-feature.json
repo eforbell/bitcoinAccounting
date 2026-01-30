@@ -1,12 +1,55 @@
 {
-  "currentFeature": "feature-1",
-  "featureName": "SQLite Database Backend",
-  "prdPath": "planning/features/feature-1-prd.json",
-  "branch": "feature/sqlite-database-backend",
-  "status": "ready",
+  "currentFeature": "feature-2",
+  "featureName": "Bitcoin Portfolio Visualizations",
+  "prdPath": "planning/features/feature-2-prd.json",
+  "summaryPath": "planning/features/feature-2-summary.md",
+  "branch": "feature/bitcoin-visualizations",
+  "status": "planned",
+  "stories": [
+    {
+      "id": "VIZ-001",
+      "title": "Infrastructure & price data fetching",
+      "status": "pending"
+    },
+    {
+      "id": "VIZ-002",
+      "title": "Orange Plot (star feature!)",
+      "status": "pending"
+    },
+    {
+      "id": "VIZ-003",
+      "title": "Balance growth chart",
+      "status": "pending"
+    },
+    {
+      "id": "VIZ-004",
+      "title": "Custody breakdown",
+      "status": "pending"
+    },
+    {
+      "id": "VIZ-005",
+      "title": "CLI script & docs",
+      "status": "pending"
+    },
+    {
+      "id": "VIZ-006",
+      "title": "PDF report (optional)",
+      "status": "pending"
+    }
+  ],
   "completedFeatures": [
-    
+    {
+      "featureId": "feature-1",
+      "featureName": "SQLite Database Backend",
+      "branch": "feature/sqlite-database-backend",
+      "mergedDate": "2026-01-29",
+      "stories": 12,
+      "notes": "Added SQLite support with database abstraction layer, migrated all PostgreSQL stored procedures to Python query classes"
+    }
   ],
   "futureEnhancements": [
+    "Feature #3: Multi-coin support (ETH, other assets)",
+    "Feature #4: Tax optimization tools (tax-loss harvesting, gain/loss forecasting)",
+    "Feature #5: Web dashboard with live updates"
   ]
 }
