@@ -289,7 +289,7 @@
         "Integration test: Generate chart with mixed custody transactions"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Shows progress toward self-sovereignty. Motivational."
     },
     {

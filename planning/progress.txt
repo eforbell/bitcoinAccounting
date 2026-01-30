@@ -585,3 +585,50 @@
 
 ---
 
+## 2026-01-30 - VIZ-004
+
+- What was implemented:
+  - Created `src/python/viz/custody_chart.py` with CustodyChart class
+  - generate() method creates matplotlib stacked area chart with:
+    - Green area: self-custodied holdings (bottom layer)
+    - Orange area: custodial holdings (exchanges)
+    - Blue area: multisig holdings (collaborative security)
+    - Gray area: unknown custody (no wallet metadata)
+    - Self-Sovereignty Index in subtitle (% self-custodied)
+    - Legend showing current balance per custody type
+  - Wallet metadata integration: queries wallets table, joins with ledger
+  - Custody type normalization: "self", "cold", "hardware" → "self-custodied"
+  - Multi-dimensional balance tracking (separate balance per custody type)
+  - Graceful degradation when wallets table empty/missing
+  - Filters zero-balance custody types before plotting
+  - Handles all-in-one-custody case (single area instead of stack)
+  - Date range resolution: supports presets and custom tuples
+  - 13 comprehensive unit tests covering all scenarios
+
+- Files changed:
+  - `src/python/viz/custody_chart.py` (new - 324 lines)
+  - `src/python/viz/__init__.py` (modified - export CustodyChart)
+  - `tests/test_viz.py` (modified - added TestCustodyChart class with 13 tests)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-004 passes: true)
+  - `AGENTS.md` (updated - stacked area charts, wallet integration, custody normalization)
+
+- **Learnings:**
+  - Stacked area charts: `ax.stackplot(dates, *[balances_list1, balances_list2, ...], labels=[...], colors=[...])`
+  - Takes unpacked lists of values (one per layer), stacks from bottom to top
+  - Order matters for visibility: put most important layer on bottom
+  - Wallet metadata JOIN: query wallets table, build dict mapping wallet_id → custody_type
+  - Graceful degradation pattern: `try: query_wallets() except: return {}`
+  - Custody type normalization: use `.lower()` for case-insensitive matching
+  - Multi-dimensional data: `[{'date': dt, 'self-custodied': 0.5, 'custodial': 0.3, 'multisig': 0.2, 'unknown': 0.0}, ...]`
+  - Update specific custody balance on each transaction, copy full state for snapshot
+  - Filter empty categories: `active_types = [ct for ct in types if current[ct] > 0.00000001]`
+  - Single custody type: stackplot works fine with single area (not truly "stacked")
+  - Zero balance across all types: raise ValueError (no data to plot)
+  - Self-Sovereignty Index: `(self_custodied / total) * 100` - motivational metric
+  - Color palette: Green (sovereignty), Orange (risk/convenience), Blue (collaborative), Gray (unknown)
+  - Legend labels with balances: "Self-Custodied: 0.60000000 BTC"
+  - Use `.replace('-', ' ').title()` to format custody type names in legend
+  - 192 total tests passing (179 existing + 13 new CustodyChart tests), zero regressions
+
+---
+
