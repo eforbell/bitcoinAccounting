@@ -15,11 +15,18 @@ import pandas as pd
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
-    from db.backend import DatabaseBackend
-    from viz.config import VizConfig
-
-from db.queries import TradeQuery
-from viz.data_fetcher import PriceDataFetcher
+try:
+    # When imported from tests
+    from src.python.db.backend import DatabaseBackend
+    from src.python.viz.config import VizConfig
+    from src.python.db.queries import TradeQuery
+    from src.python.viz.data_fetcher import PriceDataFetcher
+except ModuleNotFoundError:
+    # When running from CLI with sys.path manipulation
+    from db.backend import DatabaseBackend  # type: ignore[import]
+    from viz.config import VizConfig  # type: ignore[import]
+    from db.queries import TradeQuery  # type: ignore[import]
+    from viz.data_fetcher import PriceDataFetcher  # type: ignore[import]
 
 
 class OrangePlot:
@@ -55,6 +62,11 @@ class OrangePlot:
             raise RuntimeError(
                 f"No BTC-USD price data available for range {start_date} to {end_date}"
             )
+
+        # Convert timezone-aware index to timezone-naive for comparison compatibility
+        # yfinance returns UTC timezone-aware dates, but our database dates are naive
+        if price_data.index.tz is not None:
+            price_data.index = price_data.index.tz_localize(None)
 
         # Get trade cost data
         trades = self.trade_query.get_trade_cost("BTC", "USD")
