@@ -926,3 +926,56 @@ This pattern allows mypy to see types while handling missing dependencies gracef
   ```
 - Primary import (src.python) for tests, fallback for CLI
 - Add `# type: ignore[import]` to fallback to satisfy mypy
+
+## PDF Generation with ReportLab
+
+**Pattern**: Use reportlab for multi-page PDF reports combining charts and text
+
+```python
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.units import inch
+from reportlab.lib.utils import ImageReader
+
+# Create canvas
+c = canvas.Canvas(str(output_path), pagesize=letter)
+page_width, page_height = letter
+
+# Draw text
+c.setFont("Helvetica-Bold", 24)
+c.drawCentredString(width / 2, height - 2 * inch, "Title")
+
+# Draw image (scaled to fit)
+img = ImageReader(str(image_path))
+img_width, img_height = img.getSize()
+scale = min(max_width / img_width, max_height / img_height)
+c.drawImage(str(image_path), x, y, img_width * scale, img_height * scale)
+
+# New page
+c.showPage()
+
+# Save
+c.save()
+```
+
+**Key learnings**:
+- ImageReader handles PNG images from matplotlib
+- Scale images to fit within margins: `scale = min(max_width / img_width, max_height / img_height)`
+- Use `inch` unit for layout calculations (imported from reportlab.lib.units)
+- Word wrapping: use `stringWidth()` to measure text and break lines manually
+- Optional dependency: wrap imports in try/except, raise ImportError with installation instructions
+- Multi-page layout: `showPage()` between pages
+- Coordinate system: (0,0) is bottom-left, not top-left
+
+## Multi-Sig as Self-Custody
+
+**Decision**: When calculating self-sovereignty metrics, include both single-sig self-custody AND multisig
+
+**Rationale**: Multisig is self-custody on steroids - even stronger sovereignty than single-sig cold storage. Even if a 3rd party holds one key in a quorum, the user still maintains control.
+
+**Implementation**: 
+```python
+total_self_custody = self_custodied + multisig
+self_sovereignty_pct = (total_self_custody / total_btc) * 100
+```
+

@@ -25,7 +25,7 @@ import warnings
 from datetime import datetime
 
 from db import get_backend
-from viz import BalanceChart, CustodyChart, OrangePlot, VizConfig
+from viz import BalanceChart, CustodyChart, OrangePlot, PDFReport, VizConfig
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -106,6 +106,12 @@ Examples:
         "--log-scale",
         action="store_true",
         help="Use logarithmic Y-axis for orange plot"
+    )
+
+    parser.add_argument(
+        "--pdf",
+        action="store_true",
+        help="Generate PDF report combining all charts"
     )
 
     return parser.parse_args()
@@ -202,6 +208,22 @@ def generate_charts(args: argparse.Namespace) -> dict[str, Path]:
         log_scale=args.log_scale,
         dpi=args.dpi,
     )
+
+    # Generate PDF report if requested
+    if args.pdf:
+        try:
+            print("Generating PDF report...")
+            report = PDFReport(backend, config)
+            output_path = report.generate()
+            print(f"  ✓ {output_path}")
+            return {"pdf": output_path}
+        except ImportError as e:
+            print(f"  ✗ Failed: {e}")
+            print("  Install reportlab: pip install reportlab")
+            raise ValueError("PDF generation requires reportlab library")
+        except Exception as e:
+            print(f"  ✗ Failed: {e}")
+            raise
 
     # Determine which charts to generate
     if args.chart == "all":
