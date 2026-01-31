@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""Bitcoin Visualization CLI - Generate charts showing your Bitcoin accumulation strategy.
+
+Usage:
+    btc_viz                          # Generate all charts, all-time data
+    btc_viz --range ytd              # Year-to-date only
+    btc_viz --range 5y               # Last 5 years
+    btc_viz --chart orange           # Only orange plot
+    btc_viz --start-date 2023-01-01 --end-date 2023-12-31  # Custom range
+    btc_viz --output ~/Desktop/      # Custom output directory
+    btc_viz --no-cost-basis          # Skip cost basis overlay
+    btc_viz --log-scale              # Use logarithmic Y-axis
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Add src/python to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "python"))
+
+import argparse
+import warnings
+from datetime import datetime
+
+from db import get_backend
+from viz import BalanceChart, CustodyChart, OrangePlot, VizConfig
+
+
+def parse_arguments() -> argparse.Namespace:
+    """Parse command-line arguments.
+
+    Returns:
+        Parsed arguments namespace
+    """
+    parser = argparse.ArgumentParser(
+        description="Generate Bitcoin portfolio visualizations",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s                          # Generate all charts, all-time data
+  %(prog)s --range ytd              # Year-to-date only
+  %(prog)s --range 5y               # Last 5 years
+  %(prog)s --chart orange           # Only orange plot
+  %(prog)s --chart balance          # Only balance chart
+  %(prog)s --start-date 2023-01-01 --end-date 2023-12-31  # Custom range
+  %(prog)s --output ~/Desktop/      # Custom output directory
+  %(prog)s --no-cost-basis          # Skip cost basis overlay
+  %(prog)s --log-scale              # Use logarithmic Y-axis for orange plot
+  %(prog)s --dpi 150                # Lower resolution (faster, smaller files)
+        """
+    )
+
+    # Date range options (mutually exclusive with custom dates)
+    date_group = parser.add_mutually_exclusive_group()
+    date_group.add_argument(
+        "--range",
+        choices=["ytd", "1y", "5y", "all"],
+        default="all",
+        help="Date range preset (default: all)"
+    )
+    date_group.add_argument(
+        "--start-date",
+        type=str,
+        help="Custom start date (YYYY-MM-DD). Requires --end-date."
+    )
+
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        help="Custom end date (YYYY-MM-DD, default: today)"
+    )
+
+    # Chart selection
+    parser.add_argument(
+        "--chart",
+        choices=["orange", "balance", "custody", "all"],
+        default="all",
+        help="Specific chart to generate (default: all)"
+    )
+
+    # Output options
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="output/viz/",
+        help="Output directory (default: output/viz/)"
+    )
+
+    parser.add_argument(
+        "--dpi",
+        type=int,
+        default=300,
+        help="Resolution in DPI (default: 300, range: 72-600)"
+    )
+
+    # Chart options
+    parser.add_argument(
+        "--no-cost-basis",
+        action="store_true",
+        help="Disable cost basis overlay on orange plot"
+    )
+
+    parser.add_argument(
+        "--log-scale",
+        action="store_true",
+        help="Use logarithmic Y-axis for orange plot"
+    )
+
+    return parser.parse_args()
+
+
+def validate_arguments(args: argparse.Namespace) -> None:
+    """Validate parsed arguments.
+
+    Args:
+        args: Parsed arguments
+
+    Raises:
+        ValueError: If arguments are invalid
+    """
+    # Check date range logic
+    if args.start_date and not args.end_date:
+        raise ValueError("--start-date requires --end-date")
+
+    if args.end_date and not args.start_date and args.range == "all":
+        raise ValueError("--end-date requires --start-date")
+
+    # Validate date formats and logic
+    if args.start_date:
+        try:
+            start = datetime.strptime(args.start_date, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError(f"Invalid --start-date format: {args.start_date}. Use YYYY-MM-DD.")
+
+        if args.end_date:
+            try:
+                end = datetime.strptime(args.end_date, "%Y-%m-%d")
+            except ValueError:
+                raise ValueError(f"Invalid --end-date format: {args.end_date}. Use YYYY-MM-DD.")
+
+            if start > end:
+                raise ValueError("--start-date must be <= --end-date")
+
+        # Check dates not in future
+        now = datetime.now()
+        if start > now:
+            raise ValueError("--start-date cannot be in the future")
+        if args.end_date and end > now:
+            raise ValueError("--end-date cannot be in the future")
+
+    # Validate DPI range
+    if args.dpi < 72 or args.dpi > 600:
+        raise ValueError("--dpi must be between 72 and 600")
+
+
+def resolve_date_range(args: argparse.Namespace) -> str | tuple[datetime, datetime]:
+    """Resolve date range from arguments.
+
+    Args:
+        args: Parsed arguments
+
+    Returns:
+        Date range preset string or tuple of (start_date, end_date)
+    """
+    if args.start_date:
+        start = datetime.strptime(args.start_date, "%Y-%m-%d")
+        if args.end_date:
+            end = datetime.strptime(args.end_date, "%Y-%m-%d")
+        else:
+            end = datetime.now()
+        return (start, end)
+
+    return args.range
+
+
+def generate_charts(args: argparse.Namespace) -> dict[str, Path]:
+    """Generate requested charts.
+
+    Args:
+        args: Parsed arguments
+
+    Returns:
+        Dict mapping chart type to output path
+
+    Raises:
+        ValueError: If no transaction data available
+    """
+    # Get database backend
+    backend = get_backend()
+
+    # Create config
+    date_range = resolve_date_range(args)
+    output_dir = Path(args.output).expanduser()
+
+    config = VizConfig(
+        date_range=date_range,
+        output_dir=output_dir,
+        chart_types=[args.chart],
+        include_cost_basis=not args.no_cost_basis,
+        log_scale=args.log_scale,
+        dpi=args.dpi,
+    )
+
+    # Determine which charts to generate
+    if args.chart == "all":
+        chart_types = ["orange", "balance", "custody"]
+    else:
+        chart_types = [args.chart]
+
+    # Generate charts
+    generated = {}
+    errors = {}
+
+    for chart_type in chart_types:
+        try:
+            print(f"Generating {chart_type} plot...")
+
+            if chart_type == "orange":
+                chart = OrangePlot(backend, config)
+                output_path = chart.generate()
+            elif chart_type == "balance":
+                chart = BalanceChart(backend, config)
+                output_path = chart.generate()
+            elif chart_type == "custody":
+                chart = CustodyChart(backend, config)
+                output_path = chart.generate()
+
+            generated[chart_type] = output_path
+            print(f"  ✓ {output_path}")
+
+        except Exception as e:
+            errors[chart_type] = str(e)
+            print(f"  ✗ Failed: {e}")
+
+    if not generated:
+        raise RuntimeError("All chart generation failed. See errors above.")
+
+    if errors:
+        print(f"\nWarning: {len(errors)} chart(s) failed to generate")
+
+    return generated
+
+
+def print_summary(args: argparse.Namespace, generated: dict[str, Path]) -> None:
+    """Print summary statistics and generated files.
+
+    Args:
+        args: Parsed arguments
+        generated: Dict of generated chart paths
+    """
+    # Get database backend
+    backend = get_backend()
+
+    # Query transaction summary
+    try:
+        from db.queries import TradeQuery, BalanceCalculator
+        from viz.data_fetcher import PriceDataFetcher
+
+        trade_query = TradeQuery(backend)
+        balance_calc = BalanceCalculator(backend)
+
+        # Get trades
+        trades = trade_query.get_trade_cost("BTC", "USD")
+        if not trades:
+            return  # No data to summarize
+
+        # Separate purchases and sales
+        purchases = [t for t in trades if t["quantity"] > 0]
+        sales = [t for t in trades if t["quantity"] < 0]
+
+        # Calculate totals
+        total_btc = sum(p["quantity"] for p in purchases) + sum(s["quantity"] for s in sales)
+        total_invested = sum(
+            p["total_cost"] for p in purchases if p["total_cost"] is not None
+        )
+
+        # Get current BTC price
+        price_fetcher = PriceDataFetcher()
+        today = datetime.now()
+        yesterday = datetime(today.year, today.month, today.day - 1 if today.day > 1 else 1)
+        try:
+            price_data = price_fetcher.fetch_btc_price_history(yesterday, today)
+            current_price = float(price_data["close"].iloc[-1]) if not price_data.empty else 0
+        except Exception:
+            current_price = 0
+
+        current_value = total_btc * current_price
+
+        # Calculate gain
+        if total_invested > 0:
+            unrealized_gain_pct = ((current_value - total_invested) / total_invested) * 100
+            gain_sign = "+" if unrealized_gain_pct >= 0 else ""
+        else:
+            unrealized_gain_pct = 0
+            gain_sign = ""
+
+        # Get date range
+        dates = [t["date"] for t in trades]
+        min_date = min(
+            datetime.fromisoformat(d.replace("Z", "+00:00")) if isinstance(d, str) else d
+            for d in dates
+        )
+
+        if isinstance(args.start_date, str):
+            display_start = datetime.strptime(args.start_date, "%Y-%m-%d")
+        else:
+            display_start = min_date
+
+        if isinstance(args.end_date, str):
+            display_end = datetime.strptime(args.end_date, "%Y-%m-%d")
+        else:
+            display_end = datetime.now()
+
+        years = (display_end - display_start).days / 365.25
+
+        # Print summary
+        print("\n" + "=" * 60)
+        print("Bitcoin Visualization Summary")
+        print("=" * 60)
+        print(f"Date range: {display_start.strftime('%Y-%m-%d')} to {display_end.strftime('%Y-%m-%d')} ({years:.1f} years)")
+        print(f"Transactions: {len(purchases)} purchases, {len(sales)} sales")
+        print(f"Total BTC acquired: {total_btc:.8f} BTC")
+        print(f"Total USD invested: ${total_invested:,.2f}")
+        if current_price > 0:
+            print(f"Current BTC-USD price: ${current_price:,.2f} (as of {today.strftime('%Y-%m-%d')})")
+            print(f"Current value: ${current_value:,.2f}")
+            print(f"Unrealized gain: {gain_sign}{unrealized_gain_pct:.1f}%")
+        print()
+        print("Charts generated:")
+        for chart_type, path in generated.items():
+            print(f"  ✓ {path}")
+        print("=" * 60)
+
+    except Exception as e:
+        # Summary is optional - don't fail if it errors
+        warnings.warn(f"Could not generate summary: {e}", RuntimeWarning)
+
+
+def main() -> int:
+    """Main entry point.
+
+    Returns:
+        Exit code (0=success, 1=arg error, 2=no data, 3=all charts failed)
+    """
+    try:
+        # Parse and validate arguments
+        args = parse_arguments()
+        validate_arguments(args)
+
+        # Generate charts
+        generated = generate_charts(args)
+
+        # Print summary
+        print_summary(args, generated)
+
+        return 0
+
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+    except RuntimeError as e:
+        if "No Bitcoin transactions found" in str(e) or "No Bitcoin balance found" in str(e):
+            print(f"\nNo transaction data: {e}", file=sys.stderr)
+            print("Start stacking sats! 🧡", file=sys.stderr)
+            return 2
+        else:
+            print(f"Error: {e}", file=sys.stderr)
+            return 3
+
+    except KeyboardInterrupt:
+        print("\nInterrupted by user", file=sys.stderr)
+        return 130
+
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return 3
+
+
+if __name__ == "__main__":
+    sys.exit(main())

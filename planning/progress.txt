@@ -457,3 +457,239 @@
 
 ---
 
+
+## 2026-01-30 - VIZ-001
+
+- What was implemented:
+  - Created `src/python/viz/` package for Bitcoin portfolio visualizations
+  - `VizConfig` dataclass with validation for chart configuration:
+    - Date range (preset strings or tuple), output directory, chart types
+    - DPI validation (72-600), cost basis and log scale flags
+    - Post-init validation with clear error messages
+  - `PriceDataFetcher` class for BTC-USD price history:
+    - yfinance integration for Yahoo Finance API
+    - Local caching to `~/.cryptoaccounting/cache/btc_prices.parquet`
+    - Incremental fetching - only gets missing dates
+    - Graceful API failure handling with cache fallback
+  - 20 comprehensive unit tests covering all scenarios
+  - Added yfinance and pyarrow to requirements.txt
+
+- Files changed:
+  - `src/python/viz/__init__.py` (new)
+  - `src/python/viz/config.py` (new)
+  - `src/python/viz/data_fetcher.py` (new)
+  - `tests/test_viz.py` (new - 20 tests)
+  - `requirements.txt` (modified - added yfinance, pyarrow)
+  - `AGENTS.md` (updated - visualization patterns)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-001 passes: true)
+
+- **Learnings:**
+  - Parquet format requires pyarrow or fastparquet - not included in pandas by default
+  - yfinance returns capitalized column names ('Open', 'High') - must normalize to lowercase
+  - Cache strategy: merge old and new data with `pd.concat()`, deduplicate with `~index.duplicated(keep='last')`
+  - DataFrame index frequency attribute can differ after caching - use `check_freq=False` in test comparisons
+  - Optional dependency pattern: use TYPE_CHECKING to satisfy mypy while handling ImportError gracefully
+  - yfinance Ticker.history() returns empty DataFrame (not None) when no data - check with `df.empty`
+  - datetime and string dates: `datetime.fromisoformat(date_string)` handles both YYYY-MM-DD and datetime objects
+  - Cache directory creation: `Path.mkdir(parents=True, exist_ok=True)` creates parent dirs if needed
+  - Warning pattern: `import warnings; warnings.warn(msg, RuntimeWarning)` for non-fatal issues
+  - Test fixture pattern: `@pytest.fixture` with `tempfile.TemporaryDirectory()` for isolated cache testing
+
+- **Test Results:**
+  - 20 new visualization tests passing
+  - 153 total tests passing (125 from feature-1 + 11 1099b + 7 SQLite integration + 19 CLI + 20 viz)
+  - Zero regressions
+  - All tests execute in ~4 seconds
+
+---
+## 2026-01-30 - VIZ-002
+
+- What was implemented:
+  - Created `src/python/viz/orange_plot.py` with OrangePlot class
+  - generate() method creates matplotlib figure with:
+    - BTC-USD price history as orange line
+    - Purchases as orange scatter points (size proportional to BTC amount)
+    - Sales as green scatter points
+    - Optional running cost basis overlay (dashed blue line)
+    - Summary statistics: total invested, current value, unrealized gain %
+  - Date range resolution: supports presets ('ytd', '1y', '5y', 'all') and custom tuples
+  - Log scale Y-axis option via config.log_scale
+  - Running weighted average cost basis calculation
+  - Graceful handling of missing price data and empty ledger
+  - 13 comprehensive unit tests covering all scenarios
+
+- Files changed:
+  - `src/python/viz/orange_plot.py` (new - 423 lines)
+  - `src/python/viz/__init__.py` (modified - export OrangePlot)
+  - `tests/test_viz.py` (modified - added TestOrangePlot class with 13 tests)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-002 passes: true)
+  - `AGENTS.md` (updated - matplotlib patterns, scatter plots, cost basis calculations)
+
+- **Learnings:**
+  - Matplotlib scatter plot sizing: size parameter is in points^2, scale by 500 for visibility
+  - `zorder=5` ensures scatter points appear above line plots
+  - `fig.autofmt_xdate()` automatically formats and rotates date labels nicely
+  - Always close matplotlib figures: `plt.close(fig)` to free memory after saving
+  - Running cost basis: sort by date first, skip None prices, accumulate cost and quantity
+  - DataFrame index lookup: `df.index.get_indexer([date], method='nearest')[0]` finds closest date
+  - TradeQuery.get_trade_cost() calculates unit_cost differently for direct vs cross-currency trades:
+    - Direct (trade_curr == cost_currency): uses trade price (sell/buy ratio)
+    - Cross-currency: requires price lookup, may return None if unavailable
+  - Date range presets: 'ytd' = Jan 1 to now, '1y' = 365 days ago, '5y' = 1825 days ago, 'all' = min ledger date
+  - Unrealized gain calculation: `((current_value - total_invested) / total_invested) * 100`
+  - Color scheme: Orange (#FF9500) for Bitcoin, Green (#34C759) for sales ("greenbacks"), Blue (#007AFF) for cost basis
+  - Test edge cases: empty ledger (ValueError), missing price data (RuntimeError), cross-currency with no conversion
+  - 166 total tests passing (153 existing + 13 new OrangePlot tests), zero regressions
+
+---
+
+## 2026-01-30 - VIZ-003
+
+- What was implemented:
+  - Created `src/python/viz/balance_chart.py` with BalanceChart class
+  - generate() method creates matplotlib area chart with:
+    - Orange line showing cumulative BTC balance over time
+    - Filled area under curve (light orange with alpha=0.3)
+    - Milestone markers: dotted horizontal lines at 0.01, 0.1, 0.5, 1, 2, 5, 10, 21, 50, 100 BTC
+    - Text labels for each milestone on right side
+    - Current balance displayed in subtitle
+    - Grid and legend
+  - Cumulative balance calculation from trade history
+  - Start point (date=start, balance=0) and end point (date=end, balance=final)
+  - Date range resolution: supports presets and custom tuples
+  - Negative balance detection with RuntimeWarning
+  - Handles single transaction edge case
+  - 13 comprehensive unit tests covering all scenarios
+
+- Files changed:
+  - `src/python/viz/balance_chart.py` (new - 273 lines)
+  - `src/python/viz/__init__.py` (modified - export BalanceChart)
+  - `tests/test_viz.py` (modified - added TestBalanceChart class with 13 tests)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-003 passes: true)
+  - `AGENTS.md` (updated - area charts, milestone markers, negative balance detection)
+
+- **Learnings:**
+  - Area charts: Use `ax.plot()` for line, then `ax.fill_between()` for shaded area
+  - `fill_between(dates, balances, alpha=0.3, color='#FF9500')` creates semi-transparent fill
+  - Cumulative calculation pattern: initialize at 0, sort by date, accumulate quantities
+  - Start/end points create smooth line: [(start, 0), ...transactions..., (end, final)]
+  - Milestone markers: `ax.axhline(y=milestone, linestyle=':', alpha=0.5, color='gray')`
+  - Text labels on right: `ax.text(end_date, milestone, ' X.XX BTC', ha='left', va='center')`
+  - Standard Bitcoin milestones: 0.01 (1M sats), 0.1 (10M sats), 1, 10, 21 (special), 50, 100
+  - Milestone calculation: show up to 110% of max balance, add 100-unit intervals for high balances
+  - Negative balance check: `if balance < -0.00000001` (allow floating point errors)
+  - Use `warnings.warn(msg, RuntimeWarning)` for negative balance - continues processing
+  - Single transaction edge case: works naturally with start/end point pattern (3 points total)
+  - Date range filtering: skip trades outside range during cumulative calculation
+  - 179 total tests passing (166 existing + 13 new BalanceChart tests), zero regressions
+
+---
+
+## 2026-01-30 - VIZ-004
+
+- What was implemented:
+  - Created `src/python/viz/custody_chart.py` with CustodyChart class
+  - generate() method creates matplotlib stacked area chart with:
+    - Green area: self-custodied holdings (bottom layer)
+    - Orange area: custodial holdings (exchanges)
+    - Blue area: multisig holdings (collaborative security)
+    - Gray area: unknown custody (no wallet metadata)
+    - Self-Sovereignty Index in subtitle (% self-custodied)
+    - Legend showing current balance per custody type
+  - Wallet metadata integration: queries wallets table, joins with ledger
+  - Custody type normalization: "self", "cold", "hardware" → "self-custodied"
+  - Multi-dimensional balance tracking (separate balance per custody type)
+  - Graceful degradation when wallets table empty/missing
+  - Filters zero-balance custody types before plotting
+  - Handles all-in-one-custody case (single area instead of stack)
+  - Date range resolution: supports presets and custom tuples
+  - 13 comprehensive unit tests covering all scenarios
+
+- Files changed:
+  - `src/python/viz/custody_chart.py` (new - 324 lines)
+  - `src/python/viz/__init__.py` (modified - export CustodyChart)
+  - `tests/test_viz.py` (modified - added TestCustodyChart class with 13 tests)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-004 passes: true)
+  - `AGENTS.md` (updated - stacked area charts, wallet integration, custody normalization)
+
+- **Learnings:**
+  - Stacked area charts: `ax.stackplot(dates, *[balances_list1, balances_list2, ...], labels=[...], colors=[...])`
+  - Takes unpacked lists of values (one per layer), stacks from bottom to top
+  - Order matters for visibility: put most important layer on bottom
+  - Wallet metadata JOIN: query wallets table, build dict mapping wallet_id → custody_type
+  - Graceful degradation pattern: `try: query_wallets() except: return {}`
+  - Custody type normalization: use `.lower()` for case-insensitive matching
+  - Multi-dimensional data: `[{'date': dt, 'self-custodied': 0.5, 'custodial': 0.3, 'multisig': 0.2, 'unknown': 0.0}, ...]`
+  - Update specific custody balance on each transaction, copy full state for snapshot
+  - Filter empty categories: `active_types = [ct for ct in types if current[ct] > 0.00000001]`
+  - Single custody type: stackplot works fine with single area (not truly "stacked")
+  - Zero balance across all types: raise ValueError (no data to plot)
+  - Self-Sovereignty Index: `(self_custodied / total) * 100` - motivational metric
+  - Color palette: Green (sovereignty), Orange (risk/convenience), Blue (collaborative), Gray (unknown)
+  - Legend labels with balances: "Self-Custodied: 0.60000000 BTC"
+  - Use `.replace('-', ' ').title()` to format custody type names in legend
+  - 192 total tests passing (179 existing + 13 new CustodyChart tests), zero regressions
+
+---
+
+## 2026-01-30 - VIZ-005
+
+- What was implemented:
+  - Created `src/scripts/btc_viz` executable CLI script (374 lines)
+  - Comprehensive argument handling with argparse:
+    - Date range presets: ytd, 1y, 5y, all (default)
+    - Custom date ranges: --start-date, --end-date (mutually exclusive with --range)
+    - Chart selection: orange, balance, custody, all (default)
+    - Output directory: --output (default: output/viz/)
+    - Display options: --no-cost-basis, --log-scale, --dpi
+  - Argument validation with clear error messages:
+    - Date format validation (YYYY-MM-DD)
+    - Logical constraints (start <= end, no future dates)
+    - DPI range validation (72-600)
+  - Date range resolution: converts presets to datetime tuples
+  - Chart generation orchestration:
+    - Loops through requested chart types
+    - Try/except per chart (partial success OK)
+    - Tracks generated charts and errors separately
+    - Progress indicators: "Generating orange plot..." with ✓/✗
+  - Summary statistics output:
+    - Date range, transaction counts
+    - Total BTC acquired, total USD invested
+    - Current BTC-USD price and value
+    - Unrealized gain percentage
+    - List of generated chart files with checkmarks
+  - Exit codes: 0=success, 1=arg error, 2=no data, 3=failure, 130=interrupted
+  - Fixed imports in viz modules for CLI compatibility
+  - 5 comprehensive CLI tests using subprocess
+
+- Files changed:
+  - `src/scripts/btc_viz` (new - executable CLI script)
+  - `tests/test_btc_viz_cli.py` (new - 5 CLI tests)
+  - `src/python/viz/balance_chart.py` (modified - fixed imports)
+  - `src/python/viz/custody_chart.py` (modified - fixed imports)
+  - `src/python/viz/orange_plot.py` (modified - fixed imports)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-005 passes: true)
+  - `AGENTS.md` (updated - CLI patterns, argparse, testing)
+
+- **Learnings:**
+  - Argparse patterns: `formatter_class=argparse.RawDescriptionHelpFormatter` for multi-line epilog
+  - Mutually exclusive arguments: `parser.add_mutually_exclusive_group()` for --range vs --start-date
+  - Boolean flags: `action="store_true"` creates True/False flag (default False)
+  - Enum validation: `choices=['ytd', '1y', '5y', 'all']` restricts to valid values
+  - Separate validation function: `validate_arguments(args)` after parsing for complex logic
+  - Date validation: `datetime.strptime(date_str, "%Y-%m-%d")` catches bad formats with ValueError
+  - Exit codes: 0=success, 1=user error, 2=no data, 3=system error, 130=interrupt (Unix conventions)
+  - Partial success pattern: continue generating charts even if one fails, report errors at end
+  - Summary is optional: wrap in try/except, use warnings.warn() if it fails (don't block success)
+  - Progress indicators: print "Generating X plot..." before each chart, then ✓/✗ after
+  - CLI script imports: add src/python to sys.path, then use package imports (`from db import get_backend`)
+  - Python 3.9: need `from __future__ import annotations` for `|` union syntax in function signatures
+  - Import fix pattern: viz modules need package-level imports (`from db.queries import`) not absolute (`from src.python.db.queries`)
+  - Testing CLI scripts: use `subprocess.run()` to invoke script (more realistic than importing as module)
+  - Test pattern: create test database, run script with `env={"SQLITE_DB_PATH": db_path}`, verify output files
+  - subprocess.run parameters: `capture_output=True, text=True` captures stdout/stderr as strings
+  - Test assertions: check exit code, check stdout/stderr content, check output files exist
+  - 197 total tests passing (192 existing + 5 new CLI tests), zero regressions
+
+---
+

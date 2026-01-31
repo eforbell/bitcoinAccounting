@@ -643,3 +643,286 @@ total_usd_spent = sum(
 - Any cost basis calculations
 
 **Always**: Use query class abstractions (`TradeQuery`, `BasisCalculator`) instead of raw SQL for cost calculations. The query classes handle cross-currency conversion correctly.
+
+## Visualization Package Patterns (VIZ-001)
+
+### Package Structure
+- Visualization code lives in `src/python/viz/` (parallel to `db/` package)
+- Follows same patterns as db package: `__init__.py` exports public API, implementation in submodules
+
+### Optional Dependencies with TYPE_CHECKING
+```python
+if TYPE_CHECKING:
+    import pandas as pd
+    import yfinance as yf
+else:
+    try:
+        import pandas as pd
+        import yfinance as yf
+    except ImportError:
+        pd = None  # type: ignore[assignment]
+        yf = None  # type: ignore[assignment]
+```
+This pattern allows mypy to see types while handling missing dependencies gracefully at runtime.
+
+### Price Data Caching Strategy
+- Cache location: `~/.cryptoaccounting/cache/btc_prices.parquet`
+- Format: Parquet (requires `pyarrow` or `fastparquet`)
+- Strategy: Load cache → Fetch only missing dates → Merge with `pd.concat()` → Deduplicate → Save
+- Graceful degradation: Use cached data with warning if API fails, error only if no cache available
+
+### yfinance Integration
+- Ticker: `yf.Ticker("BTC-USD").history(start, end)` for Bitcoin price data
+- Column normalization: API returns 'Open', 'High', etc. - normalize to lowercase ('open', 'high')
+- Expected columns: open, high, low, close, volume
+
+### Testing Patterns
+- Use temporary directories for cache in tests (`tempfile.TemporaryDirectory`)
+- Mock yfinance with `@patch('src.python.viz.data_fetcher.yf.Ticker')`
+- DataFrame comparisons: Use `pd.testing.assert_frame_equal(df1, df2, check_freq=False)` to ignore index frequency differences
+
+## VIZ-002: Orange Plot (Personal Bitcoin Accumulation Visualization)
+
+### Matplotlib Chart Generation
+- Figure creation: `fig, ax = plt.subplots(figsize=(10, 6))` for presentation-ready charts
+- Close figures after saving: `plt.close(fig)` to free memory and prevent warnings
+- Save with high DPI: `fig.savefig(output_path, dpi=config.dpi, bbox_inches='tight')` for print quality
+- Auto-format dates: `fig.autofmt_xdate()` nicely rotates and aligns date labels
+
+### Scatter Plot Sizing
+- Size parameter is in points^2, scale for visibility: `size = btc_amount * 500`
+- Transparency helps with overlapping points: `alpha=0.6`
+- Edge colors provide definition: `edgecolors="black", linewidth=0.5`
+- `zorder=5` ensures scatter points appear above line plots
+
+### Running Cost Basis Calculation
+- Pattern: Iterate chronologically, maintain cumulative sums
+- Formula: `running_basis = cumulative_cost / cumulative_btc`
+- Skip None values: `if purchase["unit_cost"] is None: continue` before accumulation
+- Sort by date first: `sorted(purchases, key=lambda t: t["date"])` to ensure correct order
+
+### Date Range Resolution
+- Preset strings ('ytd', '1y', '5y', 'all') vs tuple (start, end)
+- 'ytd': Jan 1 of current year to now
+- '1y': today minus 365 days
+- '5y': today minus 5 years (1825 days)
+- 'all': First transaction date to now (query ledger for min date)
+
+### DataFrame Index Lookups
+- Use `get_indexer([date], method='nearest')` to find closest date in price data
+- Returns array of indices, access with `[0]` for single value
+- Then use `.iloc[idx]` to retrieve the row/value
+
+### Trade Data from Database
+- TradeQuery.get_trade_cost() returns unit_cost based on trade currency
+- Direct trades (trade_curr == cost_currency): unit_cost comes from trade price (sell/buy ratio)
+- Cross-currency trades: unit_cost requires price lookup, may be None if unavailable
+- Test missing prices: Use different currency (e.g., EUR trade, USD costs, no EUR-USD conversion)
+
+### Chart Annotation and Summary Stats
+- Calculate totals from purchase list: `sum(p["quantity"] for p in purchases)`
+- Current value: `total_btc * latest_price`
+- Unrealized gain %: `((current_value - total_invested) / total_invested) * 100`
+- Include sign: `gain_sign = "+" if gain >= 0 else ""`
+- Display in subtitle: Multi-line title with `\n` separator
+
+### Color Palette (Bitcoin Theme)
+- Orange (#FF9500): BTC price line, purchase markers (the "orange pill")
+- Green (#34C759): Sales markers (returning to "greenbacks")
+- Blue (#007AFF): Cost basis line (dashed)
+- Black edges: Definition on scatter points
+
+## VIZ-003: Balance Chart (Bitcoin Stack Growth Over Time)
+
+### Area Chart with Fill
+- Plot line and fill area simultaneously:
+  ```python
+  ax.plot(dates, balances, color='#FF9500', linewidth=2.5, label='BTC Balance')
+  ax.fill_between(dates, balances, alpha=0.3, color='#FF9500', label='Accumulated BTC')
+  ```
+- `fill_between()` creates shaded area under curve
+- Use `alpha=0.3` for semi-transparent fill that doesn't obscure data
+
+### Cumulative Balance Calculation
+- Pattern: Initialize at 0, iterate chronologically, sum quantities
+- Add start point (date=start, balance=0) and end point (date=end, balance=final)
+- This creates smooth line from origin to current date
+- Sort trades by date BEFORE accumulation: `sorted(trades, key=lambda t: t['date'])`
+
+### Milestone Markers (Horizontal Lines)
+- Use `ax.axhline()` for horizontal reference lines
+- Style: `linestyle=':'` (dotted), `alpha=0.5`, `color='gray'`
+- Add text labels on right side: `ax.text(end_date, milestone, ' X.XX BTC', ha='left')`
+- Standard Bitcoin milestones: 0.01, 0.1, 0.5, 1, 2, 5, 10, 21, 50, 100
+- Only show milestones up to 110% of max balance
+
+### Negative Balance Detection
+- Check during calculation loop: `if balance < -0.00000001`
+- Allow small negative values for floating point errors
+- Issue warning with `warnings.warn(msg, RuntimeWarning)`
+- Continue processing (don't fail) - negative balance may be data error but chart is still useful
+
+### Single Transaction Edge Case
+- Still creates valid chart: start point (0) → transaction point → end point (final)
+- Results in simple 2-segment line
+- No special handling needed with start/end point pattern
+
+### Balance Data Structure
+- List of dicts: `[{'date': datetime, 'balance': float}, ...]`
+- Always sorted by date
+- Include start point, all transaction points, and end point
+- Makes plotting straightforward: extract to parallel lists
+
+## VIZ-004: Custody Chart (Bitcoin Holdings by Custody Type)
+
+### Stacked Area Charts
+- Use `ax.stackplot()` for stacked areas:
+  ```python
+  ax.stackplot(
+      dates,
+      *[balances_by_type[ct] for ct in custody_types],
+      labels=[...],
+      colors=[...],
+      alpha=0.8
+  )
+  ```
+- Takes unpacked lists of values (one per custody type)
+- Stacks from bottom to top in order provided
+- Order matters: put most important (self-custodied) on bottom for visibility
+
+### Wallet Metadata Integration
+- JOIN ledger with wallets table: match ledger.exchange to wallets.wallet_id
+- Graceful degradation: if wallets table empty/missing, all transactions marked as "unknown"
+- Query pattern:
+  ```python
+  try:
+      wallets = backend.execute("SELECT wallet_id, custody FROM wallets WHERE active = 1")
+      # Build mapping dict
+  except Exception:
+      return {}  # No wallet data available
+  ```
+
+### Custody Type Normalization
+- Accept various naming conventions: "self", "cold", "hardware" → "self-custodied"
+- Accept "exchange", "hot" → "custodial"
+- Accept "multi-sig", "collaborative" → "multisig"
+- Use `.lower()` for case-insensitive matching
+- Unknown/unrecognized types → "unknown" category
+
+### Multi-dimensional Balance Tracking
+- Data structure: `[{'date': datetime, 'self-custodied': float, 'custodial': float, 'multisig': float, 'unknown': float}, ...]`
+- Update specific custody type balance on each transaction
+- Initialize all custody types to 0.0 at start
+- Copy current state on each transaction (snapshot)
+
+### Filtering Empty Categories
+- Before plotting, filter out custody types with zero final balance
+- Check: `current_totals[ct] > 0.00000001` (allow for floating point errors)
+- Single custody type case: stackplot works fine with single area (not truly "stacked")
+- Zero balance across all types: raise ValueError (no data to plot)
+
+### Self-Sovereignty Index
+- Metric: percentage of holdings in self-custody
+- Formula: `(self_custodied_balance / total_balance) * 100`
+- Display in subtitle as motivational indicator
+- Shows progress toward Bitcoin's core value proposition (self-sovereignty)
+
+### Color Palette (Custody Theme)
+- Green (#34C759): self-custodied (sovereignty, security)
+- Orange (#FF9500): custodial (convenience, counterparty risk)
+- Blue (#007AFF): multisig (collaborative security)
+- Gray (#8E8E93): unknown (missing metadata)
+
+### Legend with Current Balances
+- Include current balance in each label: "Self-Custodied: 0.60000000 BTC"
+- Use `.replace('-', ' ').title()` to format custody type names
+- Position: "upper left" so it doesn't obscure data
+
+## VIZ-005: CLI Script (btc_viz - Brings It All Together)
+
+### Argparse CLI Pattern
+- Use `argparse.ArgumentParser()` with `formatter_class=argparse.RawDescriptionHelpFormatter` for formatted epilog
+- Mutually exclusive groups: `parser.add_mutually_exclusive_group()` for `--range` vs `--start-date`
+- Action flags: `action="store_true"` for boolean flags like `--no-cost-basis`
+- Choices validation: `choices=['ytd', '1y', '5y', 'all']` for enum-like arguments
+- Type conversion: `type=int` for numeric arguments like `--dpi`
+
+### Argument Validation
+- Separate validation function: `validate_arguments(args)` after parsing
+- Check logical constraints: `--start-date` requires `--end-date`
+- Validate formats: `datetime.strptime(date_str, "%Y-%m-%d")` catches bad formats
+- Check ranges: dates not in future, DPI between 72-600
+- Raise `ValueError` with clear message on validation failure
+
+### Date Range Resolution
+- Convert preset strings to actual date tuples: "ytd" → (Jan 1, today)
+- Custom dates: parse with `datetime.strptime()`, default end to `datetime.now()`
+- Return union type: `str | tuple[datetime, datetime]` for flexibility
+- Pass through to VizConfig which handles both formats
+
+### Chart Generation Orchestration
+- Loop through requested chart types: ["orange", "balance", "custody"]
+- Try/except per chart: don't let one failure stop others
+- Track generated charts: `dict[str, Path]` mapping chart type to output file
+- Track errors separately: continue on error, report at end
+- Print progress: "Generating orange plot..." with ✓/✗ indicators
+
+### Summary Statistics
+- Optional summary (don't fail if it errors)
+- Query trades, calculate totals, get current price
+- Display: date range, transaction counts, total BTC, total USD, current value, unrealized gain
+- List generated chart paths with checkmarks
+- Use separator lines (=====) for visual structure
+
+### Exit Codes
+- 0: Success (all requested charts generated)
+- 1: Argument validation error
+- 2: No transaction data
+- 3: All chart generation failed
+- 130: KeyboardInterrupt (Ctrl+C)
+
+### Error Handling Strategy
+- `ValueError`: Validation errors (exit 1)
+- `RuntimeError` with "No Bitcoin transactions": No data (exit 2)
+- `KeyboardInterrupt`: User cancelled (exit 130)
+- Other exceptions: Unexpected error with traceback (exit 3)
+- Partial success: Generate what we can, warn about failures, exit 0
+
+### Module Imports in Scripts
+- Add `src/python` to `sys.path`: `sys.path.insert(0, str(Path(__file__).parent.parent / "python"))`
+- Use package imports: `from db import get_backend` (not `from src.python.db`)
+- Add `from __future__ import annotations` for Python 3.9 compatibility with `|` union syntax
+
+### Testing CLI Scripts
+- Use `subprocess.run()` to invoke script (more realistic than importing)
+- Test help flag: `--help` returns 0 and shows usage
+- Test validation: invalid arguments return exit code 1
+- Test empty data: returns appropriate error code
+- Test success path: create test database, run script, verify output files exist
+- Pass env vars: `env={"SQLITE_DB_PATH": str(db_path)}` to use test database
+
+### Timezone Handling with yfinance
+- **Critical Issue**: yfinance returns timezone-aware pandas DatetimeIndex (UTC)
+- Database datetimes are timezone-naive (no timezone info)
+- Comparison fails: "Invalid comparison between dtype=datetime64[ns, UTC] and datetime"
+- **Solution**: Strip timezone from pandas index after fetching:
+  ```python
+  if price_data.index.tz is not None:
+      price_data.index = price_data.index.tz_localize(None)
+  ```
+- Always do this immediately after fetching from yfinance
+- Alternative would be to make all datetime objects timezone-aware, but that's more complex
+
+### Import Compatibility Pattern
+- Challenge: Code needs to work in two contexts:
+  1. Tests: `from src.python.viz import BalanceChart`
+  2. CLI: sys.path has src/python, imports `from viz import BalanceChart`
+- **Solution**: Try/except imports:
+  ```python
+  try:
+      from src.python.db.backend import DatabaseBackend
+  except ModuleNotFoundError:
+      from db.backend import DatabaseBackend  # type: ignore[import]
+  ```
+- Primary import (src.python) for tests, fallback for CLI
+- Add `# type: ignore[import]` to fallback to satisfy mypy
