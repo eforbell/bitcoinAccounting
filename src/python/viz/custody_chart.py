@@ -316,17 +316,19 @@ class CustodyChart:
         ax.legend(loc="upper left", fontsize=10)
 
         # Calculate self-sovereignty index
+        # Note: multisig is self-custody on steroids - include it in the index
         total_balance = sum(current_totals.values())
         if total_balance > 0:
-            self_custodied_pct = (
-                current_totals["self-custodied"] / total_balance
-            ) * 100
+            total_self_custody = (
+                current_totals["self-custodied"] + current_totals["multisig"]
+            )
+            self_custody_pct = (total_self_custody / total_balance) * 100
         else:
-            self_custodied_pct = 0
+            self_custody_pct = 0
 
         # Title with self-sovereignty index
         title = "Bitcoin Holdings by Custody Type"
-        subtitle = f"Self-Sovereignty Index: {self_custodied_pct:.1f}% self-custodied"
+        subtitle = f"Self-Sovereignty Index: {self_custody_pct:.1f}% self-custodied (including multisig)"
 
         ax.set_title(f"{title}\n{subtitle}", fontsize=14, pad=20)
 
