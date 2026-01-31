@@ -91,8 +91,7 @@ class CustodyChart:
             """
             SELECT MIN(createddate) as min_date
             FROM ledger
-            WHERE trans_type = 'Trade'
-              AND (buy_curr = 'BTC' OR sell_curr = 'BTC')
+            WHERE (buy_curr = 'BTC' OR sell_curr = 'BTC')
             """
         )
 
@@ -129,36 +128,57 @@ class CustodyChart:
     def _get_custody_balances(
         self, start_date: datetime, end_date: datetime
     ) -> list[dict[str, Any]]:
-        """Get BTC balance by custody type over time.
+        """Get BTC balance by custody type over time, smoothed by day.
 
         Args:
             start_date: Start of date range
             end_date: End of date range
 
         Returns:
-            List of dicts with 'date', 'custody_type', and 'balance' keys
+            List of dicts with 'date' and balances by custody type
         """
-        # First, get all BTC trades with their wallet/exchange info
+        # Get all BTC value changes from ledger (buys - sells per wallet)
         query = """
             SELECT
                 createddate as date,
-                CASE
-                    WHEN buy_curr = 'BTC' THEN buy
-                    WHEN sell_curr = 'BTC' THEN -sell
-                END AS quantity,
+                COALESCE(CASE WHEN buy_curr = 'BTC' THEN buy ELSE 0 END, 0) -
+                COALESCE(CASE WHEN sell_curr = 'BTC' THEN sell ELSE 0 END, 0) as btc_change,
                 exchange
             FROM ledger
-            WHERE trans_type = 'Trade'
-              AND (buy_curr = 'BTC' OR sell_curr = 'BTC')
+            WHERE buy_curr = 'BTC' OR sell_curr = 'BTC'
             ORDER BY createddate ASC
         """
 
-        trades = self.backend.execute(query)
+        transactions = self.backend.execute(query)
 
         # Get wallet custody information
         wallets = self._get_wallet_custody_map()
 
-        # Calculate cumulative balance by custody type
+        # Group transactions by day and wallet to smooth the data
+        from collections import defaultdict
+        daily_changes: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+
+        for txn in transactions:
+            date = txn["date"]
+            if isinstance(date, str):
+                date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+
+            # Skip transactions outside date range
+            if date < start_date or date > end_date:
+                continue
+
+            # Get just the date (no time) for grouping
+            date_key = date.date().isoformat()
+            exchange = txn["exchange"]
+            btc_change = txn["btc_change"]
+
+            # Determine custody type
+            custody_type = wallets.get(exchange, "unknown")
+
+            # Accumulate changes for this day and custody type
+            daily_changes[date_key][custody_type] += btc_change
+
+        # Build daily balance snapshots
         custody_balances: dict[str, float] = {
             "self-custodied": 0.0,
             "custodial": 0.0,
@@ -174,27 +194,16 @@ class CustodyChart:
             **custody_balances.copy()
         })
 
-        for trade in trades:
-            date = trade["date"]
-            if isinstance(date, str):
-                date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+        # Process each day chronologically
+        for date_key in sorted(daily_changes.keys()):
+            # Apply all changes for this day
+            for custody_type, change in daily_changes[date_key].items():
+                custody_balances[custody_type] += change
 
-            # Skip trades outside date range
-            if date < start_date or date > end_date:
-                continue
-
-            quantity = trade["quantity"]
-            exchange = trade["exchange"]
-
-            # Determine custody type
-            custody_type = wallets.get(exchange, "unknown")
-
-            # Update cumulative balance
-            custody_balances[custody_type] += quantity
-
-            # Record balance snapshot
+            # Record end-of-day balance
+            day_date = datetime.fromisoformat(date_key)
             balance_data.append({
-                "date": date,
+                "date": day_date,
                 **custody_balances.copy()
             })
 
@@ -219,7 +228,6 @@ class CustodyChart:
                 """
                 SELECT wallet_id, custody
                 FROM wallets
-                WHERE active = 1
                 """
             )
 
@@ -229,9 +237,9 @@ class CustodyChart:
                 wallet_id = wallet["wallet_id"]
                 custody = wallet["custody"]
                 # Normalize custody type
-                if custody.lower() in ["self-custodied", "self", "cold", "hardware"]:
+                if custody.lower() in ["self-custodied", "self", "cold", "hardware", "hot"]:
                     wallet_map[wallet_id] = "self-custodied"
-                elif custody.lower() in ["custodial", "exchange", "hot"]:
+                elif custody.lower() in ["custodial", "exchange", "third-party"]:
                     wallet_map[wallet_id] = "custodial"
                 elif custody.lower() in ["multisig", "multi-sig", "collaborative"]:
                     wallet_map[wallet_id] = "multisig"
