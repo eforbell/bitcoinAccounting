@@ -693,3 +693,85 @@
 
 ---
 
+
+## 2026-01-30 - VIZ-004 Improvements
+
+- What was implemented:
+  - Refactored custody chart to track ALL BTC movements (not just trades)
+  - Added daily aggregation to eliminate transaction "pops" and smooth the chart
+  - Changed query to capture any ledger transaction where buy_curr='BTC' or sell_curr='BTC'
+  - Implemented grouping by date (no time component) to accumulate all changes per day
+  - Generate end-of-day balance snapshots instead of per-transaction snapshots
+  - Updated custody type mappings: hot wallets → self-custodied, third-party → custodial
+  - Removed trans_type='Trade' filter to capture deposits, withdrawals, transfers
+  - Removed active=1 filter from wallets query to include all wallet metadata
+  - Fixed VizConfig type annotation: date_range should be Tuple[datetime, datetime]
+
+- Files changed:
+  - `src/python/viz/custody_chart.py` (modified - refactored _get_custody_balances, _get_wallet_custody_map)
+  - `src/python/viz/config.py` (modified - fixed date_range type annotation)
+
+- **Learnings:**
+  - Daily aggregation pattern: use `defaultdict(lambda: defaultdict(float))` to accumulate changes by date and category
+  - Date key extraction: `date.date().isoformat()` gets YYYY-MM-DD string for grouping (removes time component)
+  - Process chronologically: sort daily_changes.keys(), apply all changes for each day, create snapshot
+  - Tracking "where bitcoin is" requires looking at all value changes, not just trades
+  - Transaction "pops" occur when multiple transactions happen on same day - daily smoothing eliminates these
+  - End-of-day balance snapshots: create one balance entry per day after applying all that day's changes
+  - COALESCE pattern: `COALESCE(CASE WHEN buy_curr = 'BTC' THEN buy ELSE 0 END, 0)` handles NULL values
+  - Net change calculation: `buy_btc - sell_btc` gives positive for acquisitions, negative for dispositions
+  - All 59 visualization tests still passing after refactor - daily smoothing doesn't break existing test expectations
+
+- **Test Results:**
+  - 59 visualization tests passing (all existing tests still work)
+  - 197 total tests passing (no regressions)
+  - User confirmation: "spike/pops are gone after the update to btc_change in the series"
+
+---
+
+## 2026-01-30 - VIZ-006
+
+- What was implemented:
+  - Created `src/python/viz/report.py` with PDFReport class
+  - Multi-page PDF generation using reportlab:
+    - Page 1: Cover page with title, date range, summary statistics
+    - Page 2: Orange plot (full page with scaling)
+    - Page 3: Balance + custody charts (dual chart layout, stacked vertically)
+    - Page 4: Key insights and motivational content
+  - Added --pdf flag to btc_viz CLI script
+  - Image scaling: fits charts within page margins while maintaining aspect ratio
+  - Text rendering: title, stats, insights with word wrapping
+  - Self-sovereignty calculation: includes multisig as part of self-custody percentage
+  - Optional dependency handling: reportlab required only for PDF generation
+  - 5 comprehensive unit tests for PDF generation
+
+- Files changed:
+  - `src/python/viz/report.py` (new - 430 lines)
+  - `src/python/viz/__init__.py` (modified - export PDFReport)
+  - `requirements.txt` (modified - added reportlab)
+  - `src/scripts/btc_viz` (modified - added --pdf flag)
+  - `tests/test_viz.py` (modified - added TestPDFReport class with 5 tests)
+  - `AGENTS.md` (updated - added PDF patterns, multisig as self-custody)
+  - `planning/features/feature-2-prd.json` (modified - VIZ-006 passes: true)
+
+- **Learnings:**
+  - ReportLab canvas coordinate system: (0,0) is bottom-left, not top-left
+  - ImageReader class handles matplotlib PNG output for embedding in PDFs
+  - Image scaling formula: `scale = min(max_width / img_width, max_height / img_height)`
+  - Layout calculations use `inch` unit from reportlab.lib.units
+  - Font setting: `c.setFont("Helvetica-Bold", 24)` before drawing text
+  - Centered text: `c.drawCentredString(x, y, text)` vs left-aligned `c.drawString(x, y, text)`
+  - Page break: `c.showPage()` creates new page, resets coordinate system
+  - Save PDF: `c.save()` writes all pages to file
+  - Word wrapping: use `c.stringWidth(text, font, size)` to measure text width, break manually
+  - Optional dependency pattern: try/except on import, raise ImportError with install instructions
+  - Dual chart layout: divide page height in half, scale each image independently
+  - Summary stats: query database for balance, trades, cost basis
+  - Insights generation: analyze custody data, purchase count, DCA behavior
+  - Multisig is self-custody: when calculating self-sovereignty, include multisig + self-custodied
+  - Test pattern: fixtures define sample_backend_with_wallets within each test class
+  - pair_price schema: uses `to_curr`, `from_curr` columns (not `pair`)
+  - 64 visualization tests passing (59 existing + 5 new PDF tests)
+  - 202 total tests passing (all previous tests + new PDF tests), zero regressions
+
+---

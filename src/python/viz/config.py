@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Tuple
 
@@ -22,7 +23,7 @@ class VizConfig:
         dpi: Resolution in dots per inch for output images (72-600)
     """
 
-    date_range: str | Tuple[str, str] = 'all'
+    date_range: str | Tuple[datetime, datetime] = 'all'
     output_dir: Path = field(default_factory=lambda: Path('output/viz'))
     chart_types: list[str] = field(default_factory=lambda: ['all'])
     include_cost_basis: bool = True

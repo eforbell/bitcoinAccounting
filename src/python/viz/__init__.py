@@ -12,6 +12,7 @@ from .config import VizConfig
 from .custody_chart import CustodyChart
 from .data_fetcher import PriceDataFetcher
 from .orange_plot import OrangePlot
+from .report import PDFReport
 
 __all__ = [
     'BalanceChart',
@@ -19,4 +20,5 @@ __all__ = [
     'CustodyChart',
     'PriceDataFetcher',
     'OrangePlot',
+    'PDFReport',
 ]

@@ -1338,3 +1338,170 @@ class TestCustodyChart:
         assert final['self-custodied'] == pytest.approx(0.5)
         assert final['custodial'] == pytest.approx(0.3)
         assert final['multisig'] == pytest.approx(0.0)  # 2021 trade excluded
+
+
+class TestPDFReport:
+    """Tests for PDFReport class."""
+
+    @pytest.fixture
+    def temp_output_dir(self) -> Path:
+        """Create a temporary output directory for testing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+
+    @pytest.fixture
+    def sample_backend_with_wallets(self) -> SqliteBackend:
+        """Create an in-memory SQLite backend with wallet metadata."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+
+        # Add wallet metadata
+        backend.execute(
+            """
+            INSERT INTO wallets (wallet_id, wallet_type, custody, description, active) VALUES
+            ('Coldcard', 'hardware', 'self-custodied', 'Hardware wallet', 1),
+            ('Coinbase', 'exchange', 'custodial', 'Exchange account', 1)
+            """
+        )
+
+        # Add sample BTC trades
+        backend.execute(
+            """
+            INSERT INTO ledger (
+                createddate, trans_type, buy_curr, buy, sell_curr, sell,
+                fee_curr, fee, exchange, "group", comment
+            ) VALUES
+            (:date1, 'Trade', 'BTC', 0.5, 'USD', 5000.0, '', 0, 'Coldcard', '', ''),
+            (:date2, 'Trade', 'BTC', 0.3, 'USD', 3600.0, '', 0, 'Coinbase', '', '')
+            """,
+            {
+                'date1': '2020-01-15 10:00:00',
+                'date2': '2020-06-01 14:30:00',
+            }
+        )
+
+        # Add pair_price data for cost basis
+        backend.execute(
+            """
+            INSERT INTO pair_price (date, to_curr, from_curr, price) VALUES
+            (:date1, 'BTC', 'USD', 10000.0),
+            (:date2, 'BTC', 'USD', 12000.0)
+            """,
+            {
+                'date1': '2020-01-15 10:00:00',
+                'date2': '2020-06-01 14:30:00',
+            }
+        )
+
+        return backend
+
+    def test_pdf_report_basic_generation(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that PDF report generates successfully with sample data."""
+        # Skip if reportlab not available
+        try:
+            from src.python.viz.report import PDFReport
+        except ImportError:
+            pytest.skip("reportlab not installed")
+
+        config = VizConfig(output_dir=temp_output_dir)
+        report = PDFReport(sample_backend_with_wallets, config)
+
+        output_path = report.generate()
+
+        # Verify output file exists
+        assert output_path.exists()
+        assert output_path.suffix == '.pdf'
+        assert output_path.name.startswith('btc_report_')
+
+        # Verify file is not empty
+        assert output_path.stat().st_size > 0
+
+    def test_pdf_report_empty_ledger(
+        self,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that PDF report raises error with empty ledger."""
+        try:
+            from src.python.viz.report import PDFReport
+        except ImportError:
+            pytest.skip("reportlab not installed")
+
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        config = VizConfig(output_dir=temp_output_dir)
+        report = PDFReport(backend, config)
+
+        with pytest.raises(ValueError, match="No Bitcoin transactions"):
+            report.generate()
+
+    def test_pdf_report_date_range(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test PDF report with custom date range."""
+        try:
+            from src.python.viz.report import PDFReport
+        except ImportError:
+            pytest.skip("reportlab not installed")
+
+        start = datetime(2020, 1, 1)
+        end = datetime(2020, 12, 31)
+        config = VizConfig(
+            date_range=(start, end),
+            output_dir=temp_output_dir
+        )
+        report = PDFReport(sample_backend_with_wallets, config)
+
+        output_path = report.generate()
+
+        # Verify file was created
+        assert output_path.exists()
+
+    def test_pdf_report_output_path(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that PDF report uses correct output path."""
+        try:
+            from src.python.viz.report import PDFReport
+        except ImportError:
+            pytest.skip("reportlab not installed")
+
+        config = VizConfig(output_dir=temp_output_dir)
+        report = PDFReport(sample_backend_with_wallets, config)
+
+        output_path = report._get_output_path()
+
+        # Verify path structure
+        assert output_path.parent == temp_output_dir
+        assert output_path.name.startswith('btc_report_')
+        assert output_path.suffix == '.pdf'
+
+    def test_pdf_report_summary_stats(
+        self,
+        sample_backend_with_wallets: SqliteBackend,
+        temp_output_dir: Path
+    ) -> None:
+        """Test that summary stats are calculated correctly."""
+        try:
+            from src.python.viz.report import PDFReport
+        except ImportError:
+            pytest.skip("reportlab not installed")
+
+        config = VizConfig(output_dir=temp_output_dir)
+        report = PDFReport(sample_backend_with_wallets, config)
+
+        stats = report._get_summary_stats()
+
+        # Verify stats keys
+        assert "Total BTC Holdings" in stats
+        assert "Purchases" in stats
+        assert "Sales" in stats
+
+        # Verify values
+        assert "BTC" in stats["Total BTC Holdings"]
+        assert int(stats["Purchases"]) > 0

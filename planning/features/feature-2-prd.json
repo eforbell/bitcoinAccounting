@@ -394,7 +394,7 @@
         "Unit tests: PDF generation (verify file created, not corrupted)"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Enhancement. PDF makes it easy to share with accountant, financial advisor, or just archive."
     }
   ],
