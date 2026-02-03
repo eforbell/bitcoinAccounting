@@ -22,36 +22,30 @@ import _bootstrap
 from cryptoAccounts import CryptoAccounts
 
 
-def get_exchange_purchase_history(crypto, coin, exchange):
-    """Get purchase/trade history at exchange.
+def get_all_purchase_data(crypto, coin):
+    """Get all purchase data for a coin, grouped by exchange.
 
     Returns:
-        (total_purchased, current_balance, total_usd_spent)
+        dict: {exchange: {'purchased': float, 'usd_spent': float}}
     """
-    # Get all trades for this coin at this exchange with proper USD cost conversion
-    # Uses TradeQuery.get_trade_cost() which handles:
-    # - USD: direct value
-    # - Stablecoins (USDC, GUSD, BUSD, USDT): treat as 1:1 USD
-    # - Other currencies: look up historical USD price from pair_price table
+    # Fetch ALL trades once (not per exchange)
     all_trades = crypto.trade_query.get_trade_cost(coin, cost_currency='USD')
 
-    # Filter to this exchange and purchases only (quantity > 0)
-    exchange_purchases = [
-        t for t in all_trades
-        if t.get('exchange') == exchange and t.get('quantity', 0) > 0
-    ]
+    # Group by exchange
+    exchange_data = {}
+    for t in all_trades:
+        if t.get('quantity', 0) <= 0:  # Skip sales
+            continue
 
-    # Calculate totals
-    total_purchased = sum(t['quantity'] for t in exchange_purchases)
-    total_usd_spent = sum(
-        t['total_cost'] for t in exchange_purchases
-        if t.get('total_cost') is not None
-    )
+        exchange = t.get('exchange', 'Unknown')
+        if exchange not in exchange_data:
+            exchange_data[exchange] = {'purchased': 0.0, 'usd_spent': 0.0}
 
-    # Get current balance
-    current_balance = crypto.get_wallet_balance(coin, exchange)
+        exchange_data[exchange]['purchased'] += t['quantity']
+        if t.get('total_cost') is not None:
+            exchange_data[exchange]['usd_spent'] += t['total_cost']
 
-    return total_purchased, current_balance, total_usd_spent
+    return exchange_data
 
 
 def main():
@@ -80,30 +74,24 @@ def main():
         total_still_at_exchange = 0
         total_usd_spent = 0
 
-        # Determine which exchanges to check
+        # Fetch ALL purchase data once (not per exchange)
+        all_purchases = get_all_purchase_data(crypto, coin)
+
+        # Filter to specific wallet if requested
         if wallet:
-            exchanges_to_check = [wallet]
+            exchanges_to_process = {wallet: all_purchases.get(wallet, {'purchased': 0, 'usd_spent': 0})}
         else:
-            # Query all wallets from database
-            try:
-                # Try wallets table first (wallet_id is the wallet name)
-                rows = crypto.backend.execute("SELECT wallet_id FROM wallets WHERE wallet_id IS NOT NULL ORDER BY wallet_id")
-                exchanges_to_check = [row['wallet_id'] for row in rows]
-                if not exchanges_to_check:
-                    # Fallback: get distinct exchanges from ledger
-                    rows = crypto.backend.execute("SELECT DISTINCT exchange FROM ledger WHERE exchange IS NOT NULL ORDER BY exchange")
-                    exchanges_to_check = [row['exchange'] for row in rows]
-            except:
-                # Fallback: get distinct exchanges from ledger
-                crypto.backend.rollback()
-                rows = crypto.backend.execute("SELECT DISTINCT exchange FROM ledger WHERE exchange IS NOT NULL ORDER BY exchange")
-                exchanges_to_check = [row['exchange'] for row in rows]
-        
-        for exchange in exchanges_to_check:
-            purchased, balance, usd_spent = get_exchange_purchase_history(crypto, coin, exchange)
+            exchanges_to_process = all_purchases
+
+        for exchange, data in exchanges_to_process.items():
+            purchased = data['purchased']
+            usd_spent = data['usd_spent']
 
             if purchased > 0:  # Has purchase history
+                # Get current balance (single query per exchange)
+                balance = crypto.get_wallet_balance(coin, exchange)
                 avg_cost = usd_spent / purchased if purchased > 0 else 0
+
                 exchange_data.append({
                     'name': exchange,
                     'purchased': purchased,
