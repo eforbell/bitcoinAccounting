@@ -1,40 +1,45 @@
 {
-  "currentFeature": "feature-2",
-  "featureName": "Bitcoin Portfolio Visualizations",
-  "prdPath": "planning/features/feature-2-prd.json",
-  "summaryPath": "planning/features/feature-2-summary.md",
-  "branch": "feature/bitcoin-visualizations",
-  "status": "planned",
+  "currentFeature": "feature-3",
+  "featureName": "Code Cleanup and Consistency Fixes",
+  "prdPath": "planning/features/feature-3-prd.json",
+  "summaryPath": "planning/features/feature-3-summary.md",
+  "branch": "feature/code-cleanup",
+  "status": "complete",
   "stories": [
     {
-      "id": "VIZ-001",
-      "title": "Infrastructure & price data fetching",
-      "status": "pending"
+      "id": "FIX-001",
+      "title": "Remove dead code (self.connection backward compat)",
+      "status": "complete"
     },
     {
-      "id": "VIZ-002",
-      "title": "Orange Plot (star feature!)",
-      "status": "pending"
+      "id": "FIX-002",
+      "title": "Complete deposit/withdrawal import execution",
+      "status": "complete"
     },
     {
-      "id": "VIZ-003",
-      "title": "Balance growth chart",
-      "status": "pending"
+      "id": "FIX-003",
+      "title": "Fix module-level now timestamp",
+      "status": "complete"
     },
     {
-      "id": "VIZ-004",
-      "title": "Custody breakdown",
-      "status": "pending"
+      "id": "FIX-004",
+      "title": "Consistency in balance methods",
+      "status": "complete"
     },
     {
-      "id": "VIZ-005",
-      "title": "CLI script & docs",
-      "status": "pending"
+      "id": "FIX-005",
+      "title": "Extract duplicate wallet filtering logic",
+      "status": "complete"
     },
     {
-      "id": "VIZ-006",
-      "title": "PDF report (optional)",
-      "status": "pending"
+      "id": "FIX-006",
+      "title": "Remove legacy exchange-specific import methods",
+      "status": "complete"
+    },
+    {
+      "id": "FIX-007",
+      "title": "Create Bitcoin wallet imports module",
+      "status": "complete"
     }
   ],
   "completedFeatures": [
@@ -45,11 +50,19 @@
       "mergedDate": "2026-01-29",
       "stories": 12,
       "notes": "Added SQLite support with database abstraction layer, migrated all PostgreSQL stored procedures to Python query classes"
+    },
+    {
+      "featureId": "feature-2",
+      "featureName": "Bitcoin Portfolio Visualizations",
+      "branch": "feature/bitcoin-visualizations",
+      "mergedDate": "2026-01-30",
+      "stories": 6,
+      "notes": "Added Orange Plot, Balance Chart, Custody Chart visualizations, btc_viz CLI, and PDF report generation"
     }
   ],
   "futureEnhancements": [
-    "Feature #3: Multi-coin support (ETH, other assets)",
-    "Feature #4: Tax optimization tools (tax-loss harvesting, gain/loss forecasting)",
-    "Feature #5: Web dashboard with live updates"
+    "Feature #4: Multi-coin support (ETH, other assets)",
+    "Feature #5: Tax optimization tools (tax-loss harvesting, gain/loss forecasting)",
+    "Feature #6: Web dashboard with live updates"
   ]
 }

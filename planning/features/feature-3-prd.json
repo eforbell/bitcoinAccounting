@@ -1,0 +1,104 @@
+{
+  "feature": "Code Cleanup and Consistency Fixes",
+  "version": "1.0",
+  "branch": "feature/code-cleanup",
+  "stories": [
+    {
+      "id": "FIX-001",
+      "title": "Remove dead code (self.connection backward compat)",
+      "priority": 1,
+      "complexity": "low",
+      "description": "Remove `self.connection = None` from CryptoAccounts.__init__. Tests were updated during SQL-009 to use backend abstraction, so backward compatibility is no longer needed.",
+      "acceptance_criteria": [
+        "self.connection = None is removed from __init__",
+        "All existing tests pass",
+        "No references to self.connection remain in codebase"
+      ],
+      "passes": true
+    },
+    {
+      "id": "FIX-002",
+      "title": "Complete deposit/withdrawal import execution",
+      "priority": 2,
+      "complexity": "low",
+      "description": "In import_transactions(), the Deposit and Withdrawal cases define a query but never execute it. Complete the implementation to execute the queries.",
+      "acceptance_criteria": [
+        "Deposit transactions are imported correctly with query execution",
+        "Withdrawal transactions are imported correctly with query execution",
+        "Remove misleading comments about incomplete code"
+      ],
+      "passes": true
+    },
+    {
+      "id": "FIX-003",
+      "title": "Fix module-level now timestamp",
+      "priority": 3,
+      "complexity": "low",
+      "description": "Replace module-level `now = datetime.now()` with `None` defaults and runtime evaluation. Methods with `now` as default parameter should evaluate datetime.now() at call time, not import time.",
+      "acceptance_criteria": [
+        "Module-level `now` variable removed",
+        "Methods using now as default use None with runtime fallback",
+        "All existing tests pass"
+      ],
+      "passes": true
+    },
+    {
+      "id": "FIX-004",
+      "title": "Consistency in balance methods",
+      "priority": 4,
+      "complexity": "low",
+      "description": "get_balance() excludes 'Stake' transactions via BalanceCalculator, but get_balance_by_account() doesn't. Make them consistent by adding Stake exclusion to get_balance_by_account().",
+      "acceptance_criteria": [
+        "get_balance_by_account() excludes Stake transactions",
+        "Document the exclusion in docstring"
+      ],
+      "passes": true
+    },
+    {
+      "id": "FIX-005",
+      "title": "Extract duplicate wallet filtering logic",
+      "priority": 5,
+      "complexity": "medium",
+      "description": "The wallet filtering logic for trade/interest purchases is duplicated between get_sales_for_1099b() and forecast_capital_gains_fifo(). Extract to a private helper method.",
+      "acceptance_criteria": [
+        "Create _get_purchase_lots() helper method",
+        "get_sales_for_1099b() uses helper",
+        "forecast_capital_gains_fifo() uses helper",
+        "All existing 1099b and forecast tests pass",
+        "Reduce code duplication by ~30 lines"
+      ],
+      "passes": true
+    },
+    {
+      "id": "FIX-006",
+      "title": "Remove legacy exchange-specific import methods",
+      "priority": 6,
+      "complexity": "low",
+      "description": "Remove legacy import methods for exchanges no longer used (Nexo, ADA, RVN mining, etc.) from cryptoAccounts.py.",
+      "acceptance_criteria": [
+        "import_transactions_rvn_mining removed",
+        "import_transactions_nexo_csv removed",
+        "import_transactions_ada_csv removed",
+        "import_transactions_ledger_csv removed",
+        "All existing tests pass"
+      ],
+      "passes": true
+    },
+    {
+      "id": "FIX-007",
+      "title": "Create Bitcoin wallet imports module",
+      "priority": 7,
+      "complexity": "medium",
+      "description": "Create a new wallet_imports.py module with import functions for common Bitcoin hardware and software wallets (Ledger, Trezor, Sparrow, Coldcard).",
+      "acceptance_criteria": [
+        "Create src/python/wallet_imports.py",
+        "import_ledger_live_csv() function",
+        "import_trezor_suite_csv() function",
+        "import_sparrow_csv() function",
+        "import_coldcard_csv() function",
+        "Bitcoin-only focus"
+      ],
+      "passes": true
+    }
+  ]
+}

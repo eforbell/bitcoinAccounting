@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from db import DatabaseBackend
 
-now = datetime.now()
-
 class CryptoAccounts(object):
 
     def __init__(self, backend: DatabaseBackend | None = None):
@@ -30,9 +28,6 @@ class CryptoAccounts(object):
         self.trade_query = TradeQuery(backend, self.price_lookup)
         self.basis_calc = BasisCalculator(self.trade_query)
         self.income_query = IncomeQuery(backend, self.price_lookup)
-
-        # Keep connection attribute for backward compatibility with tests
-        self.connection = None
 
     def close(self):
         self.backend.close()
@@ -57,6 +52,7 @@ class CryptoAccounts(object):
         """Get balance for a specific account/wallet.
 
         Fees are already included in buy/sell amounts, not subtracted separately.
+        Stake transactions are excluded from the balance, consistent with get_balance().
 
         Args:
             coin: Currency code (e.g., 'BTC', 'USD')
@@ -67,7 +63,7 @@ class CryptoAccounts(object):
         """
         query = """
             SELECT
-                COALESCE(SUM(CASE WHEN buy_curr = :coin THEN buy ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN buy_curr = :coin AND trans_type != 'Stake' THEN buy ELSE 0 END), 0) -
                 COALESCE(SUM(CASE WHEN sell_curr = :coin THEN sell ELSE 0 END), 0)
             FROM ledger
             WHERE exchange = :account
@@ -203,107 +199,30 @@ class CryptoAccounts(object):
                 })
             elif transaction['trans_type'] == "Deposit":
                 query = self.getDepositQuery()
-                # Note: This case is incomplete in original code - query defined but not executed
+                self.backend.execute(query, {
+                    "createddate": transaction['created_date'],
+                    "buy": transaction['buy'],
+                    "buy_curr": transaction['buy_curr'],
+                    "exchange": transaction['exchange'],
+                    "group": transaction.get('group', '')
+                })
             elif transaction['trans_type'] == "Withdrawal":
                 query = self.getWithdrawQuery()
-                # Note: This case is incomplete in original code - query defined but not executed
+                self.backend.execute(query, {
+                    "createddate": transaction['created_date'],
+                    "sell": transaction['sell'],
+                    "sell_curr": transaction['sell_curr'],
+                    "fee": transaction.get('fee', 0.0),
+                    "fee_curr": transaction.get('fee_curr', ''),
+                    "exchange": transaction['exchange'],
+                    "group": transaction.get('group', '')
+                })
         self.backend.commit()
 
-    def import_transactions_rvn_mining(self, in_file):
-        colnames = ['Confirmed','Date','Type','Label','Address','Amount (RVN)','Asset','ID']
-        with open(in_file, 'r') as csv_in:
-            rvn_input = csv.DictReader(csv_in, fieldnames=colnames)
-            transactions = []
-            rowNum = 0
-            for row in rvn_input:
-                rowNum += 1
-                transaction = {}
-                if rowNum == 1:
-                    continue
-                transaction['exchange'] = 'RVNMiningWallet'
-                if row['Label'] == 'Mining':
-                    transaction['trans_type'] = "Mining"
-                    transaction['created_date'] = row['Date']
-                    transaction['buy_curr'] = 'RVN'
-                    transaction['buy'] = row['Amount (RVN)']
-                    transaction['transactionid'] = row['ID']
-                    transaction['group'] = 'Ravenminer'
-                else:
-                    continue
-                transactions.append(transaction)
-        return colnames, transactions
-
-    def import_transactions_nexo_csv(self, in_file):
-        colnames = ['transactionId','trans_type','buy_curr','buy','usd_equivalent','comment','Outstanding Loan', 'created_date']
-        with open(in_file, 'r') as csv_in:
-            nexo_input = csv.DictReader(csv_in, fieldnames=colnames)
-            transactions = []
-            rowNum = 0
-            for row in nexo_input:
-                rowNum += 1
-                transaction = {}
-                if rowNum == 1:
-                    continue
-                for i, colname in enumerate(colnames):
-                    transaction[colname] = row[colname]
-                if (transaction['buy_curr'] == 'NEXOBNB'):
-                    transaction['buy_curr'] = 'BNB'
-                elif (transaction['buy_curr'] == 'NEXONEXO'):
-                    transaction['buy_curr'] = 'NEXO'
-                elif (transaction['buy_curr'] == 'BNBN'):
-                    transaction['buy_curr'] = 'BNB'
-                elif (transaction['buy_curr'] == 'NEXOBEP2'):
-                    transaction['buy_curr'] = 'NEXO'
-                transaction['exchange'] = 'Nexo'
-                transaction['group'] = None
-                transactions.append(transaction)
-        return colnames, transactions
-
-    def import_transactions_ada_csv(self, in_file):
-        colnames = ['trans_type','buy','buy_curr','sell','sell_cur','fee','fee_curr', 'exchange','group','comment','created_date']
-        with open(in_file, 'r') as csv_in:
-            ada_input = csv.DictReader(csv_in, fieldnames=colnames)
-            transactions = []
-            rowNum = 0
-            for row in ada_input:
-                if row['exchange'] == 'Cardano Protocol':
-                    row['exchange'] = 'Ledger'
-                rowNum += 1
-                if rowNum == 1:
-                    continue
-                transactions.append(row)
-
-        return colnames, transactions
-
-    def import_transactions_ledger_csv(self, in_file):
-        colnames = ['created_date','curr','op_type','value','fee','hash','account name','xpub','cost_currency','cost','cost_at_export']
-        with open(in_file, 'r') as csv_in:
-            ledger_live_input = csv.DictReader(csv_in, fieldnames=colnames)
-            transactions = []
-            rowNum = 0
-            for row in ledger_live_input:
-                rowNum += 1
-                transaction = {}
-                if rowNum == 1:
-                    continue
-                #for i, colname in enumerate(colnames):
-                if (row['op_type'] == 'IN' and row['curr'] == 'ALGO' and row['fee'] == '0' and row['value'] != '0'): #reward
-                    transaction['buy_curr'] = row['curr']
-                    transaction['buy'] = row['value']
-                    transaction['trans_type'] = 'Interest Income'
-                    transaction['created_date'] = row['created_date']
-                    transaction['comment'] = 'Reward'
-                    transaction['usd_equivalent'] = row['cost']
-                else:
-                    continue
-                transaction['exchange'] = 'Ledger'
-                transaction['group'] = None
-                transactions.append(transaction)
-        return colnames, transactions
-
-
-    def transfer_funds(self, withdraw_date= datetime.now(), deposit_date = None, from_account="Strike", tx_coin="BTC", tx_amount=0.0, to_account="Ledger-2", fee_coin="BTC", fee_amount=0.0):
-        if (deposit_date is None):
+    def transfer_funds(self, withdraw_date=None, deposit_date=None, from_account="Strike", tx_coin="BTC", tx_amount=0.0, to_account="Ledger-2", fee_coin="BTC", fee_amount=0.0):
+        if withdraw_date is None:
+            withdraw_date = datetime.now()
+        if deposit_date is None:
             delta = timedelta(minutes=10)
             deposit_date = withdraw_date + delta
         if (tx_coin is None or tx_amount is None or from_account is None or to_account is None):
@@ -341,32 +260,42 @@ class CryptoAccounts(object):
         })
         self.backend.commit()
 
-    def deposit(self, deposit_date=now, buy=0, buy_curr="USD", exchange="Strike", group=""):
+    def deposit(self, deposit_date=None, buy=0, buy_curr="USD", exchange="Strike", group=""):
+        if deposit_date is None:
+            deposit_date = datetime.now()
         self.backend.execute(
             self.getDepositQuery(),
             {"createddate": deposit_date, "buy": buy, "buy_curr": buy_curr, "exchange": exchange, "group": group})
         self.backend.commit()
 
-    def withdraw(self, withdraw_date=now, sell=0, sell_curr="USD", fee=0.0, fee_curr="USD", exchange="Strike", group=""):
+    def withdraw(self, withdraw_date=None, sell=0, sell_curr="USD", fee=0.0, fee_curr="USD", exchange="Strike", group=""):
+        if withdraw_date is None:
+            withdraw_date = datetime.now()
         self.backend.execute(
             self.getWithdrawQuery(),
             {"createddate": withdraw_date, "sell": sell, "sell_curr": sell_curr, "fee": fee, "fee_curr": fee_curr, "exchange": exchange, "group": group})
         self.backend.commit()
 
-    def interest(self, interest_date=now, buy=0.0, buy_curr="USD", exchange="River", group=""):
+    def interest(self, interest_date=None, buy=0.0, buy_curr="USD", exchange="River", group=""):
+        if interest_date is None:
+            interest_date = datetime.now()
         self.backend.execute(
             self.getInterestIncomeQuery(),
             {"createddate": interest_date, "buy": buy, "buy_curr": buy_curr, "exchange": exchange, "group": group})
         self.backend.commit()
 
-    def execute_trade(self, trade_date=now, buy=0.0, buy_curr="BTC", sell=0.0, sell_curr="USD", fee=0.0, fee_curr="USD",
+    def execute_trade(self, trade_date=None, buy=0.0, buy_curr="BTC", sell=0.0, sell_curr="USD", fee=0.0, fee_curr="USD",
                       exchange="Strike", group=""):
+        if trade_date is None:
+            trade_date = datetime.now()
         self.backend.execute(
             self.getTradeQuery(),
             {"createddate": trade_date, "buy": buy, "buy_curr": buy_curr, "sell": sell, "sell_curr": sell_curr, "fee": fee, "fee_curr": fee_curr, "exchange": exchange, "group": group})
         self.backend.commit()
 
-    def add_price_pair(self, pair_date=now, to_curr="BTC", from_curr="USD", price=0.0):
+    def add_price_pair(self, pair_date=None, to_curr="BTC", from_curr="USD", price=0.0):
+        if pair_date is None:
+            pair_date = datetime.now()
         price_query = self.getPricePairQuery()
         self.backend.execute(price_query, {"to_curr": to_curr, "price": price, "from_curr": from_curr, "date": pair_date})
         self.backend.commit()
@@ -389,38 +318,18 @@ class CryptoAccounts(object):
     def getPricePairQuery(self):
         return "insert into pair_price (to_curr, price, from_curr, date) values (:to_curr, :price, :from_curr, :date)"
 
-    def get_sales_for_1099b(self, coin='BTC', tax_year=2024, wallet=None):
-        """
-        Generate 1099-B data for sales of a coin in a given tax year using FIFO cost basis.
-        
-        Tax year determines accounting method:
-        - Pre-2025: Universal FIFO (wallet parameter optional for user preference)
-        - 2025+: Per-wallet FIFO (wallet parameter should be specified for compliance)
-        
+    def _get_purchase_lots(self, coin='BTC', wallet=None):
+        """Get all purchase lots (trades and interest) for a coin, optionally filtered by wallet.
+
+        Returns a list of tuples sorted by date: (date, quantity, unit_cost, total_cost, exchange)
+
         Args:
             coin: Cryptocurrency symbol
-            tax_year: Tax year for reporting  
             wallet: Optional wallet filter
-                    - Pre-2025: Optional (can use global FIFO)
-                    - 2025+: Recommended (IRS requires per-wallet accounting)
-        
+
         Returns:
-            tuple: (sales_list, worksheet_list)
-            - sales_list: list of dicts formatted for TaxAct 1099-B CSV import
-            - worksheet_list: list of dicts with detailed calculation breakdown
+            list: Purchase lots as tuples (date, quantity, unit_cost, total_cost, exchange)
         """
-        from datetime import datetime
-        from decimal import Decimal
-        
-        # Validate wallet requirement for 2025+
-        if tax_year >= 2025 and wallet is None:
-            import warnings
-            warnings.warn(
-                f"Per-wallet accounting is required for tax year {tax_year} (IRS Rev. Proc. 2024-28). "
-                f"Using global FIFO may not be compliant. Consider specifying --wallet parameter.",
-                UserWarning
-            )
-        
         # Get all purchases (trades) with cost basis using TradeQuery
         all_trade_costs = self.trade_query.get_trade_cost(coin, 'USD')
 
@@ -454,10 +363,47 @@ class CryptoAccounts(object):
                 for i in all_interest
             ]
 
-
         # Combine and sort all purchases by date
         all_purchases = list(trade_purchases) + list(interest_purchases)
         all_purchases.sort(key=lambda x: x[0])  # Sort by date
+        return all_purchases
+
+    def get_sales_for_1099b(self, coin='BTC', tax_year=2024, wallet=None):
+        """
+        Generate 1099-B data for sales of a coin in a given tax year using FIFO cost basis.
+        
+        Tax year determines accounting method:
+        - Pre-2025: Universal FIFO (wallet parameter optional for user preference)
+        - 2025+: Per-wallet FIFO (wallet parameter should be specified for compliance)
+        
+        Args:
+            coin: Cryptocurrency symbol
+            tax_year: Tax year for reporting  
+            wallet: Optional wallet filter
+                    - Pre-2025: Optional (can use global FIFO)
+                    - 2025+: Recommended (IRS requires per-wallet accounting)
+        
+        Returns:
+            tuple: (sales_list, worksheet_list)
+            - sales_list: list of dicts formatted for TaxAct 1099-B CSV import
+            - worksheet_list: list of dicts with detailed calculation breakdown
+        """
+        from datetime import datetime
+
+        # Validate wallet requirement for 2025+
+        if tax_year >= 2025 and wallet is None:
+            import warnings
+            warnings.warn(
+                f"Per-wallet accounting is required for tax year {tax_year} (IRS Rev. Proc. 2024-28). "
+                f"Using global FIFO may not be compliant. Consider specifying --wallet parameter.",
+                UserWarning
+            )
+
+        # Get all purchases using helper method
+        all_purchases = self._get_purchase_lots(coin, wallet)
+
+        # Need trade costs for proceeds lookup later
+        all_trade_costs = self.trade_query.get_trade_cost(coin, 'USD')
 
         # Get ALL sales through the end of the tax year using TradeQuery
         # This is critical for FIFO: we must account for all prior year sales that
@@ -634,36 +580,8 @@ class CryptoAccounts(object):
         """
         from datetime import datetime
 
-        # Get all purchases using query abstractions
-        all_trade_costs = self.trade_query.get_trade_cost(coin, 'USD')
-        all_interest = self.income_query.get_interest_income(coin, 'USD')
-
-        # Filter to purchases only and apply wallet filter
-        if wallet:
-            trade_purchases = [
-                (t['date'], t['quantity'], t['unit_cost'] or 0, t['total_cost'] or 0, t.get('exchange', ''))
-                for t in all_trade_costs
-                if t['quantity'] > 0 and t.get('exchange') == wallet
-            ]
-            interest_purchases = [
-                (i['date'], i['to_quantity'], i['unit_cost'] or 0, i['total_cost'] or 0, i.get('exchange', ''))
-                for i in all_interest
-                if i.get('exchange') == wallet
-            ]
-        else:
-            trade_purchases = [
-                (t['date'], t['quantity'], t['unit_cost'] or 0, t['total_cost'] or 0, t.get('exchange', ''))
-                for t in all_trade_costs
-                if t['quantity'] > 0
-            ]
-            interest_purchases = [
-                (i['date'], i['to_quantity'], i['unit_cost'] or 0, i['total_cost'] or 0, i.get('exchange', ''))
-                for i in all_interest
-            ]
-
-        # Combine and sort all purchases by date
-        all_purchases = list(trade_purchases) + list(interest_purchases)
-        all_purchases.sort(key=lambda x: x[0])
+        # Get all purchases using helper method
+        all_purchases = self._get_purchase_lots(coin, wallet)
 
         if not all_purchases:
             return [], {}

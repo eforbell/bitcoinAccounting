@@ -1,24 +1,24 @@
-⚠️ Minor Issues (not bugs, but worth noting)                                                          
-                                                                                                        
-  1. Line 35 - Dead code                                                                                
-  self.connection = None  # Keep connection attribute for backward compatibility with tests             
-  Tests have been updated - this can be removed in a future cleanup.                                    
-                                                                                                        
-  2. Lines 204-209 - Pre-existing incomplete code preserved                                             
-  elif transaction['trans_type'] == "Deposit":                                                          
-      query = self.getDepositQuery()                                                                    
-      # Note: This case is incomplete in original code - query defined but not executed                 
-  The refactor preserved this bug (correctly!) with a comment. Should be fixed separately.              
-                                                                                                        
-  3. Line 10 - Module-level now                                                                         
-  now = datetime.now()                                                                                  
-  This is evaluated at import time. Default parameters using now would all have the same timestamp if   
-  the module is long-lived. This is legacy behavior.                                                    
-                                                                                                        
-  4. get_balance_by_account vs get_balance inconsistency (line 56-78)                                   
-  get_balance() excludes 'Stake' transactions (via BalanceCalculator), but get_balance_by_account()     
-  doesn't. This preserves original behavior but is inconsistent.                                        
-                                                                                                        
-  5. Duplicate wallet filtering logic (lines 427-455 vs 642-662)                                        
-  The trade/interest purchase filtering is duplicated between get_sales_for_1099b and                   
-  forecast_capital_gains_fifo. Could be extracted to a helper method.           
+# Future Improvements
+
+## Performance Optimizations to Consider
+
+1. **N+1 Query Pattern** - Scripts that loop over exchanges/wallets and query inside the loop
+   - `exchange_liquidity` was fixed (fetched all trades once per exchange)
+   - Review other scripts for similar patterns:
+     - `wallet_balances`
+     - `wallet_ledger`
+     - `diagnose_balances`
+   - Pattern: Fetch all data once, group/filter in memory
+
+2. **Balance Queries** - `get_wallet_balance(coin, wallet=None)` fetches all wallets
+   - Consider caching or batch queries when called repeatedly
+   - Could add `get_all_wallet_balances(coin)` single-query method
+
+3. **Trade Cost Calculations** - `get_trade_cost()` does price lookups per trade
+   - For large ledgers, consider batch price lookups
+   - Could prefetch all prices for date range
+
+## Resolved in Feature 3
+
+All original items from this file were addressed in `feature/code-cleanup`:
+- FIX-001 through FIX-007 (see feature-3-prd.json for details)
