@@ -775,3 +775,42 @@
   - 202 total tests passing (all previous tests + new PDF tests), zero regressions
 
 ---
+
+## 2026-02-03 - Feature 3: Code Cleanup
+
+- What was implemented:
+  - FIX-001: Removed dead `self.connection = None` backward compatibility shim
+  - FIX-002: Completed Deposit/Withdrawal import execution (was defining query but not executing)
+  - FIX-003: Fixed module-level `now = datetime.now()` evaluated at import time
+    - Replaced with None defaults and runtime evaluation in 6 methods
+    - transfer_funds, deposit, withdraw, interest, execute_trade, add_price_pair
+  - FIX-004: Added Stake exclusion to get_balance_by_account() for consistency with get_balance()
+  - FIX-005: Extracted duplicate wallet filtering logic to _get_purchase_lots() helper
+    - Used by get_sales_for_1099b() and forecast_capital_gains_fifo()
+    - Reduced ~50 lines of duplicate code
+  - FIX-006: Removed legacy import methods (Nexo, ADA, RVN mining, Ledger)
+  - FIX-007: Created src/python/wallet_imports.py for Bitcoin wallet imports
+    - import_ledger_live_csv()
+    - import_trezor_suite_csv()
+    - import_sparrow_csv()
+    - import_coldcard_csv()
+
+- Files changed:
+  - `src/python/cryptoAccounts.py` (major cleanup)
+  - `src/python/wallet_imports.py` (new)
+  - `planning/fixes_todo.md` (marked resolved)
+  - `planning/features/feature-3-prd.json` (new)
+  - `planning/features/feature-3-summary.md` (new)
+  - `planning/current-feature.json` (updated)
+
+- **Learnings:**
+  - Module-level datetime evaluation is a common Python gotcha - always use None defaults
+  - Helper methods reduce duplication and centralize logic changes
+  - Wallet import functions should return (colnames, transactions) for consistency with import_transactions()
+  - Bitcoin-only focus simplifies wallet import logic (no multi-currency handling)
+
+- **Test Results:**
+  - 202 tests passing (all existing tests pass after refactoring)
+  - Zero regressions from cleanup changes
+
+---
