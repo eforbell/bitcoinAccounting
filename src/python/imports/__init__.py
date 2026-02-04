@@ -29,6 +29,13 @@ from .registry import (
     get_parser_names,
     clear_registry,
 )
+from .validation import (
+    ValidationResult,
+    validate_transaction,
+    validate_batch,
+    detect_duplicates,
+    get_transaction_warnings,
+)
 
 __all__ = [
     "BaseImporter",
@@ -38,6 +45,11 @@ __all__ = [
     "detect_parser",
     "get_parser_names",
     "clear_registry",
+    "ValidationResult",
+    "validate_transaction",
+    "validate_batch",
+    "detect_duplicates",
+    "get_transaction_warnings",
 ]
 
 # Import exchange parsers to trigger registration
