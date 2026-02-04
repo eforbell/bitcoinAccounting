@@ -973,9 +973,39 @@ c.save()
 
 **Rationale**: Multisig is self-custody on steroids - even stronger sovereignty than single-sig cold storage. Even if a 3rd party holds one key in a quorum, the user still maintains control.
 
-**Implementation**: 
+**Implementation**:
 ```python
 total_self_custody = self_custodied + multisig
 self_sovereignty_pct = (total_self_custody / total_btc) * 100
 ```
+
+## IMP-003: import_csv CLI — Exchange Import Entry Point
+
+### import_transactions Trade Gap
+- `import_transactions()` in cryptoAccounts.py originally handled: Interest Income, Mining, Deposit, Withdrawal — but NOT Trade
+- Added Trade elif branch using `getTradeQuery()` to complete the method
+- All exchange parsers produce Trade transactions, so this was a prerequisite for the import pipeline
+
+### CLI Script Structure
+- Uses `import _bootstrap` (not raw sys.path manipulation) — consistent with simpler scripts like `balance`
+- `--list` and `--format` are info-only commands: no FILE arg or DB access needed
+- FILE is `nargs='?'` (optional positionally) so --list/--format work without it
+- argparse converts `--withdraw-to` to `args.withdraw_to` automatically (hyphen → underscore)
+
+### Exit Code Convention
+- 0: success (including --list, --format, --help, empty file)
+- 1: argument errors (missing FILE, file not found, unknown --source/--format parser)
+- 2: parse errors (auto-detect failed, parse() exception, validation failure)
+- 3: import errors (database write failure)
+
+### Withdrawal Comment Limitation
+- `getWithdrawQuery()` does NOT store the `comment` field — only Interest Income query includes comment
+- The withdrawal review comment ("Review: Verify destination wallet") is set in the transaction dict but lost on DB insert
+- The `exchange` field IS stored correctly (withdraw_to destination works as expected)
+
+### Testing Strategy for CLI Scripts
+- Subprocess tests: CLI flag behavior (help, list, error exits) — no DB needed
+- Programmatic integration tests: register a test parser class, create temp CSV, exercise the full pipeline: parse → validate → detect_duplicates → import_transactions → query DB
+- Test parser class defined at module level without @register; manually call `register(cls)` in setup_method after `clear_registry()`
+- This avoids "already registered" errors across test methods
 

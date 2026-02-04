@@ -92,7 +92,7 @@
         "Integration tests with sample CSV and in-memory SQLite"
       ],
       "priority": 3,
-      "passes": false
+      "passes": true
     },
     {
       "id": "IMP-004",

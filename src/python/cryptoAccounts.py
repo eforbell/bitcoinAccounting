@@ -217,6 +217,19 @@ class CryptoAccounts(object):
                     "exchange": transaction['exchange'],
                     "group": transaction.get('group', '')
                 })
+            elif transaction['trans_type'] == "Trade":
+                query = self.getTradeQuery()
+                self.backend.execute(query, {
+                    "createddate": transaction['created_date'],
+                    "buy": transaction.get('buy', 0.0),
+                    "buy_curr": transaction.get('buy_curr', ''),
+                    "sell": transaction.get('sell', 0.0),
+                    "sell_curr": transaction.get('sell_curr', ''),
+                    "fee": transaction.get('fee', 0.0),
+                    "fee_curr": transaction.get('fee_curr', ''),
+                    "exchange": transaction['exchange'],
+                    "group": transaction.get('group', '')
+                })
         self.backend.commit()
 
     def transfer_funds(self, withdraw_date=None, deposit_date=None, from_account="Strike", tx_coin="BTC", tx_amount=0.0, to_account="Ledger-2", fee_coin="BTC", fee_amount=0.0):

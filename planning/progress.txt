@@ -849,3 +849,36 @@
   - 225 total tests passing (202 existing + 23 new)
 
 ---
+
+## 2026-02-04 - IMP-003: CLI entry point (import_csv)
+
+- What was implemented:
+  - Created `src/scripts/import_csv` executable CLI script with argparse
+  - Flags: --list, --source, --format, --withdraw-to, --dry-run, positional FILE
+  - Workflow: list/format info → file validation → parser resolution → parse → validate → duplicate check → dry-run preview or import
+  - Exit codes: 0=success, 1=arg error, 2=parse error, 3=import error
+  - Added Trade transaction handling to `import_transactions()` in cryptoAccounts.py (was silently skipping Trades)
+  - 6 subprocess CLI tests (help, list, missing file, not found, unknown source, unknown format)
+  - 9 programmatic integration tests (deposit, trade, withdrawal with/without withdraw-to, interest income, duplicate detection, validation, empty CSV, mixed types)
+
+- Files changed:
+  - `src/scripts/import_csv` (new - executable CLI script)
+  - `src/python/cryptoAccounts.py` (modified - added Trade elif in import_transactions)
+  - `tests/test_import_parsers.py` (modified - added 15 IMP-003 tests)
+  - `AGENTS.md` (updated - import_csv patterns)
+  - `planning/features/feature-4-prd.json` (marked IMP-003 passes: true)
+
+- **Learnings:**
+  - import_transactions() had a gap: handled Deposit, Withdrawal, Interest Income, Mining but not Trade — added using existing getTradeQuery()
+  - Use `import _bootstrap` pattern (not raw sys.path) for script imports — consistent with balance, sell, etc.
+  - getWithdrawQuery() does NOT store comments — only Interest Income query includes comment column
+  - Test parser registration: define class at module level without @register, call register(cls) in setup_method after clear_registry()
+  - argparse nargs='?' makes FILE optional so --list/--format work without it
+  - Subprocess tests don't need DB env vars when they exit before DB access (help, list, error cases)
+
+- **Test Results:**
+  - 15 new tests (6 CLI + 9 integration)
+  - 282 total tests passing (267 existing + 15 new)
+  - Zero regressions
+
+---
