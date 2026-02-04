@@ -1,3 +1,39 @@
+## 2026-02-04 - IMP-004: Native format parser
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/native.py` with NativeImporter class
+  - Handles two column layouts via auto-detection:
+    - Clean: trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, group, comment, created_date
+    - Legacy: Type, Buy, Buy Cur., Sell, Sell Cur., Fee, Fee Cur., Exchange, Group, Comment, Date
+  - `_detect_format()` helper checks header against both maps; clean takes priority
+  - `_parse_number()` strips $, commas, whitespace from numeric fields
+  - Column name whitespace is stripped before matching (handles " Buy Cur. " etc.)
+  - Empty rows (no trans_type) are silently skipped
+  - Registered with @register; uncommented in exchanges/__init__.py
+  - Created tests/fixtures/csv_samples/native_sample.csv (clean format, 4 transaction types)
+  - 24 unit tests across 4 test classes
+
+- Files changed:
+  - `src/python/imports/exchanges/native.py` (new)
+  - `src/python/imports/exchanges/__init__.py` (uncommented native import)
+  - `tests/fixtures/csv_samples/native_sample.csv` (new fixture)
+  - `tests/test_import_parsers.py` (added 24 IMP-004 tests)
+  - `planning/features/feature-4-prd.json` (marked IMP-004 passes: true)
+
+- **Learnings:**
+  - Two-map detection pattern: define _CLEAN_MAP and _LEGACY_MAP as lowercase→tx_field dicts; _detect_format() checks if all keys are a subset of the lowercased header
+  - csv.DictReader preserves original column name case in row keys; need lower_to_original mapping to bridge case-insensitive detection with case-sensitive row access
+  - Strip fieldnames after DictReader init: `reader.fieldnames = [n.strip() for n in reader.fieldnames]` — handles trailing spaces in CSV exports
+  - colnames output always uses clean format keys regardless of input format — normalizes for downstream consumers
+  - _parse_number strips $ and commas before float() — common in exported CSV files
+
+- **Test Results:**
+  - 24 new tests (9 detection, 6 clean format, 6 legacy format, 3 registration)
+  - 306 total tests passing
+  - Zero regressions
+
+---
+
 ## Codebase Patterns
 
 - **Named Placeholders**: Both sqlite3 and psycopg2 support `:named` syntax with dict parameters. Use this for cross-database compatibility instead of `%s` or `?`.

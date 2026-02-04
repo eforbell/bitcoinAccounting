@@ -114,6 +114,8 @@ venv.bak/
 # Sensitive transaction data
 *.csv
 *-transactions.csv
+# Test fixture CSVs are not sensitive
+!tests/fixtures/csv_samples/*.csv
 
 # Database credentials
 src/python/config.py

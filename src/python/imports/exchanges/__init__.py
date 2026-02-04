@@ -6,7 +6,7 @@ when imported. The imports here ensure all parsers are loaded.
 
 # Import parsers to trigger registration
 # Parsers will be added here as they are implemented:
-# from . import native
+from . import native
 # from . import coinbase
 # from . import kraken
 # from . import strike

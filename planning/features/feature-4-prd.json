@@ -108,7 +108,7 @@
         "Create tests/fixtures/csv_samples/native_sample.csv"
       ],
       "priority": 4,
-      "passes": false
+      "passes": true
     },
     {
       "id": "IMP-005",
