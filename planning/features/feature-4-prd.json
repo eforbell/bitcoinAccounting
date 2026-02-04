@@ -132,7 +132,7 @@
         "Create tests/fixtures/csv_samples/coinbase_sample.csv"
       ],
       "priority": 5,
-      "passes": false
+      "passes": true
     },
     {
       "id": "IMP-006",
@@ -157,7 +157,7 @@
         "Create tests/fixtures/csv_samples/kraken_sample.csv"
       ],
       "priority": 6,
-      "passes": false
+      "passes": true
     },
     {
       "id": "IMP-007",
@@ -174,7 +174,7 @@
         "Create tests/fixtures/csv_samples/strike_sample.csv"
       ],
       "priority": 7,
-      "passes": false
+      "passes": true
     },
     {
       "id": "IMP-008",

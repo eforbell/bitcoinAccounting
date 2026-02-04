@@ -9,7 +9,7 @@ when imported. The imports here ensure all parsers are loaded.
 from . import native
 from . import coinbase
 from . import kraken
-# from . import strike
+from . import strike
 # from . import river
 # from . import swan
 # from . import cashapp
