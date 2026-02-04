@@ -1,46 +1,24 @@
 {
-  "currentFeature": "feature-3",
-  "featureName": "Code Cleanup and Consistency Fixes",
-  "prdPath": "planning/features/feature-3-prd.json",
-  "summaryPath": "planning/features/feature-3-summary.md",
-  "branch": "feature/code-cleanup",
-  "status": "complete",
+  "currentFeature": "feature-4",
+  "featureName": "Exchange Import Parsers",
+  "prdPath": "planning/features/feature-4-prd.json",
+  "summaryPath": "planning/features/feature-4-summary.md",
+  "branch": "feature/exchange-import-parsers",
+  "status": "in_progress",
   "stories": [
-    {
-      "id": "FIX-001",
-      "title": "Remove dead code (self.connection backward compat)",
-      "status": "complete"
-    },
-    {
-      "id": "FIX-002",
-      "title": "Complete deposit/withdrawal import execution",
-      "status": "complete"
-    },
-    {
-      "id": "FIX-003",
-      "title": "Fix module-level now timestamp",
-      "status": "complete"
-    },
-    {
-      "id": "FIX-004",
-      "title": "Consistency in balance methods",
-      "status": "complete"
-    },
-    {
-      "id": "FIX-005",
-      "title": "Extract duplicate wallet filtering logic",
-      "status": "complete"
-    },
-    {
-      "id": "FIX-006",
-      "title": "Remove legacy exchange-specific import methods",
-      "status": "complete"
-    },
-    {
-      "id": "FIX-007",
-      "title": "Create Bitcoin wallet imports module",
-      "status": "complete"
-    }
+    {"id": "IMP-001", "title": "Base importer class and registry", "status": "pending"},
+    {"id": "IMP-002", "title": "Transaction validation utilities", "status": "pending"},
+    {"id": "IMP-003", "title": "CLI entry point (import_csv)", "status": "pending"},
+    {"id": "IMP-004", "title": "Native format parser", "status": "pending"},
+    {"id": "IMP-005", "title": "Coinbase parser", "status": "pending"},
+    {"id": "IMP-006", "title": "Kraken parser", "status": "pending"},
+    {"id": "IMP-007", "title": "Strike parser", "status": "pending"},
+    {"id": "IMP-008", "title": "River parser", "status": "pending"},
+    {"id": "IMP-009", "title": "Swan Bitcoin parser", "status": "pending"},
+    {"id": "IMP-010", "title": "Cash App parser", "status": "pending"},
+    {"id": "IMP-011", "title": "Gemini parser", "status": "pending"},
+    {"id": "IMP-012", "title": "Fold parser", "status": "pending"},
+    {"id": "IMP-013", "title": "Documentation", "status": "pending"}
   ],
   "completedFeatures": [
     {
@@ -58,11 +36,19 @@
       "mergedDate": "2026-01-30",
       "stories": 6,
       "notes": "Added Orange Plot, Balance Chart, Custody Chart visualizations, btc_viz CLI, and PDF report generation"
+    },
+    {
+      "featureId": "feature-3",
+      "featureName": "Code Cleanup and Consistency Fixes",
+      "branch": "feature/code-cleanup",
+      "mergedDate": "2026-02-04",
+      "stories": 7,
+      "notes": "Dead code removal, wallet_imports.py, performance fixes"
     }
   ],
   "futureEnhancements": [
-    "Feature #4: Multi-coin support (ETH, other assets)",
-    "Feature #5: Tax optimization tools (tax-loss harvesting, gain/loss forecasting)",
-    "Feature #6: Web dashboard with live updates"
+    "Feature #5: TUI Import Wizard with Textual",
+    "Feature #6: Multi-coin support (ETH, other assets)",
+    "Feature #7: Tax optimization tools"
   ]
 }
