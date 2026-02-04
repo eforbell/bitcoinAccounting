@@ -979,6 +979,18 @@ total_self_custody = self_custodied + multisig
 self_sovereignty_pct = (total_self_custody / total_btc) * 100
 ```
 
+## IMP-008: River – Two-Format Parser Pattern
+
+River ships two CSV exports that overlap in columns:
+- **Account Activity** (21 cols) – superset; has `Reference Code`, `Transaction Type`, `Bitcoin Price Amount`
+- **Bitcoin Activity** (8 cols) – subset; type must be inferred from `Tag` + sent/received pattern
+
+**Detection order matters**: always check the superset markers first.  The subset check includes an explicit guard (`'transaction type' not in header`) so Account Activity files don't accidentally match as Bitcoin Activity.
+
+**Withdrawal inference in Bitcoin Activity**: there is no type column — a withdrawal is identified as `Tag == '' AND Sent Currency == 'BTC' AND Sent Amount > 0`.
+
+**Buy sell amount**: Account Activity provides `Total Amount` (sent + fee) directly; Bitcoin Activity requires computing `sent + fee` with a currency-match guard to avoid mixing a BTC fee into a USD sell total.
+
 ## IMP-003: import_csv CLI — Exchange Import Entry Point
 
 ### import_transactions Trade Gap

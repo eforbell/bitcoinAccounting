@@ -1,3 +1,44 @@
+## 2026-02-04 - IMP-008: River parser
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/river.py` with RiverImporter class
+  - Supports two River export formats with auto-detection:
+    - Account Activity (21 columns): uses Transaction Type column directly
+    - Bitcoin Activity (8 columns): infers type from Tag + sent/received pattern
+  - `_detect_river_format()` checks _ACCOUNT_MARKERS superset first, then _BTC_COLS
+  - Account Activity type mapping: Buy→Trade, Send→Withdrawal, Interest Payout→Interest Income; Cash Deposit skipped (no BTC)
+  - Bitcoin Activity type mapping: Tag=Buy→Trade, Tag=Interest→Interest Income, empty tag + BTC sent→Withdrawal
+  - Buy sell amount: Account Activity uses Total Amount column; Bitcoin Activity computes sent + fee (when fee currency matches sent currency)
+  - Withdrawal sell = Sent Amount only; fee tracked separately (not added to sell)
+  - Reference Code used as comment for Account Activity transactions
+  - Registered with @register; uncommented in exchanges/__init__.py
+  - Created tests/fixtures/csv_samples/river_btc_sample.csv (5 rows: 2 Buy, 2 Send, 1 Interest)
+  - Created tests/fixtures/csv_samples/river_account_sample.csv (6 rows: 1 Cash Deposit + same 5 BTC txns)
+  - 36 unit tests across 8 test classes
+
+- Files changed:
+  - `src/python/imports/exchanges/river.py` (new)
+  - `src/python/imports/exchanges/__init__.py` (uncommented river import)
+  - `tests/fixtures/csv_samples/river_btc_sample.csv` (new fixture)
+  - `tests/fixtures/csv_samples/river_account_sample.csv` (new fixture)
+  - `tests/test_import_parsers.py` (added 36 IMP-008 tests)
+  - `planning/features/feature-4-prd.json` (marked IMP-008 passes: true)
+
+- **Learnings:**
+  - Two-format detection: check superset (Account Activity) first; Account Activity column set contains all Bitcoin Activity columns plus extras
+  - _ACCOUNT_MARKERS set {'reference code', 'transaction type', 'bitcoin price amount'} is River-specific enough to avoid conflicts with Coinbase (which also has 'transaction type')
+  - Bitcoin Activity withdrawal detection: empty Tag + Sent Currency == 'BTC' + Sent Amount > 0 — no explicit type column, must infer from data shape
+  - Buy sell calculation differs by format: Account Activity has Total Amount ready; Bitcoin Activity requires sent + fee computation (with currency-match guard to avoid mixing USD fee into BTC amounts)
+  - Cash Deposit filter: check `sent_curr != 'BTC' and recv_curr != 'BTC'` early to drop all USD-only rows regardless of Transaction Type
+  - Shared _ACCT_HDR / _BTC_HDR string constants in tests eliminate repetition across 20+ test methods
+
+- **Test Results:**
+  - 36 new tests (4 detection, 4 format helper, 6 parse_number, 9 Account Activity, 8 Bitcoin Activity, 3 registration, 2 integration)
+  - 426 total tests passing
+  - Zero regressions
+
+---
+
 ## 2026-02-04 - IMP-004: Native format parser
 
 - What was implemented:
@@ -36,6 +77,7 @@
 
 ## Codebase Patterns
 
+- **Two-format parser detection**: When an exchange ships two CSV exports that share most columns, check for the superset first (e.g. Account Activity markers), then fall back to the smaller column set with an explicit exclusion guard (`'transaction type' not in header`). See River parser.
 - **Named Placeholders**: Both sqlite3 and psycopg2 support `:named` syntax with dict parameters. Use this for cross-database compatibility instead of `%s` or `?`.
 - **Python 3.9 Type Hints**: Add `from __future__ import annotations` to use `|` union syntax on Python 3.9.
 - **Optional Dependencies with mypy**: Use `TYPE_CHECKING` pattern to conditionally import types without runtime failures.

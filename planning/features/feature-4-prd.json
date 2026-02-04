@@ -193,7 +193,7 @@
         "Create tests/fixtures/csv_samples/river_account_sample.csv"
       ],
       "priority": 8,
-      "passes": false
+      "passes": true
     },
     {
       "id": "IMP-009",
