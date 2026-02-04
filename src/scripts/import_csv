@@ -203,13 +203,15 @@ def main() -> None:
     # Import
     try:
         crypto = CryptoAccounts(backend=backend)
-        crypto.import_transactions(colnames, transactions)
+        result = crypto.import_transactions(transactions)
         crypto.close()
     except Exception as e:
         print(f"Error: Import failed: {e}", file=sys.stderr)
         sys.exit(3)
 
-    print(f"\nImported {len(transactions)} transaction(s) successfully.")
+    print(f"\nImported {result['imported']} transaction(s) successfully.")
+    if result['skipped'] > 0:
+        print(f"Skipped {result['skipped']} transaction(s) with unknown type.")
 
 
 if __name__ == '__main__':

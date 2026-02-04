@@ -906,8 +906,8 @@ SCRIPT_PATH = Path(__file__).parent.parent / "src" / "scripts" / "import_csv"
 class _TestExchangeImporter(BaseImporter):
     """Test exchange parser for IMP-003 integration tests.
 
-    Reads a simple CSV with columns: date, type, amount, currency, usd_amount, fee
-    Transaction types: buy, deposit, send, interest
+    Reads a simple CSV with columns: date, type, amount, currency, usd_amount, fee, comment, txid
+    Transaction types: buy, deposit, send, interest, mining
     """
     name = "TestExchange"
     source_type = "exchange"
@@ -932,6 +932,7 @@ class _TestExchangeImporter(BaseImporter):
                         'fee': float(row.get('fee') or 0),
                         'fee_curr': 'USD',
                         'group': '',
+                        'comment': row.get('comment', ''),
                     })
                 elif tx_type == 'deposit':
                     transactions.append({
@@ -941,6 +942,7 @@ class _TestExchangeImporter(BaseImporter):
                         'buy': float(row['amount']),
                         'buy_curr': row['currency'],
                         'group': '',
+                        'comment': row.get('comment', ''),
                     })
                 elif tx_type == 'send':
                     transactions.append({
@@ -951,7 +953,7 @@ class _TestExchangeImporter(BaseImporter):
                         'sell_curr': row['currency'],
                         'fee': float(row.get('fee') or 0),
                         'fee_curr': row['currency'],
-                        'comment': self._get_withdrawal_comment(withdraw_to),
+                        'comment': self._get_withdrawal_comment(withdraw_to, row.get('comment', '')),
                         'group': '',
                     })
                 elif tx_type == 'interest':
@@ -962,10 +964,21 @@ class _TestExchangeImporter(BaseImporter):
                         'buy': float(row['amount']),
                         'buy_curr': row['currency'],
                         'group': '',
-                        'comment': '',
+                        'comment': row.get('comment', ''),
+                    })
+                elif tx_type == 'mining':
+                    transactions.append({
+                        'trans_type': 'Mining',
+                        'created_date': row['date'],
+                        'exchange': 'TestExchange',
+                        'buy': float(row['amount']),
+                        'buy_curr': row['currency'],
+                        'group': '',
+                        'comment': row.get('comment', ''),
+                        'transactionid': row.get('txid', ''),
                     })
         colnames = ['trans_type', 'created_date', 'exchange', 'buy', 'buy_curr',
-                    'sell', 'sell_curr', 'fee', 'fee_curr', 'group', 'comment']
+                    'sell', 'sell_curr', 'fee', 'fee_curr', 'group', 'comment', 'transactionid']
         return colnames, transactions
 
 
@@ -1084,7 +1097,7 @@ class TestImportWorkflow:
 
             backend = self._make_backend()
             crypto = CryptoAccounts(backend=backend)
-            crypto.import_transactions(colnames, transactions)
+            crypto.import_transactions(transactions)
 
             rows = backend.execute("SELECT * FROM ledger WHERE trans_type = 'Deposit'")
             assert len(rows) == 1
@@ -1113,7 +1126,7 @@ class TestImportWorkflow:
 
             backend = self._make_backend()
             crypto = CryptoAccounts(backend=backend)
-            crypto.import_transactions(colnames, transactions)
+            crypto.import_transactions(transactions)
 
             rows = backend.execute("SELECT * FROM ledger WHERE trans_type = 'Trade'")
             assert len(rows) == 1
@@ -1143,7 +1156,7 @@ class TestImportWorkflow:
 
             backend = self._make_backend()
             crypto = CryptoAccounts(backend=backend)
-            crypto.import_transactions(colnames, transactions)
+            crypto.import_transactions(transactions)
 
             rows = backend.execute("SELECT * FROM ledger WHERE trans_type = 'Withdrawal'")
             assert len(rows) == 1
@@ -1182,7 +1195,7 @@ class TestImportWorkflow:
 
             backend = self._make_backend()
             crypto = CryptoAccounts(backend=backend)
-            crypto.import_transactions(colnames, transactions)
+            crypto.import_transactions(transactions)
 
             rows = backend.execute("SELECT * FROM ledger WHERE trans_type = 'Interest Income'")
             assert len(rows) == 1
@@ -1204,7 +1217,7 @@ class TestImportWorkflow:
 
             backend = self._make_backend()
             crypto = CryptoAccounts(backend=backend)
-            crypto.import_transactions(colnames, transactions)
+            crypto.import_transactions(transactions)
 
             # Re-parse same CSV — should now be detected as duplicate
             _, transactions2 = parser.parse(csv_path)
@@ -1266,10 +1279,226 @@ class TestImportWorkflow:
 
             backend = self._make_backend()
             crypto = CryptoAccounts(backend=backend)
-            crypto.import_transactions(colnames, transactions)
+            crypto.import_transactions(transactions)
 
             rows = backend.execute("SELECT * FROM ledger")
             assert len(rows) == 4
+            crypto.close()
+        finally:
+            os.unlink(csv_path)
+
+    def test_import_mining(self):
+        """Parse mining CSV, import, verify Mining row in DB."""
+        csv_path = _make_csv(
+            "date,type,amount,currency,usd_amount,fee,comment,txid\n"
+            "2024-03-15 10:00:00,mining,0.00001,BTC,,,,abc123def\n"
+        )
+        try:
+            parser = get_parser("TestExchange")
+            colnames, transactions = parser.parse(csv_path)
+
+            assert len(transactions) == 1
+            assert transactions[0]['trans_type'] == 'Mining'
+            assert transactions[0]['transactionid'] == 'abc123def'
+
+            result = validate_batch(transactions)
+            assert result.is_valid
+
+            backend = self._make_backend()
+            crypto = CryptoAccounts(backend=backend)
+            crypto.import_transactions(transactions)
+
+            rows = backend.execute("SELECT * FROM ledger WHERE trans_type = 'Mining'")
+            assert len(rows) == 1
+            assert rows[0]['buy'] == pytest.approx(0.00001)
+            assert rows[0]['buy_curr'] == 'BTC'
+            assert rows[0]['transactionid'] == 'abc123def'
+            crypto.close()
+        finally:
+            os.unlink(csv_path)
+
+    def test_import_mining_without_txid(self):
+        """Mining without transactionid still imports (empty string)."""
+        csv_path = _make_csv(
+            "date,type,amount,currency\n"
+            "2024-03-15 10:00:00,mining,0.00002,BTC\n"
+        )
+        try:
+            parser = get_parser("TestExchange")
+            _, transactions = parser.parse(csv_path)
+
+            backend = self._make_backend()
+            crypto = CryptoAccounts(backend=backend)
+            crypto.import_transactions(transactions)
+
+            rows = backend.execute("SELECT * FROM ledger WHERE trans_type = 'Mining'")
+            assert len(rows) == 1
+            assert rows[0]['transactionid'] == ''
+            crypto.close()
+        finally:
+            os.unlink(csv_path)
+
+    def test_import_returns_counts(self):
+        """import_transactions returns dict with imported and skipped counts."""
+        backend = self._make_backend()
+        crypto = CryptoAccounts(backend=backend)
+
+        transactions = [
+            {
+                'trans_type': 'Deposit',
+                'created_date': '2024-03-15',
+                'exchange': 'Test',
+                'buy': 1.0,
+                'buy_curr': 'BTC',
+            },
+            {
+                'trans_type': 'UnknownType',  # Will be skipped
+                'created_date': '2024-03-16',
+                'exchange': 'Test',
+            },
+        ]
+        result = crypto.import_transactions(transactions)
+
+        assert result['imported'] == 1
+        assert result['skipped'] == 1
+        crypto.close()
+
+
+class TestCommentPreservation:
+    """Tests verifying comments are stored in DB for all transaction types."""
+
+    def setup_method(self):
+        clear_registry()
+        register(_TestExchangeImporter)
+
+    def teardown_method(self):
+        clear_registry()
+
+    def _make_backend(self):
+        return SqliteBackend(':memory:', auto_create_tables=True)
+
+    def test_trade_comment_stored(self):
+        """Trade transaction comment is stored in database."""
+        csv_path = _make_csv(
+            "date,type,amount,currency,usd_amount,fee,comment\n"
+            "2024-03-15 10:00:00,buy,0.1,BTC,5000,25,DCA purchase\n"
+        )
+        try:
+            parser = get_parser("TestExchange")
+            _, transactions = parser.parse(csv_path)
+
+            backend = self._make_backend()
+            crypto = CryptoAccounts(backend=backend)
+            crypto.import_transactions(transactions)
+
+            rows = backend.execute("SELECT comment FROM ledger WHERE trans_type = 'Trade'")
+            assert len(rows) == 1
+            assert rows[0]['comment'] == 'DCA purchase'
+            crypto.close()
+        finally:
+            os.unlink(csv_path)
+
+    def test_deposit_comment_stored(self):
+        """Deposit transaction comment is stored in database."""
+        csv_path = _make_csv(
+            "date,type,amount,currency,usd_amount,fee,comment\n"
+            "2024-03-15 10:00:00,deposit,0.5,BTC,,,Transfer from cold storage\n"
+        )
+        try:
+            parser = get_parser("TestExchange")
+            _, transactions = parser.parse(csv_path)
+
+            backend = self._make_backend()
+            crypto = CryptoAccounts(backend=backend)
+            crypto.import_transactions(transactions)
+
+            rows = backend.execute("SELECT comment FROM ledger WHERE trans_type = 'Deposit'")
+            assert len(rows) == 1
+            assert rows[0]['comment'] == 'Transfer from cold storage'
+            crypto.close()
+        finally:
+            os.unlink(csv_path)
+
+    def test_withdrawal_comment_stored(self):
+        """Withdrawal transaction comment is stored in database."""
+        csv_path = _make_csv(
+            "date,type,amount,currency,usd_amount,fee,comment\n"
+            "2024-03-15 10:00:00,send,0.2,BTC,,0.0001,To Ledger Nano\n"
+        )
+        try:
+            parser = get_parser("TestExchange")
+            _, transactions = parser.parse(csv_path, withdraw_to="Ledger")
+
+            backend = self._make_backend()
+            crypto = CryptoAccounts(backend=backend)
+            crypto.import_transactions(transactions)
+
+            rows = backend.execute("SELECT comment FROM ledger WHERE trans_type = 'Withdrawal'")
+            assert len(rows) == 1
+            assert rows[0]['comment'] == 'To Ledger Nano'
+            crypto.close()
+        finally:
+            os.unlink(csv_path)
+
+    def test_withdrawal_review_comment_stored(self):
+        """Withdrawal without withdraw_to stores review comment in database."""
+        csv_path = _make_csv(
+            "date,type,amount,currency,usd_amount,fee,comment\n"
+            "2024-03-15 10:00:00,send,0.2,BTC,,0.0001,\n"
+        )
+        try:
+            parser = get_parser("TestExchange")
+            _, transactions = parser.parse(csv_path, withdraw_to=None)
+
+            backend = self._make_backend()
+            crypto = CryptoAccounts(backend=backend)
+            crypto.import_transactions(transactions)
+
+            rows = backend.execute("SELECT comment FROM ledger WHERE trans_type = 'Withdrawal'")
+            assert len(rows) == 1
+            assert 'Review: Verify destination wallet' in rows[0]['comment']
+            crypto.close()
+        finally:
+            os.unlink(csv_path)
+
+    def test_interest_income_comment_stored(self):
+        """Interest Income transaction comment is stored in database."""
+        csv_path = _make_csv(
+            "date,type,amount,currency,usd_amount,fee,comment\n"
+            "2024-03-15 10:00:00,interest,0.001,BTC,,,Gemini Earn reward\n"
+        )
+        try:
+            parser = get_parser("TestExchange")
+            _, transactions = parser.parse(csv_path)
+
+            backend = self._make_backend()
+            crypto = CryptoAccounts(backend=backend)
+            crypto.import_transactions(transactions)
+
+            rows = backend.execute("SELECT comment FROM ledger WHERE trans_type = 'Interest Income'")
+            assert len(rows) == 1
+            assert rows[0]['comment'] == 'Gemini Earn reward'
+            crypto.close()
+        finally:
+            os.unlink(csv_path)
+
+    def test_mining_comment_stored(self):
+        """Mining transaction comment is stored in database."""
+        csv_path = _make_csv(
+            "date,type,amount,currency,usd_amount,fee,comment,txid\n"
+            "2024-03-15 10:00:00,mining,0.00001,BTC,,,Pool payout,block123\n"
+        )
+        try:
+            parser = get_parser("TestExchange")
+            _, transactions = parser.parse(csv_path)
+
+            backend = self._make_backend()
+            crypto = CryptoAccounts(backend=backend)
+            crypto.import_transactions(transactions)
+
+            rows = backend.execute("SELECT comment FROM ledger WHERE trans_type = 'Mining'")
+            assert len(rows) == 1
+            assert rows[0]['comment'] == 'Pool payout'
             crypto.close()
         finally:
             os.unlink(csv_path)

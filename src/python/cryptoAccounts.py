@@ -160,79 +160,120 @@ class CryptoAccounts(object):
             for transaction in transactions:
                 trans_writer.writerow(transaction)
 
-    def import_transactions(self, colnames, transactions):
+    def import_transactions(self, transactions):
+        """Import a list of transactions into the ledger.
+
+        Args:
+            transactions: List of transaction dicts. Each must have:
+                - trans_type: One of Trade, Deposit, Withdrawal, Interest Income,
+                              Mining, Interest, or Staking (last two normalize to Interest Income)
+                - created_date: Transaction date string
+                - exchange: Exchange/wallet name
+                Additional fields vary by type (buy, sell, fee, etc.)
+
+        Returns:
+            dict with keys:
+                - imported: Number of transactions successfully imported
+                - skipped: Number of transactions with unknown trans_type
+        """
+        imported = 0
+        skipped = 0
+
         for transaction in transactions:
-            if transaction['trans_type'] == "Interest Income" or transaction['trans_type'] == "Interest" or transaction['trans_type'] == 'Staking':
-                query = "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", \"comment\") values (:createddate, 'Interest Income', :buy, :buy_curr, :exchange, :group, :comment)"
-                transaction['trans_type'] = "Interest Income"
+            trans_type = transaction.get('trans_type', '')
+
+            # Normalize Interest/Staking aliases to Interest Income
+            if trans_type in ('Interest Income', 'Interest', 'Staking'):
+                query = self.getInterestIncomeQuery()
                 self.backend.execute(query, {
-                    "createddate": transaction['created_date'],
-                    "buy": transaction['buy'],
-                    "buy_curr": transaction['buy_curr'],
-                    "exchange": transaction['exchange'],
-                    "group": transaction['group'],
-                    "comment": transaction.get('comment', '')
+                    "createddate": transaction.get('created_date', ''),
+                    "buy": transaction.get('buy', 0.0),
+                    "buy_curr": transaction.get('buy_curr', ''),
+                    "exchange": transaction.get('exchange', ''),
+                    "group": transaction.get('group', ''),
+                    "comment": transaction.get('comment', ''),
                 })
-                price_query = self.getPricePairQuery()
+                # Optionally store USD equivalent as price pair for cost basis
                 if 'usd_equivalent' in transaction:
                     usd_equiv = transaction['usd_equivalent']
                     try:
                         usd_equiv = float(usd_equiv)
-                    except(ValueError):
-                        usd_equiv = float(usd_equiv[1:])
-                    conv_price = float(usd_equiv)/float(transaction['buy'])
-                    self.backend.execute(price_query, {
-                        "to_curr": 'USD',
-                        "price": conv_price,
-                        "from_curr": transaction['buy_curr'],
-                        "date": transaction['created_date']
-                    })
-            elif transaction['trans_type'] == "Mining":
+                    except ValueError:
+                        # Handle '$1234.56' format by stripping currency symbol
+                        usd_equiv = float(str(usd_equiv).lstrip('$').replace(',', ''))
+                    buy_amount = float(transaction.get('buy', 0.0))
+                    if buy_amount > 0:
+                        conv_price = usd_equiv / buy_amount
+                        self.backend.execute(self.getPricePairQuery(), {
+                            "to_curr": 'USD',
+                            "price": conv_price,
+                            "from_curr": transaction.get('buy_curr', ''),
+                            "date": transaction.get('created_date', ''),
+                        })
+                imported += 1
+
+            elif trans_type == "Mining":
                 query = self.getMiningQuery()
                 self.backend.execute(query, {
-                    "createddate": transaction['created_date'],
-                    "buy": transaction['buy'],
-                    "buy_curr": transaction['buy_curr'],
-                    "exchange": transaction['exchange'],
-                    "group": transaction['group'],
-                    "transactionid": transaction['transactionid']
+                    "createddate": transaction.get('created_date', ''),
+                    "buy": transaction.get('buy', 0.0),
+                    "buy_curr": transaction.get('buy_curr', ''),
+                    "exchange": transaction.get('exchange', ''),
+                    "group": transaction.get('group', ''),
+                    "comment": transaction.get('comment', ''),
+                    "transactionid": transaction.get('transactionid', ''),
                 })
-            elif transaction['trans_type'] == "Deposit":
+                imported += 1
+
+            elif trans_type == "Deposit":
                 query = self.getDepositQuery()
                 self.backend.execute(query, {
-                    "createddate": transaction['created_date'],
-                    "buy": transaction['buy'],
-                    "buy_curr": transaction['buy_curr'],
-                    "exchange": transaction['exchange'],
-                    "group": transaction.get('group', '')
+                    "createddate": transaction.get('created_date', ''),
+                    "buy": transaction.get('buy', 0.0),
+                    "buy_curr": transaction.get('buy_curr', ''),
+                    "exchange": transaction.get('exchange', ''),
+                    "group": transaction.get('group', ''),
+                    "comment": transaction.get('comment', ''),
                 })
-            elif transaction['trans_type'] == "Withdrawal":
+                imported += 1
+
+            elif trans_type == "Withdrawal":
                 query = self.getWithdrawQuery()
                 self.backend.execute(query, {
-                    "createddate": transaction['created_date'],
-                    "sell": transaction['sell'],
-                    "sell_curr": transaction['sell_curr'],
+                    "createddate": transaction.get('created_date', ''),
+                    "sell": transaction.get('sell', 0.0),
+                    "sell_curr": transaction.get('sell_curr', ''),
                     "fee": transaction.get('fee', 0.0),
                     "fee_curr": transaction.get('fee_curr', ''),
-                    "exchange": transaction['exchange'],
-                    "group": transaction.get('group', '')
+                    "exchange": transaction.get('exchange', ''),
+                    "group": transaction.get('group', ''),
+                    "comment": transaction.get('comment', ''),
                 })
-            elif transaction['trans_type'] == "Trade":
+                imported += 1
+
+            elif trans_type == "Trade":
                 query = self.getTradeQuery()
                 self.backend.execute(query, {
-                    "createddate": transaction['created_date'],
+                    "createddate": transaction.get('created_date', ''),
                     "buy": transaction.get('buy', 0.0),
                     "buy_curr": transaction.get('buy_curr', ''),
                     "sell": transaction.get('sell', 0.0),
                     "sell_curr": transaction.get('sell_curr', ''),
                     "fee": transaction.get('fee', 0.0),
                     "fee_curr": transaction.get('fee_curr', ''),
-                    "exchange": transaction['exchange'],
-                    "group": transaction.get('group', '')
+                    "exchange": transaction.get('exchange', ''),
+                    "group": transaction.get('group', ''),
+                    "comment": transaction.get('comment', ''),
                 })
-        self.backend.commit()
+                imported += 1
 
-    def transfer_funds(self, withdraw_date=None, deposit_date=None, from_account="Strike", tx_coin="BTC", tx_amount=0.0, to_account="Ledger-2", fee_coin="BTC", fee_amount=0.0):
+            else:
+                skipped += 1
+
+        self.backend.commit()
+        return {"imported": imported, "skipped": skipped}
+
+    def transfer_funds(self, withdraw_date=None, deposit_date=None, from_account="Strike", tx_coin="BTC", tx_amount=0.0, to_account="Ledger-2", fee_coin="BTC", fee_amount=0.0, comment=""):
         if withdraw_date is None:
             withdraw_date = datetime.now()
         if deposit_date is None:
@@ -254,7 +295,7 @@ class CryptoAccounts(object):
             to_group = None
 
         withdrawQuery = self.getWithdrawQuery()
-        depositQuery =  self.getDepositQuery()
+        depositQuery = self.getDepositQuery()
         self.backend.execute(withdrawQuery, {
             "createddate": str(withdraw_date),
             "sell": tx_amount+fee_amount,
@@ -262,48 +303,50 @@ class CryptoAccounts(object):
             "fee": fee_amount,
             "fee_curr": fee_coin,
             "exchange": from_exchange,
-            "group": from_group
+            "group": from_group,
+            "comment": comment,
         })
         self.backend.execute(depositQuery, {
             "createddate": str(deposit_date),
             "buy": tx_amount,
             "buy_curr": tx_coin,
             "exchange": to_exchange,
-            "group": to_group
+            "group": to_group,
+            "comment": comment,
         })
         self.backend.commit()
 
-    def deposit(self, deposit_date=None, buy=0, buy_curr="USD", exchange="Strike", group=""):
+    def deposit(self, deposit_date=None, buy=0, buy_curr="USD", exchange="Strike", group="", comment=""):
         if deposit_date is None:
             deposit_date = datetime.now()
         self.backend.execute(
             self.getDepositQuery(),
-            {"createddate": deposit_date, "buy": buy, "buy_curr": buy_curr, "exchange": exchange, "group": group})
+            {"createddate": deposit_date, "buy": buy, "buy_curr": buy_curr, "exchange": exchange, "group": group, "comment": comment})
         self.backend.commit()
 
-    def withdraw(self, withdraw_date=None, sell=0, sell_curr="USD", fee=0.0, fee_curr="USD", exchange="Strike", group=""):
+    def withdraw(self, withdraw_date=None, sell=0, sell_curr="USD", fee=0.0, fee_curr="USD", exchange="Strike", group="", comment=""):
         if withdraw_date is None:
             withdraw_date = datetime.now()
         self.backend.execute(
             self.getWithdrawQuery(),
-            {"createddate": withdraw_date, "sell": sell, "sell_curr": sell_curr, "fee": fee, "fee_curr": fee_curr, "exchange": exchange, "group": group})
+            {"createddate": withdraw_date, "sell": sell, "sell_curr": sell_curr, "fee": fee, "fee_curr": fee_curr, "exchange": exchange, "group": group, "comment": comment})
         self.backend.commit()
 
-    def interest(self, interest_date=None, buy=0.0, buy_curr="USD", exchange="River", group=""):
+    def interest(self, interest_date=None, buy=0.0, buy_curr="USD", exchange="River", group="", comment=""):
         if interest_date is None:
             interest_date = datetime.now()
         self.backend.execute(
             self.getInterestIncomeQuery(),
-            {"createddate": interest_date, "buy": buy, "buy_curr": buy_curr, "exchange": exchange, "group": group})
+            {"createddate": interest_date, "buy": buy, "buy_curr": buy_curr, "exchange": exchange, "group": group, "comment": comment})
         self.backend.commit()
 
     def execute_trade(self, trade_date=None, buy=0.0, buy_curr="BTC", sell=0.0, sell_curr="USD", fee=0.0, fee_curr="USD",
-                      exchange="Strike", group=""):
+                      exchange="Strike", group="", comment=""):
         if trade_date is None:
             trade_date = datetime.now()
         self.backend.execute(
             self.getTradeQuery(),
-            {"createddate": trade_date, "buy": buy, "buy_curr": buy_curr, "sell": sell, "sell_curr": sell_curr, "fee": fee, "fee_curr": fee_curr, "exchange": exchange, "group": group})
+            {"createddate": trade_date, "buy": buy, "buy_curr": buy_curr, "sell": sell, "sell_curr": sell_curr, "fee": fee, "fee_curr": fee_curr, "exchange": exchange, "group": group, "comment": comment})
         self.backend.commit()
 
     def add_price_pair(self, pair_date=None, to_curr="BTC", from_curr="USD", price=0.0):
@@ -314,19 +357,19 @@ class CryptoAccounts(object):
         self.backend.commit()
 
     def getDepositQuery(self):
-        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (:createddate, 'Deposit', :buy, :buy_curr, :exchange, :group)"
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", comment) values (:createddate, 'Deposit', :buy, :buy_curr, :exchange, :group, :comment)"
 
     def getWithdrawQuery(self):
-        return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (:createddate, 'Withdrawal', :sell, :sell_curr, :fee, :fee_curr, :exchange, :group)"
+        return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\", comment) values (:createddate, 'Withdrawal', :sell, :sell_curr, :fee, :fee_curr, :exchange, :group, :comment)"
 
     def getInterestIncomeQuery(self):
-        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\") values (:createddate, 'Interest Income', :buy, :buy_curr, :exchange, :group)"
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", comment) values (:createddate, 'Interest Income', :buy, :buy_curr, :exchange, :group, :comment)"
 
     def getMiningQuery(self):
-        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", transactionid) values (:createddate, 'Mining', :buy, :buy_curr, :exchange, :group, :transactionid)"
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", comment, transactionid) values (:createddate, 'Mining', :buy, :buy_curr, :exchange, :group, :comment, :transactionid)"
 
     def getTradeQuery(self):
-        return "insert into ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, \"group\") values (:createddate, 'Trade', :buy, :buy_curr, :sell, :sell_curr, :fee, :fee_curr, :exchange, :group)"
+        return "insert into ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, \"group\", comment) values (:createddate, 'Trade', :buy, :buy_curr, :sell, :sell_curr, :fee, :fee_curr, :exchange, :group, :comment)"
 
     def getPricePairQuery(self):
         return "insert into pair_price (to_curr, price, from_curr, date) values (:to_curr, :price, :from_curr, :date)"
