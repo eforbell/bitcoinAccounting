@@ -6,7 +6,7 @@
   "branch": "feature/exchange-import-parsers",
   "status": "in_progress",
   "stories": [
-    {"id": "IMP-001", "title": "Base importer class and registry", "status": "pending"},
+    {"id": "IMP-001", "title": "Base importer class and registry", "status": "complete"},
     {"id": "IMP-002", "title": "Transaction validation utilities", "status": "pending"},
     {"id": "IMP-003", "title": "CLI entry point (import_csv)", "status": "pending"},
     {"id": "IMP-004", "title": "Native format parser", "status": "pending"},

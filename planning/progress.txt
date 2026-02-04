@@ -814,3 +814,38 @@
   - Zero regressions from cleanup changes
 
 ---
+
+## 2026-02-04 - IMP-001: Base importer class and registry
+
+- What was implemented:
+  - Created `src/python/imports/` package for CSV import parsers
+  - `base.py`: BaseImporter abstract class with:
+    - Class attributes: name, source_type, file_patterns, description, expected_columns
+    - Abstract parse() method for subclasses
+    - detect() method for auto-detection based on column headers
+    - get_format_help() for CLI --format output
+    - Withdrawal helpers: _get_withdrawal_exchange(), _get_withdrawal_comment()
+  - `registry.py`: Parser registry with @register decorator
+    - get_parser(), get_all_parsers(), detect_parser(), get_parser_names()
+  - `exchanges/__init__.py`: Placeholder for exchange parsers
+
+- Files created:
+  - `src/python/imports/__init__.py`
+  - `src/python/imports/base.py`
+  - `src/python/imports/registry.py`
+  - `src/python/imports/exchanges/__init__.py`
+  - `tests/test_import_parsers.py`
+  - `planning/features/feature-4-prd.json`
+  - `planning/features/feature-4-summary.md`
+
+- **Learnings:**
+  - Registry pattern with decorator is clean for self-registering parsers
+  - Case-insensitive column matching helps with format variations
+  - Withdrawal destination handling needs both exchange name and comment helpers
+  - 80% column match threshold balances flexibility with accuracy for auto-detect
+
+- **Test Results:**
+  - 23 new tests for imports package
+  - 225 total tests passing (202 existing + 23 new)
+
+---
