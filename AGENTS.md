@@ -1110,3 +1110,38 @@ River ships two CSV exports that overlap in columns:
 - **Wallet parser registration**: Import in `imports/wallets/__init__.py` with
   `from . import ledger  # noqa: F401` to trigger @register decorator
 
+
+## WAL-002 Enhancement: --wallet-name Requirement
+
+- **Semantic problem with wallet withdrawals**: Original design used
+  `exchange='Ledger-Withdrawal'` placeholder for unspecified withdrawal
+  destinations, creating ambiguity:
+  - Looks like a wallet name (conflicts with user-named "Ledger" wallet)
+  - Doesn't clearly signal "missing data" vs "actual destination"
+  - For deposits, `exchange='Ledger'` (hardcoded) doesn't match user's naming
+- **Solution**: Require `--wallet-name` parameter for wallet imports
+  - Deposits (IN): `exchange=wallet_name` (user-specified, e.g., "MyLedger")
+  - Withdrawals (OUT): `exchange=withdraw_to` or placeholder if unspecified
+  - Placeholder still used for unknown withdrawals (could be wallet or exchange)
+- **CLI validation**: import_csv checks `source_type == 'wallet'` and requires
+  `--wallet-name` parameter, failing with exit code 1 if missing
+- **BaseImporter.parse() signature change**:
+  ```python
+  def parse(self, file_path: str, wallet_name: str | None = None, 
+            withdraw_to: str | None = None) -> tuple[list[str], list[dict]]
+  ```
+- **Backward compatibility**: Exchange parsers ignore wallet_name parameter
+  (default None, not used in exchange logic)
+- **PRD updates**: All wallet parser stories (WAL-002 through WAL-005) updated
+  to specify parse() signature and --wallet-name requirement
+- **Usage examples**:
+  ```bash
+  # Wallet import (required)
+  import_csv --wallet-name Ledger ledger.csv
+  
+  # With withdrawal destination
+  import_csv --wallet-name Ledger --withdraw-to Coldcard ledger.csv
+  
+  # Exchange import (wallet-name ignored)
+  import_csv coinbase.csv
+  ```

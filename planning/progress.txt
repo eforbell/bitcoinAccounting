@@ -1200,3 +1200,55 @@
   - import_csv --list shows Ledger parser correctly
 
 ---
+
+## 2026-02-05 - WAL-002 Enhancement: --wallet-name Requirement
+
+- What was implemented:
+  - Added --wallet-name CLI parameter to import_csv script
+  - Updated BaseImporter.parse() signature to accept wallet_name parameter
+  - Modified LedgerImporter to use wallet_name for deposit transactions
+  - CLI validation: wallet parsers (source_type='wallet') now require --wallet-name
+  - Updated all 8 exchange parsers to accept (but ignore) wallet_name parameter
+  - Added comprehensive tests for wallet-name requirement
+
+- Rationale for change:
+  - Semantic clarity: deposits to a wallet should use the user's wallet name
+  - Eliminates ambiguity between "Ledger" (user wallet) and "Ledger-Withdrawal" (placeholder)
+  - Makes deposit location explicit rather than inferred
+  - Withdrawal destinations remain optional (placeholder used if unspecified)
+  - Future-proofs for cross-wallet transfer matching
+
+- Files changed:
+  - `src/scripts/import_csv` (added --wallet-name arg, validation logic)
+  - `src/python/imports/base.py` (updated parse() signature, docstring)
+  - `src/python/imports/wallets/ledger.py` (use wallet_name for deposits)
+  - `src/python/imports/exchanges/*.py` (8 files - added wallet_name parameter)
+  - `tests/test_import_ledger.py` (added test_parse_incoming_with_wallet_name)
+  - `tests/test_import_cli.py` (added TestWalletImportRequirements class, 2 tests)
+  - `planning/features/feature-5-prd.json` (updated acceptance criteria)
+
+- **Learnings:**
+  - Wallet vs exchange semantics differ: wallets need explicit identification
+  - Placeholder naming matters: "Ledger-Withdrawal" looks like a wallet name
+  - User experience: required parameters prevent ambiguous defaults
+  - Backward compatibility: optional parameters with None defaults maintain exchange parser compatibility
+  - CLI validation layer catches semantic errors early (wallet without --wallet-name)
+
+- **Test Results:**
+  - 564 tests passing (2 new wallet requirement tests)
+  - Zero regressions from signature changes
+  - All exchange imports still work without wallet_name
+
+- **Usage Examples:**
+  ```bash
+  # Wallet import (required)
+  import_csv --wallet-name Ledger ledger.csv
+  
+  # Wallet with withdrawal destination
+  import_csv --wallet-name Ledger --withdraw-to Coldcard ledger.csv
+  
+  # Exchange import (unchanged)
+  import_csv coinbase.csv
+  ```
+
+---
