@@ -1,0 +1,7 @@
+Date,Type,Amount (BTC),Price (USD),Total (USD),Fee (USD),Status
+2024-01-05 10:00:00,Purchase,0.003368,28950.00,100.00,2.50,Completed
+2024-01-12 10:00:00,Purchase,0.003328,29300.00,100.00,2.50,Completed
+2024-01-20 12:00:00,USD Deposit,,,250.00,0.00,Completed
+2024-02-01 10:00:00,Purchase,0.002876,33900.00,100.00,2.50,Completed
+2024-02-15 14:30:00,Withdrawal,0.005,,,0.00,Completed
+2024-03-01 09:00:00,Deposit,0.01,,,0.00,Completed

@@ -7,3 +7,4 @@ python-dotenv
 yfinance
 pyarrow
 reportlab
+openpyxl

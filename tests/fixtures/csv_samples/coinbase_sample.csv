@@ -1,0 +1,9 @@
+Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total,Fees,Notes
+2024-01-15T10:30:00Z,Buy,BTC,0.05,USD,50000.00,2500.00,2510.00,10.00,DCA purchase
+2024-02-01T14:00:00Z,Sell,BTC,0.02,USD,52000.00,1040.00,1030.00,10.00,Taking profits
+2024-02-15T09:00:00Z,Send,BTC,0.01,USD,51000.00,510.00,510.00,0.0001,To cold storage
+2024-03-01T00:00:00Z,Receive,BTC,0.005,USD,48000.00,240.00,240.00,0.00,From friend
+2024-03-15T12:00:00Z,Rewards Income,BTC,0.0001,USD,55000.00,5.50,5.50,0.00,Staking reward
+2024-04-01T08:00:00Z,Learning Reward,BTC,0.00005,USD,60000.00,3.00,3.00,0.00,Coinbase Learn
+2024-04-15T16:00:00Z,Convert,BTC,0.001,USD,62000.00,62.00,62.00,0.50,Converted from ETH
+2024-05-01T10:00:00Z,Buy,ETH,1.0,USD,3000.00,3000.00,3015.00,15.00,ETH purchase

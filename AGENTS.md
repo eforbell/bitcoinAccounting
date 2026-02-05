@@ -973,9 +973,98 @@ c.save()
 
 **Rationale**: Multisig is self-custody on steroids - even stronger sovereignty than single-sig cold storage. Even if a 3rd party holds one key in a quorum, the user still maintains control.
 
-**Implementation**: 
+**Implementation**:
 ```python
 total_self_custody = self_custodied + multisig
 self_sovereignty_pct = (total_self_custody / total_btc) * 100
 ```
+
+## IMP-008: River – Two-Format Parser Pattern
+
+River ships two CSV exports that overlap in columns:
+- **Account Activity** (21 cols) – superset; has `Reference Code`, `Transaction Type`, `Bitcoin Price Amount`
+- **Bitcoin Activity** (8 cols) – subset; type must be inferred from `Tag` + sent/received pattern
+
+**Detection order matters**: always check the superset markers first.  The subset check includes an explicit guard (`'transaction type' not in header`) so Account Activity files don't accidentally match as Bitcoin Activity.
+
+**Withdrawal inference in Bitcoin Activity**: there is no type column — a withdrawal is identified as `Tag == '' AND Sent Currency == 'BTC' AND Sent Amount > 0`.
+
+**Buy sell amount**: Account Activity provides `Total Amount` (sent + fee) directly; Bitcoin Activity requires computing `sent + fee` with a currency-match guard to avoid mixing a BTC fee into a USD sell total.
+
+## IMP-003: import_csv CLI — Exchange Import Entry Point
+
+### import_transactions Trade Gap
+- `import_transactions()` in cryptoAccounts.py originally handled: Interest Income, Mining, Deposit, Withdrawal — but NOT Trade
+- Added Trade elif branch using `getTradeQuery()` to complete the method
+- All exchange parsers produce Trade transactions, so this was a prerequisite for the import pipeline
+
+### CLI Script Structure
+- Uses `import _bootstrap` (not raw sys.path manipulation) — consistent with simpler scripts like `balance`
+- `--list` and `--format` are info-only commands: no FILE arg or DB access needed
+- FILE is `nargs='?'` (optional positionally) so --list/--format work without it
+- argparse converts `--withdraw-to` to `args.withdraw_to` automatically (hyphen → underscore)
+
+### Exit Code Convention
+- 0: success (including --list, --format, --help, empty file)
+- 1: argument errors (missing FILE, file not found, unknown --source/--format parser)
+- 2: parse errors (auto-detect failed, parse() exception, validation failure)
+- 3: import errors (database write failure)
+
+### Withdrawal Comment Limitation
+- `getWithdrawQuery()` does NOT store the `comment` field — only Interest Income query includes comment
+- The withdrawal review comment ("Review: Verify destination wallet") is set in the transaction dict but lost on DB insert
+- The `exchange` field IS stored correctly (withdraw_to destination works as expected)
+
+### Testing Strategy for CLI Scripts
+- Subprocess tests: CLI flag behavior (help, list, error exits) — no DB needed
+- Programmatic integration tests: register a test parser class, create temp CSV, exercise the full pipeline: parse → validate → detect_duplicates → import_transactions → query DB
+- Test parser class defined at module level without @register; manually call `register(cls)` in setup_method after `clear_registry()`
+- This avoids "already registered" errors across test methods
+
+## IMP-009: Swan — DCA Platform Patterns
+
+- Swan is Bitcoin-only DCA: no asset filtering needed (all rows are BTC)
+- **Status filtering**: Real DCA platforms have Pending rows for in-flight ACH
+  purchases. Filter by Status (case-insensitive) and silently drop Pending/Failed.
+- **group field for analytics**: Set `group='DCA'` on all purchases. This field
+  survives `import_transactions()` and is queryable downstream.
+- Total (USD) includes fee — consistent with Coinbase's Total semantics. Fee is
+  still tracked separately for tax reporting.
+
+## IMP-010: Cash App — Data-Quality Warnings During Parse
+
+- Cash App's Gain/Loss CSV omits cost basis for external wallet Receives.
+  Both empty string and literal "0.00" represent this — check the parsed float,
+  not the raw string.
+- **warnings.warn() during parse()** is the right place for data-quality alerts
+  that don't block import. The warning appears in CLI output and is testable
+  with `pytest.warns(UserWarning)`.
+- **Asserting NO warning was emitted**: use `warnings.catch_warnings()` +
+  `simplefilter("error")` — any warning becomes an exception, failing the test.
+- Tag the comment field with the issue text so the flag survives into the DB:
+  `"Cost basis $0 - verify before tax filing"`.
+
+## IMP-011: Gemini — Dual CSV + xlsx Dispatch
+
+- **Detection and parse dispatch on extension**: `detect()` and `parse()` branch
+  on `.xlsx` vs `.csv` extension. Each sub-path is fully independent — the CSV
+  path is unchanged from its original implementation.
+- **Dynamic column mapping for xlsx**: Gemini's xlsx has 30+ columns that vary
+  by account holdings (per-asset Amount/Fee/Balance triplets). Never hardcode
+  column indices. Build a `{header_lower: col_index}` dict from row 1 at runtime;
+  missing columns silently resolve to 0.0 via a `_to_float(None)` helper.
+- **Negative-amount convention**: Gemini stores Buy USD amounts and fees as
+  negative (accounting: money leaving = negative). Apply `abs()` unconditionally
+  to all amount fields in the xlsx path.
+- **openpyxl quirks with Gemini exports**:
+  - `load_workbook(read_only=True)` only returns 1 column because the file lacks
+    a default style. Use the default `read_only=False`.
+  - openpyxl emits `UserWarning: Workbook contains no default style` — this is
+    harmless and expected for Gemini exports.
+- **xlsx test fixtures**: Use openpyxl programmatically to create temp xlsx files
+  in tests (`_make_xlsx` helper). Only include the minimal columns the parser
+  reads — dynamic mapping means extras are ignored. Use `datetime` objects for
+  Date cells so `_fmt_dt()` formats them correctly.
+- Symbol filter (`BTCUSD` / `BTC`) is the primary row gate in xlsx, analogous
+  to `base-asset == BTC` in the CSV path.
 

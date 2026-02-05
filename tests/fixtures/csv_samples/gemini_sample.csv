@@ -1,0 +1,7 @@
+time,base-asset,quote-asset,type,price,quantity,total,fee,fee-currency,trade-id
+2024-01-05 10:00:00,BTC,USD,Buy,29500.00,0.01,295.00,2.95,USD,trade-001
+2024-01-15 11:00:00,ETH,USD,Buy,2200.00,1.5,3300.00,3.30,USD,trade-004
+2024-01-20 14:30:00,BTC,USD,Sell,30000.00,0.005,150.00,1.50,USD,trade-002
+2024-02-01 09:00:00,BTC,USD,Deposit,,0.02,,,,
+2024-02-15 16:00:00,BTC,USD,Withdrawal,,0.01,,0.0001,BTC,
+2024-02-20 12:00:00,BTC,USD,Earn,,0.001,,,,trade-003

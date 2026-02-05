@@ -1,0 +1,5 @@
+trans_type,buy,buy_curr,sell,sell_curr,fee,fee_curr,exchange,group,comment,created_date
+Trade,0.05,BTC,2500.00,USD,10.00,USD,Coinbase,,Purchase,2024-01-15 10:30:00
+Deposit,0.1,BTC,,,,,River,,Transfer in,2024-02-01 08:00:00
+Withdrawal,,,0.02,BTC,0.0001,BTC,Ledger,,To cold storage,2024-02-15 14:00:00
+Interest Income,0.001,BTC,,,,,Gemini,,Earn reward,2024-03-01 00:00:00

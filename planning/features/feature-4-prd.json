@@ -1,0 +1,304 @@
+{
+  "branchName": "feature/exchange-import-parsers",
+  "projectName": "Exchange Import Parsers",
+  "description": "Add import parsers for 8 major Bitcoin exchanges plus a native format, enabling users to onboard transaction history via CLI",
+  "principles": [
+    "Bitcoin-only focus - all parsers filter to BTC transactions",
+    "Consistent output format - all parsers return (colnames, transactions) tuple",
+    "Sensible defaults - withdrawal handling with review comments",
+    "Dry-run first - preview before committing",
+    "Extensible registry - easy to add new parsers"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest + pytest-cov",
+    "csv": "csv module (stdlib)",
+    "datetime": "datetime module (stdlib)"
+  },
+  "userStories": [
+    {
+      "id": "IMP-001",
+      "title": "Base importer class and registry",
+      "acceptanceCriteria": [
+        "Create src/python/imports/ package with __init__.py",
+        "Create imports/base.py with BaseImporter abstract class:",
+        "  - name: str class attribute (e.g., 'Coinbase')",
+        "  - source_type: str ('exchange' or 'native')",
+        "  - file_patterns: list[str] (e.g., ['*.csv'])",
+        "  - description: str (brief description for --list)",
+        "  - expected_columns: list[str] (hint for validation)",
+        "  - parse(file_path: str, withdraw_to: str | None) -> tuple[list[str], list[dict]] abstract method",
+        "  - detect(file_path: str) -> bool method for auto-detection",
+        "  - get_format_help() -> str method for --format output",
+        "Create imports/registry.py with parser registry:",
+        "  - _REGISTRY: dict[str, type[BaseImporter]] module-level",
+        "  - register(cls) decorator to register parser classes",
+        "  - get_all_parsers() -> list[BaseImporter]",
+        "  - get_parser(name: str) -> BaseImporter | None",
+        "  - detect_parser(file_path: str) -> BaseImporter | None (auto-detect)",
+        "Create imports/exchanges/__init__.py (empty, for package)",
+        "Export from imports/__init__.py: BaseImporter, register, get_parser, get_all_parsers, detect_parser",
+        "Unit tests for registry: register, get, detect operations"
+      ],
+      "priority": 1,
+      "passes": true
+    },
+    {
+      "id": "IMP-002",
+      "title": "Transaction validation utilities",
+      "acceptanceCriteria": [
+        "Create imports/validation.py",
+        "validate_transaction(tx: dict) -> list[str] returns list of error messages:",
+        "  - Check required fields: trans_type, created_date, exchange",
+        "  - Check trans_type is valid: Trade, Deposit, Withdrawal, Interest Income, Mining",
+        "  - Check buy/sell fields based on trans_type",
+        "  - Validate created_date is parseable",
+        "  - Validate numeric fields are positive",
+        "ValidationResult dataclass: valid_count, error_count, warnings, errors",
+        "validate_batch(transactions: list[dict]) -> ValidationResult",
+        "detect_duplicates(transactions: list[dict], backend) -> list[dict]:",
+        "  - Check for existing transactions by date + exchange + amount + type",
+        "  - Return list of potential duplicates",
+        "Unit tests with various error scenarios"
+      ],
+      "priority": 2,
+      "passes": true
+    },
+    {
+      "id": "IMP-003",
+      "title": "CLI entry point (import_csv script)",
+      "acceptanceCriteria": [
+        "Create src/scripts/import_csv executable with shebang",
+        "Use _bootstrap.py pattern for imports",
+        "argparse with flags:",
+        "  --list: Show all available parsers with descriptions",
+        "  --source NAME: Specify parser (required unless auto-detect)",
+        "  --format NAME: Show expected CSV format for parser",
+        "  --withdraw-to WALLET: Set destination for withdrawals",
+        "  --dry-run: Preview only, don't commit",
+        "  FILE: Positional argument for CSV file path",
+        "Workflow:",
+        "  1. If --list: print parsers and exit",
+        "  2. If --format: print format help and exit",
+        "  3. Validate file exists and is readable",
+        "  4. Get parser (by --source or auto-detect)",
+        "  5. Parse file with parser.parse(file, withdraw_to)",
+        "  6. Validate transactions",
+        "  7. Check for duplicates",
+        "  8. If --dry-run: print preview and exit",
+        "  9. Import via CryptoAccounts.import_transactions()",
+        "  10. Print summary (imported, skipped, errors)",
+        "Exit codes: 0=success, 1=arg error, 2=parse error, 3=import error",
+        "Integration tests with sample CSV and in-memory SQLite"
+      ],
+      "priority": 3,
+      "passes": true
+    },
+    {
+      "id": "IMP-004",
+      "title": "Native format parser",
+      "acceptanceCriteria": [
+        "Create imports/exchanges/native.py with NativeImporter class",
+        "Accepts clean column names: trans_type,buy,buy_curr,sell,sell_curr,fee,fee_curr,exchange,group,comment,created_date",
+        "Also accepts legacy export format: Type,Buy,Buy Cur.,Sell,Sell Cur.,Fee,Fee Cur.,Exchange,Group,Comment,Date",
+        "Auto-detect based on header row",
+        "Map columns to standard transaction dict format",
+        "Register with @register decorator",
+        "Unit tests with both formats",
+        "Create tests/fixtures/csv_samples/native_sample.csv"
+      ],
+      "priority": 4,
+      "passes": true
+    },
+    {
+      "id": "IMP-005",
+      "title": "Coinbase parser",
+      "acceptanceCriteria": [
+        "Create imports/exchanges/coinbase.py with CoinbaseImporter class",
+        "Parse columns: Timestamp, Transaction Type, Asset, Quantity Transacted, Spot Price Currency, Spot Price at Transaction, Subtotal, Total, Fees, Notes",
+        "Map transaction types:",
+        "  - Buy -> Trade (buy BTC, sell USD)",
+        "  - Sell -> Trade (sell BTC, buy USD)",
+        "  - Send -> Withdrawal (apply --withdraw-to or default)",
+        "  - Receive -> Deposit",
+        "  - Rewards Income / Learning Reward -> Interest Income",
+        "  - Convert -> Trade",
+        "Filter to BTC transactions only (Asset == 'BTC')",
+        "Parse Coinbase date formats (ISO 8601 variants)",
+        "Include fees in transaction",
+        "For Send: set exchange to withdraw_to or '{Exchange}-Withdrawal', add review comment",
+        "Register with @register decorator",
+        "Unit tests with sample fixture",
+        "Create tests/fixtures/csv_samples/coinbase_sample.csv"
+      ],
+      "priority": 5,
+      "passes": true
+    },
+    {
+      "id": "IMP-006",
+      "title": "Kraken parser",
+      "acceptanceCriteria": [
+        "Create imports/exchanges/kraken.py with KrakenImporter class",
+        "Parse Kraken ledger format (13 columns): txid, refid, time, type, subtype, aclass, asset, amount, fee, balance",
+        "Handle Kraken asset naming: XXBT -> BTC, XBT -> BTC",
+        "Map transaction types:",
+        "  - trade -> Trade (match buy/sell pairs by refid)",
+        "  - deposit -> Deposit",
+        "  - withdrawal -> Withdrawal (apply --withdraw-to)",
+        "  - staking -> Interest Income",
+        "Complex pair matching for trades:",
+        "  - Group entries by refid",
+        "  - Identify buy leg (positive amount) and sell leg (negative amount)",
+        "  - Combine into single Trade transaction",
+        "Parse Kraken timestamp format (microsecond precision)",
+        "Filter to BTC-related transactions",
+        "Register with @register decorator",
+        "Extensive unit tests for pair matching edge cases",
+        "Create tests/fixtures/csv_samples/kraken_sample.csv"
+      ],
+      "priority": 6,
+      "passes": true
+    },
+    {
+      "id": "IMP-007",
+      "title": "Strike parser",
+      "acceptanceCriteria": [
+        "Create imports/exchanges/strike.py with StrikeImporter class",
+        "Parse Strike transaction history format",
+        "Map transaction types: purchases, sends, receives",
+        "Extract purchase price for cost basis",
+        "Handle Strike date format",
+        "For sends: apply --withdraw-to or default",
+        "Register with @register decorator",
+        "Unit tests with sample fixture",
+        "Create tests/fixtures/csv_samples/strike_sample.csv"
+      ],
+      "priority": 7,
+      "passes": true
+    },
+    {
+      "id": "IMP-008",
+      "title": "River parser",
+      "acceptanceCriteria": [
+        "Create imports/exchanges/river.py with RiverImporter class",
+        "Support two River export formats:",
+        "  1. Bitcoin Activity CSV: BTC transactions only",
+        "  2. Account Activity CSV: All account activity",
+        "Auto-detect format based on column headers",
+        "Map transaction types appropriately",
+        "For withdrawals: apply --withdraw-to or default",
+        "Register with @register decorator",
+        "Unit tests for both formats",
+        "Create tests/fixtures/csv_samples/river_btc_sample.csv",
+        "Create tests/fixtures/csv_samples/river_account_sample.csv"
+      ],
+      "priority": 8,
+      "passes": true
+    },
+    {
+      "id": "IMP-009",
+      "title": "Swan Bitcoin parser",
+      "acceptanceCriteria": [
+        "Create imports/exchanges/swan.py with SwanImporter class",
+        "Parse Swan Deposits/Purchases CSV",
+        "Extract DCA purchase information",
+        "Map to Trade transactions",
+        "For withdrawals: apply --withdraw-to or default",
+        "Register with @register decorator",
+        "Unit tests with sample fixture",
+        "Create tests/fixtures/csv_samples/swan_sample.csv"
+      ],
+      "priority": 9,
+      "passes": true
+    },
+    {
+      "id": "IMP-010",
+      "title": "Cash App parser",
+      "acceptanceCriteria": [
+        "Create imports/exchanges/cashapp.py with CashAppImporter class",
+        "Parse Cash App Gain/Loss CSV",
+        "Handle limitation: no cost basis for external transfers",
+        "Generate warning for external receives with $0 basis",
+        "Map transaction types",
+        "For sends: apply --withdraw-to or default",
+        "Register with @register decorator",
+        "Unit tests with sample fixture",
+        "Create tests/fixtures/csv_samples/cashapp_sample.csv"
+      ],
+      "priority": 10,
+      "passes": true
+    },
+    {
+      "id": "IMP-011",
+      "title": "Gemini parser",
+      "acceptanceCriteria": [
+        "Create imports/exchanges/gemini.py with GeminiImporter class",
+        "Parse Gemini transaction history: time, base-asset, quote-asset, type, price, quantity, total, fee, fee-currency, trade-id",
+        "Map transaction types including Gemini Earn interest",
+        "Filter to BTC transactions",
+        "For withdrawals: apply --withdraw-to or default",
+        "Register with @register decorator",
+        "Unit tests with sample fixture",
+        "Create tests/fixtures/csv_samples/gemini_sample.csv"
+      ],
+      "priority": 11,
+      "passes": true
+    },
+    {
+      "id": "IMP-012",
+      "title": "Fold parser",
+      "status": "skipped",
+      "reason": "No reliable documentation of Fold's CSV export format; cannot implement without risking incorrect parsing",
+      "acceptanceCriteria": [
+        "Create imports/exchanges/fold.py with FoldImporter class",
+        "Parse Fold Yearly Bitcoin Transaction History",
+        "Handle limited data (primarily rewards)",
+        "Map reward transactions to Interest Income",
+        "Register with @register decorator",
+        "Unit tests with sample fixture",
+        "Create tests/fixtures/csv_samples/fold_sample.csv"
+      ],
+      "priority": 12,
+      "passes": false
+    },
+    {
+      "id": "IMP-013",
+      "title": "Documentation and CSV format guide",
+      "acceptanceCriteria": [
+        "Update README.md with Import section:",
+        "  - Overview of import_csv script",
+        "  - Supported exchanges list",
+        "  - Example usage",
+        "  - Withdrawal handling explanation",
+        "Create docs/CSV_FORMAT_GUIDE.md:",
+        "  - Expected format for each exchange",
+        "  - How to export from each exchange",
+        "  - Common issues and troubleshooting",
+        "Update AGENTS.md with learnings",
+        "Update progress.txt with feature completion"
+      ],
+      "priority": 13,
+      "passes": true
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Kraken pair matching - complex refid linking logic",
+      "Exchange CSV format changes over time"
+    ],
+    "medium": [
+      "Date format variations across exchanges",
+      "Large file performance"
+    ],
+    "low": [
+      "Missing cost basis for some sources (Cash App)",
+      "File encoding issues"
+    ]
+  },
+  "futureEnhancements": [
+    "Feature 5: TUI Import Wizard with Textual",
+    "Additional exchange support (Binance, BlockFi, etc.)",
+    "Automatic format version detection",
+    "Batch import from directory"
+  ]
+}

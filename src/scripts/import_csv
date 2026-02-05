@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""Import transactions from exchange CSV exports.
+
+Usage:
+    import_csv --list                          # Show available parsers
+    import_csv --format coinbase               # Show expected format
+    import_csv coinbase_export.csv             # Auto-detect and import
+    import_csv --source coinbase file.csv      # Import with explicit parser
+    import_csv --dry-run file.csv              # Preview without importing
+    import_csv --withdraw-to Ledger file.csv   # Set withdrawal destination
+"""
+
+from __future__ import annotations
+
+import _bootstrap  # noqa: F401
+
+import argparse
+import sys
+from pathlib import Path
+
+from cryptoAccounts import CryptoAccounts
+from db import get_backend
+from imports import (
+    detect_duplicates,
+    detect_parser,
+    get_all_parsers,
+    get_parser,
+    validate_batch,
+)
+
+
+def parse_arguments() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Import transactions from exchange CSV exports",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s --list                              # Show available parsers
+  %(prog)s --format coinbase                   # Show expected CSV format
+  %(prog)s coinbase_export.csv                 # Auto-detect parser and import
+  %(prog)s --source coinbase file.csv          # Specify parser explicitly
+  %(prog)s --dry-run file.csv                  # Preview without importing
+  %(prog)s --withdraw-to Ledger file.csv       # Set withdrawal destination
+        """
+    )
+
+    parser.add_argument(
+        'file',
+        nargs='?',
+        help='CSV file to import (required unless using --list or --format)',
+    )
+    parser.add_argument(
+        '--list',
+        action='store_true',
+        help='Show all available parsers and exit',
+    )
+    parser.add_argument(
+        '--source',
+        metavar='NAME',
+        help='Parser name to use (skip auto-detection)',
+    )
+    parser.add_argument(
+        '--format',
+        metavar='NAME',
+        help='Show expected CSV format for a parser and exit',
+    )
+    parser.add_argument(
+        '--withdraw-to',
+        metavar='WALLET',
+        help='Destination wallet name for withdrawals',
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Preview transactions without importing',
+    )
+
+    return parser.parse_args()
+
+
+def list_parsers() -> None:
+    """Print all registered parsers in a formatted table."""
+    parsers = get_all_parsers()
+    if not parsers:
+        print("No parsers available.")
+        return
+
+    print(f"{'Name':<20} {'Type':<10} Description")
+    print("-" * 70)
+    for p in parsers:
+        print(f"{p.name:<20} {p.source_type:<10} {p.description}")
+
+
+def show_format(name: str) -> None:
+    """Print format help for a named parser and exit."""
+    importer = get_parser(name)
+    if importer is None:
+        print(f"Error: Unknown parser '{name}'. Use --list to see available parsers.", file=sys.stderr)
+        sys.exit(1)
+    print(importer.get_format_help())
+
+
+def print_preview(transactions: list[dict[str, object]]) -> None:
+    """Print a formatted dry-run preview of transactions."""
+    print(f"\n--- Dry Run Preview ({len(transactions)} transaction(s)) ---")
+    print(f"{'#':<4} {'Type':<20} {'Amount':>14} {'Curr':<6} {'Exchange':<20} Date")
+    print("-" * 80)
+    for i, tx in enumerate(transactions):
+        if tx.get('buy'):
+            amount, curr = tx['buy'], tx.get('buy_curr', '')
+        else:
+            amount, curr = tx.get('sell', ''), tx.get('sell_curr', '')
+        print(f"{i:<4} {tx['trans_type']:<20} {str(amount):>14} {str(curr):<6} {str(tx.get('exchange', '')):<20} {tx['created_date']}")
+
+
+def main() -> None:
+    """Main entry point."""
+    args = parse_arguments()
+
+    # Info-only commands (no file needed)
+    if args.list:
+        list_parsers()
+        sys.exit(0)
+
+    if args.format:
+        show_format(args.format)
+        sys.exit(0)
+
+    # FILE is required for import
+    if not args.file:
+        print("Error: FILE is required. Use --list or --format for info-only commands.", file=sys.stderr)
+        sys.exit(1)
+
+    file_path = Path(args.file)
+    if not file_path.exists():
+        print(f"Error: File not found: {file_path}", file=sys.stderr)
+        sys.exit(1)
+    if not file_path.is_file():
+        print(f"Error: Not a file: {file_path}", file=sys.stderr)
+        sys.exit(1)
+
+    # Resolve parser
+    if args.source:
+        importer = get_parser(args.source)
+        if importer is None:
+            print(f"Error: Unknown parser '{args.source}'. Use --list to see available parsers.", file=sys.stderr)
+            sys.exit(1)
+    else:
+        importer = detect_parser(str(file_path))
+        if importer is None:
+            print("Error: Could not auto-detect parser. Use --source to specify one.", file=sys.stderr)
+            sys.exit(2)
+
+    print(f"Parser: {importer.name}")
+
+    # Parse
+    try:
+        colnames, transactions = importer.parse(str(file_path), args.withdraw_to)
+    except Exception as e:
+        print(f"Error: Parse failed: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if not transactions:
+        print("No transactions found in file.")
+        sys.exit(0)
+
+    print(f"Parsed {len(transactions)} transaction(s)")
+
+    # Validate
+    validation = validate_batch(transactions)
+
+    if validation.warnings:
+        print(f"\n{validation.warning_count} warning(s):")
+        for idx, warns in validation.warnings:
+            for w in warns:
+                print(f"  [tx {idx}] {w}")
+
+    if not validation.is_valid:
+        print(f"\nValidation failed: {validation.error_count} error(s)", file=sys.stderr)
+        for idx, errs in validation.errors:
+            for e in errs:
+                print(f"  [tx {idx}] {e}", file=sys.stderr)
+        sys.exit(2)
+
+    # Duplicate check
+    backend = get_backend()
+    duplicates = detect_duplicates(transactions, backend)
+    if duplicates:
+        print(f"\n{len(duplicates)} potential duplicate(s) detected:")
+        for dup in duplicates:
+            amt = dup.get('buy', dup.get('sell', ''))
+            curr = dup.get('buy_curr', dup.get('sell_curr', ''))
+            print(f"  {dup['trans_type']} {amt} {curr} on {dup['created_date']}")
+
+    # Dry-run preview
+    if args.dry_run:
+        print_preview(transactions)
+        if duplicates:
+            print(f"\n  Note: {len(duplicates)} potential duplicate(s) shown above.")
+        sys.exit(0)
+
+    # Import
+    try:
+        crypto = CryptoAccounts(backend=backend)
+        result = crypto.import_transactions(transactions)
+        crypto.close()
+    except Exception as e:
+        print(f"Error: Import failed: {e}", file=sys.stderr)
+        sys.exit(3)
+
+    print(f"\nImported {result['imported']} transaction(s) successfully.")
+    if result['skipped'] > 0:
+        print(f"Skipped {result['skipped']} transaction(s) with unknown type.")
+
+
+if __name__ == '__main__':
+    main()

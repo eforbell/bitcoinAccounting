@@ -1,5 +1,248 @@
+## 2026-02-05 - IMP-012: Fold parser — SKIPPED
+
+- Skipped: no reliable documentation of Fold's CSV export format available.
+  Cannot implement without risking incorrect parsing.
+- PRD entry marked with `"status": "skipped"` and reason recorded in
+  `planning/features/feature-4-prd.json`.
+- No files created; no code changes.
+
+---
+
+## 2026-02-05 - IMP-011: Gemini xlsx augmentation
+
+- What was implemented:
+  - Augmented `src/python/imports/exchanges/gemini.py` with native xlsx path
+  - CSV path (gemini-exports tool format) preserved exactly as committed
+  - New xlsx path handles Gemini's native "Account History" download:
+    - 30+ columns, dynamic per-account (varies by holdings)
+    - Detection: checks for 'BTC Amount BTC' + 'Withdrawal Destination' headers
+    - Dynamic col_idx map built from row 1 at runtime — missing columns ignored
+    - Symbol filter: only BTCUSD and BTC rows processed
+    - abs() applied to all amounts (Gemini stores Buy USD and fees as negative)
+    - Withdrawal destination address captured in comment field
+  - Added openpyxl to requirements.txt
+  - 29 new xlsx tests across 5 classes (helpers, detection, parsing, integration)
+  - Smoke-tested against real Gemini export: 36 BTC transactions parsed correctly
+    (27 Trades, 9 Withdrawals)
+
+- Files changed:
+  - `src/python/imports/exchanges/gemini.py` (rewritten — dual CSV+xlsx paths)
+  - `requirements.txt` (added openpyxl)
+  - `tests/test_import_gemini.py` (29 new xlsx tests; 58 total)
+  - `planning/features/feature-4-prd.json` (IMP-012 marked skipped)
+
+- **Learnings:**
+  - openpyxl read_only=True breaks on Gemini xlsx (no default style) — use default
+  - Dynamic column discovery is essential when xlsx column sets vary by account
+  - Negative accounting convention (money out = negative) is common in native
+    exchange exports; abs() is the right fix at the parser boundary
+  - Programmatic xlsx fixture creation in tests mirrors _make_csv pattern cleanly
+
+- **Test Results:**
+  - 58 Gemini tests (29 CSV + 29 xlsx)
+  - 339 total import tests passing
+  - Zero regressions
+
+---
+
+## 2026-02-05 - IMP-011: Gemini parser
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/gemini.py` with GeminiImporter class
+  - Parses Gemini transaction history CSV (hyphenated column names from gemini-exports API tool)
+  - Columns: time, base-asset, quote-asset, type, price, quantity, total, fee, fee-currency, trade-id
+  - Filters to BTC transactions only (base-asset == BTC); non-BTC rows silently dropped
+  - Transaction type mapping:
+    - Buy → Trade (sell = total; falls back to price * quantity if total is empty)
+    - Sell → Trade (buy = total; same fallback)
+    - Deposit → Deposit
+    - Withdrawal → Withdrawal (apply --withdraw-to or default; BTC fee tracked)
+    - Earn / Earn Interest → Interest Income (comment = "Gemini Earn")
+  - fee_curr guarded: empty string when fee == 0 to avoid orphan currency labels
+  - Detection: checks for 'base-asset', 'quote-asset', 'trade-id' — hyphenated names are unique to Gemini
+  - Registered with @register; uncommented in exchanges/__init__.py
+  - Created tests/fixtures/csv_samples/gemini_sample.csv (6 rows: 1 Buy, 1 ETH Buy (filtered), 1 Sell, 1 Deposit, 1 Withdrawal, 1 Earn)
+  - 29 unit tests across 5 test classes
+
+- Files changed:
+  - `src/python/imports/exchanges/gemini.py` (new)
+  - `src/python/imports/exchanges/__init__.py` (uncommented gemini import)
+  - `tests/fixtures/csv_samples/gemini_sample.csv` (new fixture)
+  - `tests/test_import_gemini.py` (new — 29 tests)
+  - `planning/features/feature-4-prd.json` (marked IMP-011 passes: true)
+
+- **Learnings:**
+  - Hyphenated column names (base-asset, quote-asset, trade-id) are highly distinctive for detection — no need to check many columns
+  - Buy/Sell total fallback (price * quantity) handles incomplete API exports without failing
+  - fee_curr guard (`if fee > 0 else ''`) prevents empty-fee rows from carrying a stale currency label — applied consistently across all transaction types
+  - Gemini Earn type has two labels in the wild: "Earn" and "Earn Interest" — handle both with a set membership check
+  - multi-asset exchange: base-asset filter is the first check in _parse_row, short-circuiting all other logic for non-BTC rows
+
+- **Test Results:**
+  - 29 new tests (4 detection, 6 parse_number, 14 parsing, 3 registration, 2 integration)
+  - 512 total tests passing
+  - Zero regressions
+
+---
+
+## 2026-02-05 - IMP-010: Cash App parser
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/cashapp.py` with CashAppImporter class
+  - Parses Cash App "Gain/Loss" CSV export (Bitcoin-only, no asset filtering)
+  - Columns: Date, Transaction Type, Amount (BTC), Market Price ($), Cost Basis ($), Proceeds ($), Gain/Loss ($), Note
+  - Transaction type mapping:
+    - Purchase → Trade (sell = Cost Basis; falls back to Market Price * Amount if blank)
+    - Sale → Trade (buy = Proceeds; falls back to Market Price * Amount if blank)
+    - Send → Withdrawal (apply --withdraw-to or default)
+    - Receive → Deposit
+  - Key limitation handling: Receive rows with Cost Basis == $0 (empty or explicit zero) emit a UserWarning and tag comment with "Cost basis $0 - verify before tax filing"
+  - Both empty-string and literal "0.00" Cost Basis trigger the warning — Cash App uses both for external transfers
+  - Detection: checks for "cost basis ($)" AND "gain/loss ($)" AND "amount (btc)" — unique to Cash App
+  - Registered with @register; uncommented in exchanges/__init__.py
+  - Created tests/fixtures/csv_samples/cashapp_sample.csv (5 rows: 2 Purchase, 1 Receive no basis, 1 Sale, 1 Send)
+  - 28 unit tests across 5 test classes
+
+- Files changed:
+  - `src/python/imports/exchanges/cashapp.py` (new)
+  - `src/python/imports/exchanges/__init__.py` (uncommented cashapp import)
+  - `tests/fixtures/csv_samples/cashapp_sample.csv` (new fixture)
+  - `tests/test_import_cashapp.py` (new — 28 tests)
+  - `planning/features/feature-4-prd.json` (marked IMP-010 passes: true)
+
+- **Learnings:**
+  - Cost Basis / Proceeds fallback pattern: use the exchange-reported value if > 0, otherwise compute from Market Price * Amount — handles missing fields gracefully
+  - warnings.warn() during parse() is the right place for data-quality alerts that don't block import; pytest.warns() captures these cleanly in tests
+  - warnings.catch_warnings() + simplefilter("error") is the idiom for asserting NO warning was emitted
+  - Cash App's $0 basis applies to both empty fields AND explicit "0.00" — check the parsed float, not the raw string
+  - Sale and Purchase are symmetric: Sale flips buy/sell sides vs Purchase; Proceeds ↔ Cost Basis
+
+- **Test Results:**
+  - 28 new tests (4 detection, 6 parse_number, 13 parsing, 3 registration, 2 integration)
+  - 483 total tests passing
+  - Zero regressions
+
+---
+
+## 2026-02-05 - IMP-009: Swan Bitcoin parser
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/swan.py` with SwanImporter class
+  - Parses Swan Bitcoin "Deposits & Purchases" CSV export format
+  - Columns: Date, Type, Amount (BTC), Price (USD), Total (USD), Fee (USD), Status
+  - Transaction type mapping:
+    - Purchase → Trade (buy BTC, sell USD); group='DCA' tags all purchases
+    - Withdrawal → Withdrawal (apply --withdraw-to or default)
+    - Deposit → Deposit (BTC received from external wallet)
+    - USD Deposit → skipped (no BTC involved)
+  - Status filtering: Pending and Failed rows silently dropped; status check is case-insensitive
+  - Total (USD) used as sell amount for Purchases — includes fee (consistent with Coinbase approach)
+  - Withdrawal fee tracked in USD (Swan's reporting format); empty fee_curr when fee=0
+  - Registered with @register; uncommented in exchanges/__init__.py
+  - Created tests/fixtures/csv_samples/swan_sample.csv (6 rows: 3 Purchase, 1 USD Deposit, 1 Withdrawal, 1 Deposit)
+  - 29 unit tests across 5 test classes
+
+- Files changed:
+  - `src/python/imports/exchanges/swan.py` (new)
+  - `src/python/imports/exchanges/__init__.py` (uncommented swan import)
+  - `tests/fixtures/csv_samples/swan_sample.csv` (new fixture)
+  - `tests/test_import_swan.py` (new — 29 tests)
+  - `planning/features/feature-4-prd.json` (marked IMP-009 passes: true)
+
+- **Learnings:**
+  - Swan is Bitcoin-only DCA — no asset filtering needed (unlike Coinbase)
+  - Status column filtering adds robustness: real DCA platforms have Pending rows for in-flight ACH purchases
+  - group='DCA' field useful for downstream analytics; persists through import_transactions()
+  - Total (USD) includes fee for Purchases: consistent with Coinbase's Total field semantics; fee tracked separately for tax reporting
+  - USD Deposit skip: simply returning None for non-BTC types keeps the parser clean; no explicit filter needed
+
+- **Test Results:**
+  - 29 new tests (4 detection, 6 parse_number, 14 parsing, 3 registration, 2 integration)
+  - 455 total tests passing
+  - Zero regressions
+
+---
+
+## 2026-02-04 - IMP-008: River parser
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/river.py` with RiverImporter class
+  - Supports two River export formats with auto-detection:
+    - Account Activity (21 columns): uses Transaction Type column directly
+    - Bitcoin Activity (8 columns): infers type from Tag + sent/received pattern
+  - `_detect_river_format()` checks _ACCOUNT_MARKERS superset first, then _BTC_COLS
+  - Account Activity type mapping: Buy→Trade, Send→Withdrawal, Interest Payout→Interest Income; Cash Deposit skipped (no BTC)
+  - Bitcoin Activity type mapping: Tag=Buy→Trade, Tag=Interest→Interest Income, empty tag + BTC sent→Withdrawal
+  - Buy sell amount: Account Activity uses Total Amount column; Bitcoin Activity computes sent + fee (when fee currency matches sent currency)
+  - Withdrawal sell = Sent Amount only; fee tracked separately (not added to sell)
+  - Reference Code used as comment for Account Activity transactions
+  - Registered with @register; uncommented in exchanges/__init__.py
+  - Created tests/fixtures/csv_samples/river_btc_sample.csv (5 rows: 2 Buy, 2 Send, 1 Interest)
+  - Created tests/fixtures/csv_samples/river_account_sample.csv (6 rows: 1 Cash Deposit + same 5 BTC txns)
+  - 36 unit tests across 8 test classes
+
+- Files changed:
+  - `src/python/imports/exchanges/river.py` (new)
+  - `src/python/imports/exchanges/__init__.py` (uncommented river import)
+  - `tests/fixtures/csv_samples/river_btc_sample.csv` (new fixture)
+  - `tests/fixtures/csv_samples/river_account_sample.csv` (new fixture)
+  - `tests/test_import_parsers.py` (added 36 IMP-008 tests)
+  - `planning/features/feature-4-prd.json` (marked IMP-008 passes: true)
+
+- **Learnings:**
+  - Two-format detection: check superset (Account Activity) first; Account Activity column set contains all Bitcoin Activity columns plus extras
+  - _ACCOUNT_MARKERS set {'reference code', 'transaction type', 'bitcoin price amount'} is River-specific enough to avoid conflicts with Coinbase (which also has 'transaction type')
+  - Bitcoin Activity withdrawal detection: empty Tag + Sent Currency == 'BTC' + Sent Amount > 0 — no explicit type column, must infer from data shape
+  - Buy sell calculation differs by format: Account Activity has Total Amount ready; Bitcoin Activity requires sent + fee computation (with currency-match guard to avoid mixing USD fee into BTC amounts)
+  - Cash Deposit filter: check `sent_curr != 'BTC' and recv_curr != 'BTC'` early to drop all USD-only rows regardless of Transaction Type
+  - Shared _ACCT_HDR / _BTC_HDR string constants in tests eliminate repetition across 20+ test methods
+
+- **Test Results:**
+  - 36 new tests (4 detection, 4 format helper, 6 parse_number, 9 Account Activity, 8 Bitcoin Activity, 3 registration, 2 integration)
+  - 426 total tests passing
+  - Zero regressions
+
+---
+
+## 2026-02-04 - IMP-004: Native format parser
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/native.py` with NativeImporter class
+  - Handles two column layouts via auto-detection:
+    - Clean: trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, group, comment, created_date
+    - Legacy: Type, Buy, Buy Cur., Sell, Sell Cur., Fee, Fee Cur., Exchange, Group, Comment, Date
+  - `_detect_format()` helper checks header against both maps; clean takes priority
+  - `_parse_number()` strips $, commas, whitespace from numeric fields
+  - Column name whitespace is stripped before matching (handles " Buy Cur. " etc.)
+  - Empty rows (no trans_type) are silently skipped
+  - Registered with @register; uncommented in exchanges/__init__.py
+  - Created tests/fixtures/csv_samples/native_sample.csv (clean format, 4 transaction types)
+  - 24 unit tests across 4 test classes
+
+- Files changed:
+  - `src/python/imports/exchanges/native.py` (new)
+  - `src/python/imports/exchanges/__init__.py` (uncommented native import)
+  - `tests/fixtures/csv_samples/native_sample.csv` (new fixture)
+  - `tests/test_import_parsers.py` (added 24 IMP-004 tests)
+  - `planning/features/feature-4-prd.json` (marked IMP-004 passes: true)
+
+- **Learnings:**
+  - Two-map detection pattern: define _CLEAN_MAP and _LEGACY_MAP as lowercase→tx_field dicts; _detect_format() checks if all keys are a subset of the lowercased header
+  - csv.DictReader preserves original column name case in row keys; need lower_to_original mapping to bridge case-insensitive detection with case-sensitive row access
+  - Strip fieldnames after DictReader init: `reader.fieldnames = [n.strip() for n in reader.fieldnames]` — handles trailing spaces in CSV exports
+  - colnames output always uses clean format keys regardless of input format — normalizes for downstream consumers
+  - _parse_number strips $ and commas before float() — common in exported CSV files
+
+- **Test Results:**
+  - 24 new tests (9 detection, 6 clean format, 6 legacy format, 3 registration)
+  - 306 total tests passing
+  - Zero regressions
+
+---
+
 ## Codebase Patterns
 
+- **Two-format parser detection**: When an exchange ships two CSV exports that share most columns, check for the superset first (e.g. Account Activity markers), then fall back to the smaller column set with an explicit exclusion guard (`'transaction type' not in header`). See River parser.
 - **Named Placeholders**: Both sqlite3 and psycopg2 support `:named` syntax with dict parameters. Use this for cross-database compatibility instead of `%s` or `?`.
 - **Python 3.9 Type Hints**: Add `from __future__ import annotations` to use `|` union syntax on Python 3.9.
 - **Optional Dependencies with mypy**: Use `TYPE_CHECKING` pattern to conditionally import types without runtime failures.
@@ -812,5 +1055,73 @@
 - **Test Results:**
   - 202 tests passing (all existing tests pass after refactoring)
   - Zero regressions from cleanup changes
+
+---
+
+## 2026-02-04 - IMP-001: Base importer class and registry
+
+- What was implemented:
+  - Created `src/python/imports/` package for CSV import parsers
+  - `base.py`: BaseImporter abstract class with:
+    - Class attributes: name, source_type, file_patterns, description, expected_columns
+    - Abstract parse() method for subclasses
+    - detect() method for auto-detection based on column headers
+    - get_format_help() for CLI --format output
+    - Withdrawal helpers: _get_withdrawal_exchange(), _get_withdrawal_comment()
+  - `registry.py`: Parser registry with @register decorator
+    - get_parser(), get_all_parsers(), detect_parser(), get_parser_names()
+  - `exchanges/__init__.py`: Placeholder for exchange parsers
+
+- Files created:
+  - `src/python/imports/__init__.py`
+  - `src/python/imports/base.py`
+  - `src/python/imports/registry.py`
+  - `src/python/imports/exchanges/__init__.py`
+  - `tests/test_import_parsers.py`
+  - `planning/features/feature-4-prd.json`
+  - `planning/features/feature-4-summary.md`
+
+- **Learnings:**
+  - Registry pattern with decorator is clean for self-registering parsers
+  - Case-insensitive column matching helps with format variations
+  - Withdrawal destination handling needs both exchange name and comment helpers
+  - 80% column match threshold balances flexibility with accuracy for auto-detect
+
+- **Test Results:**
+  - 23 new tests for imports package
+  - 225 total tests passing (202 existing + 23 new)
+
+---
+
+## 2026-02-04 - IMP-003: CLI entry point (import_csv)
+
+- What was implemented:
+  - Created `src/scripts/import_csv` executable CLI script with argparse
+  - Flags: --list, --source, --format, --withdraw-to, --dry-run, positional FILE
+  - Workflow: list/format info → file validation → parser resolution → parse → validate → duplicate check → dry-run preview or import
+  - Exit codes: 0=success, 1=arg error, 2=parse error, 3=import error
+  - Added Trade transaction handling to `import_transactions()` in cryptoAccounts.py (was silently skipping Trades)
+  - 6 subprocess CLI tests (help, list, missing file, not found, unknown source, unknown format)
+  - 9 programmatic integration tests (deposit, trade, withdrawal with/without withdraw-to, interest income, duplicate detection, validation, empty CSV, mixed types)
+
+- Files changed:
+  - `src/scripts/import_csv` (new - executable CLI script)
+  - `src/python/cryptoAccounts.py` (modified - added Trade elif in import_transactions)
+  - `tests/test_import_parsers.py` (modified - added 15 IMP-003 tests)
+  - `AGENTS.md` (updated - import_csv patterns)
+  - `planning/features/feature-4-prd.json` (marked IMP-003 passes: true)
+
+- **Learnings:**
+  - import_transactions() had a gap: handled Deposit, Withdrawal, Interest Income, Mining but not Trade — added using existing getTradeQuery()
+  - Use `import _bootstrap` pattern (not raw sys.path) for script imports — consistent with balance, sell, etc.
+  - getWithdrawQuery() does NOT store comments — only Interest Income query includes comment column
+  - Test parser registration: define class at module level without @register, call register(cls) in setup_method after clear_registry()
+  - argparse nargs='?' makes FILE optional so --list/--format work without it
+  - Subprocess tests don't need DB env vars when they exit before DB access (help, list, error cases)
+
+- **Test Results:**
+  - 15 new tests (6 CLI + 9 integration)
+  - 282 total tests passing (267 existing + 15 new)
+  - Zero regressions
 
 ---
