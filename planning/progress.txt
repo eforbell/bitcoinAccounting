@@ -1,3 +1,50 @@
+## 2026-02-05 - IMP-012: Fold parser — SKIPPED
+
+- Skipped: no reliable documentation of Fold's CSV export format available.
+  Cannot implement without risking incorrect parsing.
+- PRD entry marked with `"status": "skipped"` and reason recorded in
+  `planning/features/feature-4-prd.json`.
+- No files created; no code changes.
+
+---
+
+## 2026-02-05 - IMP-011: Gemini xlsx augmentation
+
+- What was implemented:
+  - Augmented `src/python/imports/exchanges/gemini.py` with native xlsx path
+  - CSV path (gemini-exports tool format) preserved exactly as committed
+  - New xlsx path handles Gemini's native "Account History" download:
+    - 30+ columns, dynamic per-account (varies by holdings)
+    - Detection: checks for 'BTC Amount BTC' + 'Withdrawal Destination' headers
+    - Dynamic col_idx map built from row 1 at runtime — missing columns ignored
+    - Symbol filter: only BTCUSD and BTC rows processed
+    - abs() applied to all amounts (Gemini stores Buy USD and fees as negative)
+    - Withdrawal destination address captured in comment field
+  - Added openpyxl to requirements.txt
+  - 29 new xlsx tests across 5 classes (helpers, detection, parsing, integration)
+  - Smoke-tested against real Gemini export: 36 BTC transactions parsed correctly
+    (27 Trades, 9 Withdrawals)
+
+- Files changed:
+  - `src/python/imports/exchanges/gemini.py` (rewritten — dual CSV+xlsx paths)
+  - `requirements.txt` (added openpyxl)
+  - `tests/test_import_gemini.py` (29 new xlsx tests; 58 total)
+  - `planning/features/feature-4-prd.json` (IMP-012 marked skipped)
+
+- **Learnings:**
+  - openpyxl read_only=True breaks on Gemini xlsx (no default style) — use default
+  - Dynamic column discovery is essential when xlsx column sets vary by account
+  - Negative accounting convention (money out = negative) is common in native
+    exchange exports; abs() is the right fix at the parser boundary
+  - Programmatic xlsx fixture creation in tests mirrors _make_csv pattern cleanly
+
+- **Test Results:**
+  - 58 Gemini tests (29 CSV + 29 xlsx)
+  - 339 total import tests passing
+  - Zero regressions
+
+---
+
 ## 2026-02-05 - IMP-011: Gemini parser
 
 - What was implemented:

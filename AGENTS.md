@@ -1021,3 +1021,50 @@ River ships two CSV exports that overlap in columns:
 - Test parser class defined at module level without @register; manually call `register(cls)` in setup_method after `clear_registry()`
 - This avoids "already registered" errors across test methods
 
+## IMP-009: Swan — DCA Platform Patterns
+
+- Swan is Bitcoin-only DCA: no asset filtering needed (all rows are BTC)
+- **Status filtering**: Real DCA platforms have Pending rows for in-flight ACH
+  purchases. Filter by Status (case-insensitive) and silently drop Pending/Failed.
+- **group field for analytics**: Set `group='DCA'` on all purchases. This field
+  survives `import_transactions()` and is queryable downstream.
+- Total (USD) includes fee — consistent with Coinbase's Total semantics. Fee is
+  still tracked separately for tax reporting.
+
+## IMP-010: Cash App — Data-Quality Warnings During Parse
+
+- Cash App's Gain/Loss CSV omits cost basis for external wallet Receives.
+  Both empty string and literal "0.00" represent this — check the parsed float,
+  not the raw string.
+- **warnings.warn() during parse()** is the right place for data-quality alerts
+  that don't block import. The warning appears in CLI output and is testable
+  with `pytest.warns(UserWarning)`.
+- **Asserting NO warning was emitted**: use `warnings.catch_warnings()` +
+  `simplefilter("error")` — any warning becomes an exception, failing the test.
+- Tag the comment field with the issue text so the flag survives into the DB:
+  `"Cost basis $0 - verify before tax filing"`.
+
+## IMP-011: Gemini — Dual CSV + xlsx Dispatch
+
+- **Detection and parse dispatch on extension**: `detect()` and `parse()` branch
+  on `.xlsx` vs `.csv` extension. Each sub-path is fully independent — the CSV
+  path is unchanged from its original implementation.
+- **Dynamic column mapping for xlsx**: Gemini's xlsx has 30+ columns that vary
+  by account holdings (per-asset Amount/Fee/Balance triplets). Never hardcode
+  column indices. Build a `{header_lower: col_index}` dict from row 1 at runtime;
+  missing columns silently resolve to 0.0 via a `_to_float(None)` helper.
+- **Negative-amount convention**: Gemini stores Buy USD amounts and fees as
+  negative (accounting: money leaving = negative). Apply `abs()` unconditionally
+  to all amount fields in the xlsx path.
+- **openpyxl quirks with Gemini exports**:
+  - `load_workbook(read_only=True)` only returns 1 column because the file lacks
+    a default style. Use the default `read_only=False`.
+  - openpyxl emits `UserWarning: Workbook contains no default style` — this is
+    harmless and expected for Gemini exports.
+- **xlsx test fixtures**: Use openpyxl programmatically to create temp xlsx files
+  in tests (`_make_xlsx` helper). Only include the minimal columns the parser
+  reads — dynamic mapping means extras are ignored. Use `datetime` objects for
+  Date cells so `_fmt_dt()` formats them correctly.
+- Symbol filter (`BTCUSD` / `BTC`) is the primary row gate in xlsx, analogous
+  to `base-asset == BTC` in the CSV path.
+

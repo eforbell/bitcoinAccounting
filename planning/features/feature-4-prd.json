@@ -247,6 +247,8 @@
     {
       "id": "IMP-012",
       "title": "Fold parser",
+      "status": "skipped",
+      "reason": "No reliable documentation of Fold's CSV export format; cannot implement without risking incorrect parsing",
       "acceptanceCriteria": [
         "Create imports/exchanges/fold.py with FoldImporter class",
         "Parse Fold Yearly Bitcoin Transaction History",
@@ -276,7 +278,7 @@
         "Update progress.txt with feature completion"
       ],
       "priority": 13,
-      "passes": false
+      "passes": true
     }
   ],
   "riskAssessment": {
