@@ -1086,3 +1086,27 @@ River ships two CSV exports that overlap in columns:
 - **source_type field**: Used to distinguish exchange parsers (`source_type='exchange'`)
   from wallet parsers (`source_type='wallet'`) in CLI output
 
+
+## WAL-002: Ledger Live Importer
+
+- **Ledger Live CSV format**: Operations export with 11 columns including:
+  - Operation Date (datetime string), Currency, Operation Type (IN/OUT)
+  - Amount (float), Fees (float), Hash (transaction ID)
+  - Account Name, xpub (extended public key for account)
+  - Cost Currency, Cost, Cost at Export (USD equivalent values)
+- **Operation type mapping**: Ledger uses simple IN/OUT types
+  - `IN` → Deposit (BTC received)
+  - `OUT` → Withdrawal (BTC sent)
+- **BTC-only filtering**: Multi-currency wallet, must filter on `Currency == 'BTC'`
+  and skip all other assets (ETH, etc.)
+- **Zero-amount transactions**: Skip transactions where parsed amount == 0
+  (empty CSV cells or explicit zeros)
+- **Withdrawal fee handling**: Apply `fee_curr = 'BTC' if fee > 0 else ''` pattern
+  to avoid orphan currency labels on zero-fee withdrawals
+- **Absolute value on withdrawals**: Amounts may come as negative in OUT operations,
+  always apply `abs(value)` when setting sell amount
+- **csv.DictReader.fieldnames type**: Returns `Sequence[str] | None`, not `list[str]`.
+  Convert with `list(reader.fieldnames)` before passing to functions expecting list.
+- **Wallet parser registration**: Import in `imports/wallets/__init__.py` with
+  `from . import ledger  # noqa: F401` to trigger @register decorator
+
