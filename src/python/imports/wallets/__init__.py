@@ -9,4 +9,4 @@ when imported. The imports here ensure all parsers are loaded.
 from . import ledger  # noqa: F401
 from . import trezor  # noqa: F401
 from . import sparrow  # noqa: F401
-# from . import coldcard
+from . import coldcard  # noqa: F401

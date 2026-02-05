@@ -1214,3 +1214,26 @@ River ships two CSV exports that overlap in columns:
 - **27 comprehensive tests**: Detection (4), parsing (17), registration (3), integration (3)
   - Includes tests for satoshi conversion, decimal fallback, label preservation
   - All tests pass, 617 total tests passing (27 new + 590 existing)
+
+## WAL-005: Coldcard Importer
+
+- **Coldcard CSV format**: Address explorer export with 5 columns:
+  - Date (YYYY-MM-DD), Type (receive/send), Amount (decimal BTC), Fee (decimal BTC), TXID
+- **Dual detection mode**: Supports both type-based and sign-based transaction detection
+  - Type column present: `receive`/`received`/`in` → Deposit, `send`/`sent`/`out` → Withdrawal
+  - Type column empty: positive amount → Deposit, negative amount → Withdrawal
+  - Handles firmware version variations where type column may be absent
+- **Detection heuristic**: Uses `type` + `amount` + `txid` columns as distinctive markers
+  - Trezor: has 'tx id' (with space) and 'address' — excluded by negative checks
+  - Sparrow: has 'value'/'label'/'balance' instead of 'amount'/'type'
+  - Ledger: has 'operation type' instead of 'type'
+  - Negative checks `'address' not in header` and `'label' not in header` prevent false positives
+- **Amount format**: Decimal BTC (not satoshis like Sparrow) — no conversion needed
+- **Case-insensitive**: Both column names and type values are normalized with `.lower()`
+- **Consistent patterns**: Same as all wallet parsers:
+  - Zero-amount filtering, zero-fee handling (`fee_curr=''`), abs() on amounts
+  - wallet_name for deposits, withdraw_to for withdrawals
+  - Review comment for unspecified withdrawal destinations
+- **30 comprehensive tests**: Detection (5), parsing (20), registration (3), integration (2)
+  - Includes type variants, sign-based fallback, case-insensitive matching, invalid data handling
+  - All tests pass, 647 total tests passing (30 new + 617 existing)
