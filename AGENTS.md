@@ -1247,3 +1247,17 @@ River ships two CSV exports that overlap in columns:
   module becomes dead code once all parsers are migrated and tested.
 - **Confidence check**: Run the full test suite after deletion to confirm no hidden
   dependencies exist (dynamic imports, exec(), etc.).
+
+## WAL-007: Documentation for Wallet Imports
+
+- **Parallel structure**: Mirror code organization in docs — exchanges and wallets
+  get separate quick-reference tables and separate detailed sections.
+- **Wallet-specific UX**: `--wallet-name` is required for wallet imports but not
+  exchanges. Document this prominently with examples in both README and format guide.
+- **Export instructions per wallet**:
+  - Ledger Live: Settings → Accounts → Export operations
+  - Trezor Suite: Transactions → Export
+  - Sparrow Wallet: Tools → Export CSV
+  - Coldcard: Address Explorer → export to SD card
+- **Detection discriminators make good doc notes**: Users benefit from knowing why
+  TXID vs TX ID matters, or why Sparrow's Balance column is distinctive.

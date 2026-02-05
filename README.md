@@ -15,7 +15,7 @@ with support for any cryptocurrency.
 - CLI helpers for common operations (buy, sell, transfer, export)
 - Tax reporting (1099-B exports, FIFO calculations)
 - Lightweight visualization helpers and example notebook
-- Bulk import from exchanges (Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini) with auto-detection
+- Bulk import from exchanges (Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini) and wallets (Ledger, Trezor, Sparrow, Coldcard) with auto-detection
 
 ## Quick Start
 
@@ -269,22 +269,34 @@ Add `src/scripts` to your PATH or run scripts directly with full path.
 - **Transfer between wallets**: `transfer` - Creates withdrawal + deposit pair
 - **Interest/Staking income**: `earnInterest` - Records income with cost basis
 
-### Importing from Exchanges
+### Importing from Exchanges and Wallets
 
-Bulk-import transaction history from exchange CSV and xlsx exports:
+Bulk-import transaction history from exchange CSV/xlsx exports and hardware wallet exports:
 
 - **Auto-detect and import**: `import_csv coinbase_export.csv`
 - **Preview first**: `import_csv --dry-run coinbase_export.csv`
 - **Specify parser**: `import_csv --source kraken ledger.csv`
 - **Set withdrawal destination**: `import_csv --withdraw-to ColdCard file.csv`
-- **List supported exchanges**: `import_csv --list`
+- **List supported parsers**: `import_csv --list`
 - **Show expected format**: `import_csv --format gemini`
 
-Supported: Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini (CSV + native xlsx), and a Native pass-through format. All parsers extract BTC transactions only. See [docs/CSV_FORMAT_GUIDE.md](docs/CSV_FORMAT_GUIDE.md) for per-exchange export instructions and column details.
+**Exchanges**: Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini (CSV + native xlsx), and a Native pass-through format.
+
+**Wallets**: Ledger Live, Trezor Suite, Sparrow Wallet, Coldcard. Wallet imports require `--wallet-name` to identify the destination:
+
+```bash
+# Import Ledger Live export
+import_csv --wallet-name MyLedger ledger_operations.csv
+
+# Import with withdrawal destination
+import_csv --wallet-name MyTrezor --withdraw-to ColdStorage trezor_export.csv
+```
+
+All parsers extract BTC transactions only. See [docs/CSV_FORMAT_GUIDE.md](docs/CSV_FORMAT_GUIDE.md) for per-parser export instructions and column details.
 
 **Withdrawal handling**: Use `--withdraw-to` to set the destination wallet name
-(e.g. `--withdraw-to ColdCard`). Without it, withdrawals are tagged
-`{Exchange}-Withdrawal` with a review comment so you can update them later.
+(e.g. `--withdraw-to ColdCard`). Without it, withdrawals are tagged with a
+review comment so you can update them later.
 
 ### Checking Balances
 
@@ -363,7 +375,7 @@ python -m pytest --cov=src\python\db --cov-report=term-missing
 
 ### Test Suite Coverage
 
-**370+ tests passing** ✅ (PostgreSQL tests skipped when database unavailable)
+**640+ tests passing** (PostgreSQL tests skipped when database unavailable)
 
 - **Database abstraction layer** (`tests/test_db_backend.py`):
   - Backend interface (SQLite, PostgreSQL)
@@ -390,11 +402,11 @@ python -m pytest --cov=src\python\db --cov-report=term-missing
   - End-to-end workflows
   - FIFO calculations
 
-- **Exchange import parsers** (`tests/test_import_*.py`):
-  - 8 parsers: Native, Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini
+- **Import parsers** (`tests/test_import_*.py`):
+  - 8 exchange parsers: Native, Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini
+  - 4 wallet parsers: Ledger Live, Trezor Suite, Sparrow Wallet, Coldcard
   - Per-parser detection, parsing, registration, and integration tests
   - Gemini dual-path: CSV and native xlsx formats
-  - 339 tests total
 
 - **Legacy tests** (`tests/test_sqlite_integration.py`):
   - Balance calculation edge cases

@@ -1,3 +1,41 @@
+## 2026-02-05 - WAL-007: Documentation update
+
+- What was implemented:
+  - Updated README.md:
+    - Added wallet parsers (Ledger, Trezor, Sparrow, Coldcard) to Key Features bullet
+    - Renamed "Importing from Exchanges" to "Importing from Exchanges and Wallets"
+    - Added wallet import section with --wallet-name examples
+    - Updated test count from 370+ to 640+
+    - Updated import parser test section to include 4 wallet parsers
+  - Updated docs/CSV_FORMAT_GUIDE.md:
+    - Renamed guide title to "Exchange & Wallet Imports"
+    - Added Wallets quick reference table alongside Exchanges table
+    - Added 4 new wallet sections with full documentation:
+      - Ledger Live: Settings → Accounts → Export operations
+      - Trezor Suite: Transactions → Export
+      - Sparrow Wallet: Tools → Export CSV
+      - Coldcard: Address Explorer export to SD card
+    - Each section includes expected columns, type mappings, notes, and usage examples
+  - Updated AGENTS.md with WAL-006 and WAL-007 learnings
+
+- Files changed:
+  - `README.md` (updated — wallet imports, test counts)
+  - `docs/CSV_FORMAT_GUIDE.md` (updated — 4 wallet sections added)
+  - `AGENTS.md` (updated — WAL-006, WAL-007 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-007 passes: true)
+
+- **Learnings:**
+  - Documentation should mirror code organization: exchanges and wallets as separate sections
+  - Wallet imports have a different UX requirement (--wallet-name) that needs prominent documentation
+  - Export instructions vary by wallet: some are in-app, Coldcard uses SD card export
+  - Detection heuristic differences (TXID vs TX ID, presence/absence of columns) make good documentation notes
+
+- **Test Results:**
+  - 647 tests passing (unchanged — documentation-only changes)
+  - Zero regressions
+
+---
+
 ## 2026-02-05 - WAL-006: Remove standalone wallet_imports.py
 
 - What was implemented:

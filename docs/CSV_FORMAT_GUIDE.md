@@ -1,7 +1,7 @@
-# CSV Format Guide — Exchange Imports
+# CSV Format Guide — Exchange & Wallet Imports
 
-This guide covers the expected file formats for each supported exchange, how to
-obtain the correct export, and common issues you may encounter.
+This guide covers the expected file formats for each supported exchange and
+wallet, how to obtain the correct export, and common issues you may encounter.
 
 Use `import_csv --format <name>` at any time to print the expected columns for a
 specific parser without opening this file.
@@ -9,6 +9,8 @@ specific parser without opening this file.
 ---
 
 ## Quick Reference
+
+### Exchanges
 
 | Exchange | File type | Auto-detected | Key detection columns |
 |----------|-----------|---------------|----------------------|
@@ -20,6 +22,17 @@ specific parser without opening this file.
 | Cash App | CSV | Yes | `Cost Basis ($)`, `Gain/Loss ($)`, `Amount (BTC)` |
 | Gemini | CSV or xlsx | Yes | CSV: `base-asset`, `quote-asset`, `trade-id`; xlsx: `BTC Amount BTC`, `Withdrawal Destination` |
 | Native | CSV | Yes | Clean or legacy column set (see Native section) |
+
+### Wallets
+
+Wallet imports require `--wallet-name` to identify the wallet for deposit transactions.
+
+| Wallet | File type | Auto-detected | Key detection columns |
+|--------|-----------|---------------|----------------------|
+| Ledger Live | CSV | Yes | `Operation Date`, `Operation Type`, `Currency` |
+| Trezor Suite | CSV | Yes | `TX ID`, `Address`, `Date` |
+| Sparrow | CSV | Yes | `Label`, `Balance`, `Value`, `TXID` |
+| Coldcard | CSV | Yes | `Type`, `Amount`, `TXID` (without `Address` or `Label`) |
 
 ---
 
@@ -277,6 +290,132 @@ Withdrawal Destination
   amount fields.
 - Non-BTC rows (GUSD sells, BAT deposits, etc.) are filtered out via the
   `Symbol` column.
+
+---
+
+## Ledger Live
+
+**How to export**: In Ledger Live, go to **Settings → Accounts**, select a
+Bitcoin account, and click **Export operations**. The export includes all
+operations across all currencies — the parser filters to BTC automatically.
+
+**Expected columns**:
+```
+Operation Date, Currency, Operation Type, Amount, Fees, Hash,
+Account Name, xpub, Cost Currency, Cost, Cost at Export
+```
+
+**Transaction types mapped**:
+
+| Source type | Maps to | Notes |
+|-------------|---------|-------|
+| IN | Deposit | Uses `--wallet-name` as exchange field |
+| OUT | Withdrawal | Apply `--withdraw-to` or defaults to placeholder |
+
+**Notes**:
+- Only rows where `Currency == BTC` are imported; all other assets are skipped.
+- Withdrawal amounts may appear as negative — the parser applies `abs()`.
+- Zero-fee withdrawals get an empty `fee_curr` to avoid orphan currency labels.
+
+**Example**:
+```bash
+import_csv --wallet-name "Ledger Nano X" ledger_operations.csv
+import_csv --wallet-name "Ledger Nano X" --withdraw-to ColdCard ledger_operations.csv
+```
+
+---
+
+## Trezor Suite
+
+**How to export**: In Trezor Suite, navigate to **Transactions** and click
+**Export** to download the transaction history CSV.
+
+**Expected columns**:
+```
+Date, Time, Type, Amount, Fee, Address, TX ID
+```
+
+**Transaction types mapped**:
+
+| Source type | Maps to | Notes |
+|-------------|---------|-------|
+| recv / received | Deposit | Uses `--wallet-name` as exchange field |
+| sent / send | Withdrawal | Apply `--withdraw-to` or defaults to placeholder |
+
+**Notes**:
+- Trezor Suite's BTC export is single-currency — no asset filtering needed.
+- Date and Time are separate columns; the parser combines them into one timestamp.
+- Type matching is case-insensitive (`RECV`, `recv`, `Recv` all work).
+- `TX ID` (two words with space) distinguishes Trezor from Coldcard's `TXID`.
+
+**Example**:
+```bash
+import_csv --wallet-name "Trezor Model T" trezor_export.csv
+```
+
+---
+
+## Sparrow Wallet
+
+**How to export**: In Sparrow Wallet, go to **Tools → Export CSV** to download
+the transaction history.
+
+**Expected columns**:
+```
+Date, Label, Value, Balance, Fee, TXID
+```
+
+**Transaction types mapped** (inferred from Value sign):
+
+| Pattern | Maps to | Notes |
+|---------|---------|-------|
+| Positive Value | Deposit | Uses `--wallet-name` as exchange field |
+| Negative Value | Withdrawal | Apply `--withdraw-to` or defaults to placeholder |
+
+**Notes**:
+- Sparrow exports values in **satoshis** by default (e.g. `50000000` = 0.5 BTC).
+  The parser auto-converts to BTC. Decimal BTC values are also accepted as fallback.
+- The `Label` field is preserved as the transaction comment.
+- For withdrawals, the label and review comment are combined with `"; "` separator.
+- The `Balance` column (running total) is unique to Sparrow — used for detection.
+
+**Example**:
+```bash
+import_csv --wallet-name "Sparrow Cold" sparrow_export.csv
+```
+
+---
+
+## Coldcard
+
+**How to export**: On the Coldcard device, use the **Address Explorer** to
+export the transaction history CSV to the SD card.
+
+**Expected columns**:
+```
+Date, Type, Amount, Fee, TXID
+```
+
+**Transaction types mapped**:
+
+| Source type | Maps to | Notes |
+|-------------|---------|-------|
+| receive / received / in | Deposit | Uses `--wallet-name` as exchange field |
+| send / sent / out | Withdrawal | Apply `--withdraw-to` or defaults to placeholder |
+| *(empty type, positive amount)* | Deposit | Sign-based fallback for older firmware |
+| *(empty type, negative amount)* | Withdrawal | Sign-based fallback for older firmware |
+
+**Notes**:
+- Amounts are in **decimal BTC** (not satoshis like Sparrow).
+- Supports both type-based and sign-based transaction detection to handle
+  firmware version variations where the Type column may be empty.
+- `TXID` (one word) distinguishes Coldcard from Trezor's `TX ID` (two words).
+- Type matching is case-insensitive.
+
+**Example**:
+```bash
+import_csv --wallet-name "Coldcard Mk4" coldcard_export.csv
+```
 
 ---
 

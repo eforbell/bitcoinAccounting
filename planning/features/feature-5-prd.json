@@ -132,7 +132,7 @@
         "Update AGENTS.md with any learnings from this feature"
       ],
       "priority": 7,
-      "passes": false
+      "passes": true
     }
   ],
   "riskAssessment": {
