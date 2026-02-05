@@ -1,3 +1,75 @@
+## 2026-02-05 - WAL-006: Remove standalone wallet_imports.py
+
+- What was implemented:
+  - Verified no active imports of wallet_imports module remain in codebase
+  - Only references are in planning/documentation files (progress.txt, PRDs, summaries)
+  - Deleted src/python/wallet_imports.py (294 lines, 4 standalone functions)
+  - All 4 wallet parsers already migrated to imports/wallets/ package (WAL-002 through WAL-005)
+  - Full test suite passes with zero regressions
+
+- Files changed:
+  - `src/python/wallet_imports.py` (deleted)
+  - `AGENTS.md` (updated — WAL-006 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-006 passes: true)
+
+- **Learnings:**
+  - Always grep entire codebase before deleting a module to verify no hidden dependencies
+  - Planning/documentation references to deleted modules are historical and don't need updating
+  - Migration from standalone functions to class-based parsers was clean — no runtime dependencies remained
+
+- **Test Results:**
+  - 647 tests passing (unchanged — no code depended on wallet_imports.py)
+  - Zero regressions
+
+---
+
+## 2026-02-05 - WAL-005: Coldcard importer class
+
+- What was implemented:
+  - Created `src/python/imports/wallets/coldcard.py` with ColdcardImporter class
+  - Inherits from BaseImporter with @register decorator
+  - Parses Coldcard address explorer transaction history CSV export (5 columns)
+  - Columns: Date, Type, Amount, Fee, TXID
+  - Dual transaction detection: type-based AND sign-based fallback
+  - Type values: receive/received/in → Deposit, send/sent/out → Withdrawal
+  - Sign fallback: empty type + positive amount → Deposit, empty type + negative amount → Withdrawal
+  - Amount in decimal BTC (no satoshi conversion needed unlike Sparrow)
+  - wallet_name for deposits (uses specified name or defaults to 'Coldcard')
+  - withdraw_to for withdrawals (uses specified destination or 'Coldcard-Withdrawal')
+  - Review comment added for unspecified withdrawal destinations
+  - Zero-amount filtering, zero-fee handling (empty fee_curr), abs() on amounts
+  - Case-insensitive type and column matching
+  - Detection heuristic: 'type' + 'amount' + 'txid' columns, NOT 'address' or 'label'
+  - 30 comprehensive unit tests across 4 classes (detection, parsing, registration, integration)
+  - Created tests/fixtures/csv_samples/coldcard_sample.csv (5 transactions)
+  - Registered in imports/wallets/__init__.py
+  - Verified with `import_csv --list` (shows as wallet type)
+
+- Files changed:
+  - `src/python/imports/wallets/coldcard.py` (new — 158 lines)
+  - `src/python/imports/wallets/__init__.py` (uncommented coldcard import)
+  - `tests/fixtures/csv_samples/coldcard_sample.csv` (new fixture)
+  - `tests/test_import_coldcard.py` (new — 30 tests: 5 detection, 20 parsing, 3 registration, 2 integration)
+  - `AGENTS.md` (updated — WAL-005 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-005 passes: true)
+
+- **Learnings:**
+  - Coldcard uses decimal BTC amounts (not satoshis like Sparrow) — no conversion needed
+  - Dual detection: type-based + sign-based fallback handles firmware version variations
+  - Detection heuristic: 'type' + 'amount' + 'txid' is unique to Coldcard
+  - Negative checks ('address' not in header, 'label' not in header) prevent Trezor/Sparrow false positives
+  - Trezor uses 'tx id' (two words), Coldcard uses 'txid' (one word) — natural discriminator
+  - Same core patterns as all wallet parsers: zero-amount skip, zero-fee empty string, abs() on amounts
+  - Type fallback pattern: `is_deposit = (tx_type in known_types) or (not tx_type and amount > 0)`
+
+- **Test Results:**
+  - 30 new Coldcard tests passing
+  - 647 total tests passing (617 existing + 30 new)
+  - Zero regressions from adding Coldcard parser
+  - import_csv --list verified: shows Coldcard as wallet type
+
+---
+
 ## 2026-02-05 - WAL-003: Trezor Suite importer class
 
 - What was implemented:

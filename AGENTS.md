@@ -1237,3 +1237,13 @@ River ships two CSV exports that overlap in columns:
 - **30 comprehensive tests**: Detection (5), parsing (20), registration (3), integration (2)
   - Includes type variants, sign-based fallback, case-insensitive matching, invalid data handling
   - All tests pass, 647 total tests passing (30 new + 617 existing)
+
+## WAL-006: Removing Orphaned Modules
+
+- **Verification before deletion**: Always grep the full codebase for imports/references
+  before removing a module. Planning/documentation references don't count as active usage.
+- **Pattern**: When migrating standalone functions to a class-based system (e.g.,
+  `wallet_imports.py` functions → `imports/wallets/*.py` classes), the standalone
+  module becomes dead code once all parsers are migrated and tested.
+- **Confidence check**: Run the full test suite after deletion to confirm no hidden
+  dependencies exist (dynamic imports, exec(), etc.).
