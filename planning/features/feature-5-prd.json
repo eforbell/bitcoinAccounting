@@ -65,7 +65,7 @@
         "Create tests/fixtures/csv_samples/trezor_sample.csv"
       ],
       "priority": 3,
-      "passes": false
+      "passes": true
     },
     {
       "id": "WAL-004",
