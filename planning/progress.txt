@@ -1125,3 +1125,33 @@
   - Zero regressions
 
 ---
+## 2026-02-05 - WAL-001: Create wallets package structure
+
+- What was implemented:
+  - Created src/python/imports/wallets/ directory structure
+  - Created imports/wallets/__init__.py with parser registration pattern (initially empty, ready for wallet parsers)
+  - Updated imports/__init__.py to import wallets subpackage alongside exchanges
+  - Verified import_csv --list command works correctly (shows 8 exchange parsers)
+  - All 541 tests passing with no regressions
+
+- Files changed:
+  - `src/python/imports/wallets/__init__.py` (new - placeholder for wallet parsers)
+  - `src/python/imports/__init__.py` (modified - added wallets subpackage import)
+  - `AGENTS.md` (updated - added WAL-001 package structure pattern)
+  - `planning/features/feature-5-prd.json` (marked WAL-001 passes: true)
+
+- **Learnings:**
+  - Package organization pattern: subpackages (exchanges/, wallets/) under imports/ with separate __init__.py for each
+  - Each subpackage's __init__.py imports parser modules to trigger @register decorator
+  - Top-level imports/__init__.py imports both subpackages with # noqa: F401, E402 to ensure all parsers are registered
+  - source_type field distinguishes exchange parsers from wallet parsers in CLI output
+  - Lazy evaluation: parser modules only imported when imports package is imported
+  - This pattern enables clean test isolation (clear_registry() between tests)
+
+- **Test Results:**
+  - 541 tests passing (unchanged from before)
+  - Zero regressions from adding wallets subpackage
+  - import_csv --list verified working (shows 8 parsers)
+
+---
+
