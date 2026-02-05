@@ -1,3 +1,42 @@
+## 2026-02-05 - IMP-009: Swan Bitcoin parser
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/swan.py` with SwanImporter class
+  - Parses Swan Bitcoin "Deposits & Purchases" CSV export format
+  - Columns: Date, Type, Amount (BTC), Price (USD), Total (USD), Fee (USD), Status
+  - Transaction type mapping:
+    - Purchase → Trade (buy BTC, sell USD); group='DCA' tags all purchases
+    - Withdrawal → Withdrawal (apply --withdraw-to or default)
+    - Deposit → Deposit (BTC received from external wallet)
+    - USD Deposit → skipped (no BTC involved)
+  - Status filtering: Pending and Failed rows silently dropped; status check is case-insensitive
+  - Total (USD) used as sell amount for Purchases — includes fee (consistent with Coinbase approach)
+  - Withdrawal fee tracked in USD (Swan's reporting format); empty fee_curr when fee=0
+  - Registered with @register; uncommented in exchanges/__init__.py
+  - Created tests/fixtures/csv_samples/swan_sample.csv (6 rows: 3 Purchase, 1 USD Deposit, 1 Withdrawal, 1 Deposit)
+  - 29 unit tests across 5 test classes
+
+- Files changed:
+  - `src/python/imports/exchanges/swan.py` (new)
+  - `src/python/imports/exchanges/__init__.py` (uncommented swan import)
+  - `tests/fixtures/csv_samples/swan_sample.csv` (new fixture)
+  - `tests/test_import_swan.py` (new — 29 tests)
+  - `planning/features/feature-4-prd.json` (marked IMP-009 passes: true)
+
+- **Learnings:**
+  - Swan is Bitcoin-only DCA — no asset filtering needed (unlike Coinbase)
+  - Status column filtering adds robustness: real DCA platforms have Pending rows for in-flight ACH purchases
+  - group='DCA' field useful for downstream analytics; persists through import_transactions()
+  - Total (USD) includes fee for Purchases: consistent with Coinbase's Total field semantics; fee tracked separately for tax reporting
+  - USD Deposit skip: simply returning None for non-BTC types keeps the parser clean; no explicit filter needed
+
+- **Test Results:**
+  - 29 new tests (4 detection, 6 parse_number, 14 parsing, 3 registration, 2 integration)
+  - 455 total tests passing
+  - Zero regressions
+
+---
+
 ## 2026-02-04 - IMP-008: River parser
 
 - What was implemented:

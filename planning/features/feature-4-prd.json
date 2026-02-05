@@ -209,7 +209,7 @@
         "Create tests/fixtures/csv_samples/swan_sample.csv"
       ],
       "priority": 9,
-      "passes": false
+      "passes": true
     },
     {
       "id": "IMP-010",
