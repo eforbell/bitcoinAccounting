@@ -242,7 +242,7 @@
         "Create tests/fixtures/csv_samples/gemini_sample.csv"
       ],
       "priority": 11,
-      "passes": false
+      "passes": true
     },
     {
       "id": "IMP-012",

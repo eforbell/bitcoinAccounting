@@ -1,3 +1,43 @@
+## 2026-02-05 - IMP-011: Gemini parser
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/gemini.py` with GeminiImporter class
+  - Parses Gemini transaction history CSV (hyphenated column names from gemini-exports API tool)
+  - Columns: time, base-asset, quote-asset, type, price, quantity, total, fee, fee-currency, trade-id
+  - Filters to BTC transactions only (base-asset == BTC); non-BTC rows silently dropped
+  - Transaction type mapping:
+    - Buy → Trade (sell = total; falls back to price * quantity if total is empty)
+    - Sell → Trade (buy = total; same fallback)
+    - Deposit → Deposit
+    - Withdrawal → Withdrawal (apply --withdraw-to or default; BTC fee tracked)
+    - Earn / Earn Interest → Interest Income (comment = "Gemini Earn")
+  - fee_curr guarded: empty string when fee == 0 to avoid orphan currency labels
+  - Detection: checks for 'base-asset', 'quote-asset', 'trade-id' — hyphenated names are unique to Gemini
+  - Registered with @register; uncommented in exchanges/__init__.py
+  - Created tests/fixtures/csv_samples/gemini_sample.csv (6 rows: 1 Buy, 1 ETH Buy (filtered), 1 Sell, 1 Deposit, 1 Withdrawal, 1 Earn)
+  - 29 unit tests across 5 test classes
+
+- Files changed:
+  - `src/python/imports/exchanges/gemini.py` (new)
+  - `src/python/imports/exchanges/__init__.py` (uncommented gemini import)
+  - `tests/fixtures/csv_samples/gemini_sample.csv` (new fixture)
+  - `tests/test_import_gemini.py` (new — 29 tests)
+  - `planning/features/feature-4-prd.json` (marked IMP-011 passes: true)
+
+- **Learnings:**
+  - Hyphenated column names (base-asset, quote-asset, trade-id) are highly distinctive for detection — no need to check many columns
+  - Buy/Sell total fallback (price * quantity) handles incomplete API exports without failing
+  - fee_curr guard (`if fee > 0 else ''`) prevents empty-fee rows from carrying a stale currency label — applied consistently across all transaction types
+  - Gemini Earn type has two labels in the wild: "Earn" and "Earn Interest" — handle both with a set membership check
+  - multi-asset exchange: base-asset filter is the first check in _parse_row, short-circuiting all other logic for non-BTC rows
+
+- **Test Results:**
+  - 29 new tests (4 detection, 6 parse_number, 14 parsing, 3 registration, 2 integration)
+  - 512 total tests passing
+  - Zero regressions
+
+---
+
 ## 2026-02-05 - IMP-010: Cash App parser
 
 - What was implemented:
