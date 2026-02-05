@@ -1,3 +1,42 @@
+## 2026-02-05 - IMP-010: Cash App parser
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/cashapp.py` with CashAppImporter class
+  - Parses Cash App "Gain/Loss" CSV export (Bitcoin-only, no asset filtering)
+  - Columns: Date, Transaction Type, Amount (BTC), Market Price ($), Cost Basis ($), Proceeds ($), Gain/Loss ($), Note
+  - Transaction type mapping:
+    - Purchase → Trade (sell = Cost Basis; falls back to Market Price * Amount if blank)
+    - Sale → Trade (buy = Proceeds; falls back to Market Price * Amount if blank)
+    - Send → Withdrawal (apply --withdraw-to or default)
+    - Receive → Deposit
+  - Key limitation handling: Receive rows with Cost Basis == $0 (empty or explicit zero) emit a UserWarning and tag comment with "Cost basis $0 - verify before tax filing"
+  - Both empty-string and literal "0.00" Cost Basis trigger the warning — Cash App uses both for external transfers
+  - Detection: checks for "cost basis ($)" AND "gain/loss ($)" AND "amount (btc)" — unique to Cash App
+  - Registered with @register; uncommented in exchanges/__init__.py
+  - Created tests/fixtures/csv_samples/cashapp_sample.csv (5 rows: 2 Purchase, 1 Receive no basis, 1 Sale, 1 Send)
+  - 28 unit tests across 5 test classes
+
+- Files changed:
+  - `src/python/imports/exchanges/cashapp.py` (new)
+  - `src/python/imports/exchanges/__init__.py` (uncommented cashapp import)
+  - `tests/fixtures/csv_samples/cashapp_sample.csv` (new fixture)
+  - `tests/test_import_cashapp.py` (new — 28 tests)
+  - `planning/features/feature-4-prd.json` (marked IMP-010 passes: true)
+
+- **Learnings:**
+  - Cost Basis / Proceeds fallback pattern: use the exchange-reported value if > 0, otherwise compute from Market Price * Amount — handles missing fields gracefully
+  - warnings.warn() during parse() is the right place for data-quality alerts that don't block import; pytest.warns() captures these cleanly in tests
+  - warnings.catch_warnings() + simplefilter("error") is the idiom for asserting NO warning was emitted
+  - Cash App's $0 basis applies to both empty fields AND explicit "0.00" — check the parsed float, not the raw string
+  - Sale and Purchase are symmetric: Sale flips buy/sell sides vs Purchase; Proceeds ↔ Cost Basis
+
+- **Test Results:**
+  - 28 new tests (4 detection, 6 parse_number, 13 parsing, 3 registration, 2 integration)
+  - 483 total tests passing
+  - Zero regressions
+
+---
+
 ## 2026-02-05 - IMP-009: Swan Bitcoin parser
 
 - What was implemented:

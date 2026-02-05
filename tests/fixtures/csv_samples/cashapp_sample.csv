@@ -1,0 +1,6 @@
+Date,Transaction Type,Amount (BTC),Market Price ($),Cost Basis ($),Proceeds ($),Gain/Loss ($),Note
+2024-01-10 10:30:00,Purchase,0.01,29500.00,295.00,,,DCA January
+2024-02-15 14:00:00,Purchase,0.005,42000.00,210.00,,,DCA February
+2024-02-20 09:00:00,Receive,0.02,41500.00,,,,
+2024-03-01 11:00:00,Sale,0.005,43000.00,210.00,215.00,5.00,Sold for expenses
+2024-03-10 16:45:00,Send,0.01,45000.00,,,,To Ledger

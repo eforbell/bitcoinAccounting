@@ -226,7 +226,7 @@
         "Create tests/fixtures/csv_samples/cashapp_sample.csv"
       ],
       "priority": 10,
-      "passes": false
+      "passes": true
     },
     {
       "id": "IMP-011",
