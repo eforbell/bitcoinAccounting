@@ -1,24 +1,18 @@
 {
-  "currentFeature": "feature-4",
-  "featureName": "Exchange Import Parsers",
-  "prdPath": "planning/features/feature-4-prd.json",
-  "summaryPath": "planning/features/feature-4-summary.md",
-  "branch": "feature/exchange-import-parsers",
+  "currentFeature": "feature-5",
+  "featureName": "Wallet Import Integration",
+  "prdPath": "planning/features/feature-5-prd.json",
+  "summaryPath": "planning/features/feature-5-summary.md",
+  "branch": "feature/wallet-import-integration",
   "status": "in_progress",
   "stories": [
-    {"id": "IMP-001", "title": "Base importer class and registry", "status": "complete"},
-    {"id": "IMP-002", "title": "Transaction validation utilities", "status": "complete"},
-    {"id": "IMP-003", "title": "CLI entry point (import_csv)", "status": "pending"},
-    {"id": "IMP-004", "title": "Native format parser", "status": "pending"},
-    {"id": "IMP-005", "title": "Coinbase parser", "status": "pending"},
-    {"id": "IMP-006", "title": "Kraken parser", "status": "pending"},
-    {"id": "IMP-007", "title": "Strike parser", "status": "pending"},
-    {"id": "IMP-008", "title": "River parser", "status": "pending"},
-    {"id": "IMP-009", "title": "Swan Bitcoin parser", "status": "pending"},
-    {"id": "IMP-010", "title": "Cash App parser", "status": "pending"},
-    {"id": "IMP-011", "title": "Gemini parser", "status": "pending"},
-    {"id": "IMP-012", "title": "Fold parser", "status": "pending"},
-    {"id": "IMP-013", "title": "Documentation", "status": "pending"}
+    {"id": "WAL-001", "title": "Create wallets package structure", "status": "pending"},
+    {"id": "WAL-002", "title": "Ledger Live importer class", "status": "pending"},
+    {"id": "WAL-003", "title": "Trezor Suite importer class", "status": "pending"},
+    {"id": "WAL-004", "title": "Sparrow Wallet importer class", "status": "pending"},
+    {"id": "WAL-005", "title": "Coldcard importer class", "status": "pending"},
+    {"id": "WAL-006", "title": "Remove standalone wallet_imports.py", "status": "pending"},
+    {"id": "WAL-007", "title": "Documentation update", "status": "pending"}
   ],
   "completedFeatures": [
     {
@@ -43,12 +37,20 @@
       "branch": "feature/code-cleanup",
       "mergedDate": "2026-02-04",
       "stories": 7,
-      "notes": "Dead code removal, wallet_imports.py, performance fixes"
+      "notes": "Dead code removal, wallet_imports.py extraction, performance fixes"
+    },
+    {
+      "featureId": "feature-4",
+      "featureName": "Exchange Import Parsers",
+      "branch": "feature/exchange-import-parsers",
+      "mergedDate": "2026-02-05",
+      "stories": 12,
+      "notes": "CLI import system with registry, validation, 8 exchange parsers (Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini, Native), --dry-run and --withdraw-to support"
     }
   ],
   "futureEnhancements": [
-    "Feature #5: TUI Import Wizard with Textual",
-    "Feature #6: Multi-coin support (ETH, other assets)",
-    "Feature #7: Tax optimization tools"
+    "Feature #6: TUI Import Wizard with Textual",
+    "Feature #7: Multi-coin support (ETH, other assets)",
+    "Feature #8: Tax optimization tools"
   ]
 }

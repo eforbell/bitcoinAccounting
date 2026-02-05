@@ -1,0 +1,152 @@
+{
+  "branchName": "feature/wallet-import-integration",
+  "projectName": "Wallet Import Integration",
+  "description": "Integrate the 4 standalone wallet parsers (Ledger, Trezor, Sparrow, Coldcard) into the CLI import system, providing wallet users the same DX as exchange imports",
+  "principles": [
+    "Reuse existing infrastructure - no new CLI flags or patterns",
+    "Consistent output format - same (colnames, transactions) tuple",
+    "Mechanical refactoring - convert functions to classes",
+    "Clean removal - delete orphaned wallet_imports.py after migration"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest + pytest-cov",
+    "csv": "csv module (stdlib)",
+    "datetime": "datetime module (stdlib)"
+  },
+  "userStories": [
+    {
+      "id": "WAL-001",
+      "title": "Create wallets package structure",
+      "acceptanceCriteria": [
+        "Create src/python/imports/wallets/ directory",
+        "Create imports/wallets/__init__.py that imports all wallet parsers",
+        "Update imports/__init__.py to import from wallets subpackage",
+        "Verify `import_csv --list` shows wallet parsers after registration",
+        "Wallet parsers should appear with source_type='wallet' in list output"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "WAL-002",
+      "title": "Ledger Live importer class",
+      "acceptanceCriteria": [
+        "Create imports/wallets/ledger.py with LedgerImporter class",
+        "Inherit from BaseImporter with @register decorator",
+        "Set name='Ledger', source_type='wallet'",
+        "Set expected_columns for Ledger Live CSV format",
+        "Implement detect() to identify Ledger Live exports",
+        "Implement parse() - port logic from import_ledger_live_csv()",
+        "Add --withdraw-to support using _get_withdrawal_exchange() helper",
+        "Add review comment for unspecified withdrawals using _get_withdrawal_comment()",
+        "Unit tests with sample Ledger Live CSV fixture",
+        "Create tests/fixtures/csv_samples/ledger_sample.csv"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "WAL-003",
+      "title": "Trezor Suite importer class",
+      "acceptanceCriteria": [
+        "Create imports/wallets/trezor.py with TrezorImporter class",
+        "Inherit from BaseImporter with @register decorator",
+        "Set name='Trezor', source_type='wallet'",
+        "Set expected_columns for Trezor Suite CSV format",
+        "Implement detect() to identify Trezor Suite exports",
+        "Implement parse() - port logic from import_trezor_suite_csv()",
+        "Add --withdraw-to support using _get_withdrawal_exchange() helper",
+        "Add review comment for unspecified withdrawals using _get_withdrawal_comment()",
+        "Unit tests with sample Trezor Suite CSV fixture",
+        "Create tests/fixtures/csv_samples/trezor_sample.csv"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "WAL-004",
+      "title": "Sparrow Wallet importer class",
+      "acceptanceCriteria": [
+        "Create imports/wallets/sparrow.py with SparrowImporter class",
+        "Inherit from BaseImporter with @register decorator",
+        "Set name='Sparrow', source_type='wallet'",
+        "Set expected_columns for Sparrow Wallet CSV format",
+        "Implement detect() to identify Sparrow exports",
+        "Implement parse() - port logic from import_sparrow_csv()",
+        "Preserve satoshi-to-BTC conversion logic",
+        "Preserve label → comment mapping",
+        "Add --withdraw-to support using _get_withdrawal_exchange() helper",
+        "Add review comment for unspecified withdrawals using _get_withdrawal_comment()",
+        "Unit tests with sample Sparrow CSV fixture",
+        "Create tests/fixtures/csv_samples/sparrow_sample.csv"
+      ],
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "WAL-005",
+      "title": "Coldcard importer class",
+      "acceptanceCriteria": [
+        "Create imports/wallets/coldcard.py with ColdcardImporter class",
+        "Inherit from BaseImporter with @register decorator",
+        "Set name='Coldcard', source_type='wallet'",
+        "Set expected_columns for Coldcard CSV format",
+        "Implement detect() to identify Coldcard exports",
+        "Implement parse() - port logic from import_coldcard_csv()",
+        "Preserve case-insensitive column matching",
+        "Add --withdraw-to support using _get_withdrawal_exchange() helper",
+        "Add review comment for unspecified withdrawals using _get_withdrawal_comment()",
+        "Unit tests with sample Coldcard CSV fixture",
+        "Create tests/fixtures/csv_samples/coldcard_sample.csv"
+      ],
+      "priority": 5,
+      "passes": false
+    },
+    {
+      "id": "WAL-006",
+      "title": "Remove standalone wallet_imports.py",
+      "acceptanceCriteria": [
+        "Verify no imports of wallet_imports module remain in codebase",
+        "Delete src/python/wallet_imports.py",
+        "Run full test suite to confirm no regressions",
+        "Update any __all__ exports if needed"
+      ],
+      "priority": 6,
+      "passes": false
+    },
+    {
+      "id": "WAL-007",
+      "title": "Documentation update",
+      "acceptanceCriteria": [
+        "Update README.md Import section to include wallet parsers",
+        "Update docs/CSV_FORMAT_GUIDE.md with wallet export instructions:",
+        "  - Ledger Live: Settings → Accounts → Export operations",
+        "  - Trezor Suite: Transactions → Export",
+        "  - Sparrow: Tools → Export CSV",
+        "  - Coldcard: Address Explorer export",
+        "Add examples showing wallet import with --withdraw-to flag",
+        "Update AGENTS.md with any learnings from this feature"
+      ],
+      "priority": 7,
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [],
+    "medium": [
+      "Coldcard CSV format varies by firmware version",
+      "Sparrow satoshi vs BTC detection edge cases"
+    ],
+    "low": [
+      "File encoding differences across platforms",
+      "Date format variations in exports"
+    ]
+  },
+  "futureEnhancements": [
+    "Feature 6: TUI Import Wizard with Textual",
+    "Additional wallet support (BlueWallet, Electrum, etc.)",
+    "UTXO-level import with address tracking",
+    "Multi-signature wallet support"
+  ]
+}
