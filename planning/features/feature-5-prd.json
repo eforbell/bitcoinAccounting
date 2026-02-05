@@ -85,7 +85,7 @@
         "Create tests/fixtures/csv_samples/sparrow_sample.csv"
       ],
       "priority": 4,
-      "passes": false
+      "passes": true
     },
     {
       "id": "WAL-005",

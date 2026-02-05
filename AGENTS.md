@@ -1175,3 +1175,42 @@ River ships two CSV exports that overlap in columns:
   varying amounts and fees (including zero-fee withdrawals)
 - **26 comprehensive tests**: Detection (4), parsing (17), registration (3), integration (2)
   - All tests pass, zero regressions on full suite (590 total tests)
+
+## WAL-004: Sparrow Wallet importer class
+
+- **Satoshi to BTC conversion**: Sparrow exports use satoshis by default
+  - Primary conversion: `value_sats / 100_000_000` for both Value and Fee columns
+  - Fallback pattern: If int() conversion fails, try float() for decimal BTC values
+  - Enables handling both native satoshi exports and manually-edited decimal files
+- **Two-step parsing pattern**:
+  ```python
+  try:
+      value_sats = int(value_str)  # Try as satoshis first
+      return value_sats / 100_000_000
+  except ValueError:
+      return float(value_str)  # Fallback to decimal BTC
+  ```
+- **Sign-based transaction type**: Value sign determines deposit vs withdrawal
+  - Positive value → Deposit (BTC received to wallet)
+  - Negative value → Withdrawal (BTC sent from wallet)
+  - Always apply `abs(value_btc)` when setting sell amount for withdrawals
+- **Label → comment mapping**: Sparrow's Label column becomes transaction comment
+  - Empty labels result in `None` comment for deposits
+  - For withdrawals, combine label with review comment using "; " separator
+  - Pattern: `f"{label}; {withdrawal_comment}"` if both exist
+- **Detection heuristic**: Combination of 'label' + 'balance' columns is distinctive
+  - Most wallet exports don't include running balance
+  - Label field is unique to Sparrow's export format
+  - Requires all 5 columns: date, label, value, balance, txid
+- **Case-insensitive column matching**: Uses `_normalize_header()` helper
+  - Handles LABEL vs Label vs label variations
+  - Same pattern as Trezor and Ledger parsers
+- **Zero-fee handling**: Empty `fee_curr` string when fee == 0
+  - Prevents orphan "BTC" label on zero-fee withdrawals
+  - Consistent with other wallet parsers
+- **Test fixture**: 5 transactions with satoshi values (50M, -20M, 10M, -5M, 25M)
+  - Mix of positive/negative values, varying fees, descriptive labels
+  - Tests satoshi-to-BTC conversion accuracy across range of amounts
+- **27 comprehensive tests**: Detection (4), parsing (17), registration (3), integration (3)
+  - Includes tests for satoshi conversion, decimal fallback, label preservation
+  - All tests pass, 617 total tests passing (27 new + 590 existing)

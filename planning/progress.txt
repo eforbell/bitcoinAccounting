@@ -1301,3 +1301,56 @@
   ```
 
 ---
+
+## 2026-02-05 - WAL-004: Sparrow Wallet importer class
+
+- What was implemented:
+  - Created `src/python/imports/wallets/sparrow.py` with SparrowImporter class
+  - Inherits from BaseImporter with @register decorator
+  - Parses Sparrow Wallet transaction history CSV export (6 columns)
+  - Columns: Date, Label, Value, Balance, Fee, TXID
+  - Satoshi to BTC conversion with fallback to decimal:
+    - Primary: `int(value_str) / 100_000_000` for satoshi values
+    - Fallback: `float(value_str)` for decimal BTC values
+    - Applied to both Value and Fee columns
+  - Transaction type mapping based on value sign:
+    - Positive value → Deposit (BTC received to wallet)
+    - Negative value → Withdrawal (BTC sent from wallet, abs() applied)
+  - Label → comment mapping preserved for all transactions
+  - wallet_name for deposits (uses specified name or defaults to 'Sparrow')
+  - withdraw_to for withdrawals (uses specified destination or 'Sparrow-Withdrawal')
+  - Combined label and review comment for withdrawals: "{label}; {review}"
+  - Zero-fee handling (empty fee_curr when fee == 0)
+  - Detection heuristic: 'label' + 'balance' + 'value' + 'date' + 'txid' columns
+  - Case-insensitive column matching with _normalize_header() helper
+  - 27 comprehensive unit tests across 4 classes (detection, parsing, registration, integration)
+  - Created tests/fixtures/csv_samples/sparrow_sample.csv (5 transactions)
+  - Registered in imports/wallets/__init__.py
+  - Verified with `import_csv --list` (shows as wallet type)
+
+- Files changed:
+  - `src/python/imports/wallets/sparrow.py` (new — 203 lines)
+  - `src/python/imports/wallets/__init__.py` (uncommented sparrow import)
+  - `tests/fixtures/csv_samples/sparrow_sample.csv` (new fixture)
+  - `tests/test_import_sparrow.py` (new — 27 tests: 4 detection, 17 parsing, 3 registration, 3 integration)
+  - `AGENTS.md` (updated — WAL-004 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-004 passes: true)
+
+- **Learnings:**
+  - Sparrow uses satoshis (not BTC) for Value and Fee columns — requires division by 100M
+  - Two-step conversion pattern handles both satoshi integers and decimal BTC gracefully
+  - Sign-based type detection: positive = deposit, negative = withdrawal (no explicit type column)
+  - Label field is preserved as comment for both deposits and withdrawals
+  - Withdrawal comment combines user label + review note: "Label text; Review: Verify destination wallet"
+  - Balance column is unique to Sparrow format — good detection heuristic
+  - Same patterns as Trezor/Ledger: zero-amount skip, zero-fee empty string, abs() on withdrawals
+  - All wallet parsers follow same structure: detect(), parse(), registration, helpers
+  - _parse_satoshis() helper encapsulates conversion logic and fallback pattern
+
+- **Test Results:**
+  - 27 new Sparrow tests passing
+  - 617 total tests passing (590 existing + 27 new)
+  - Zero regressions from adding Sparrow parser
+  - import_csv --list verified: shows Sparrow as wallet type
+
+---
