@@ -82,7 +82,7 @@ class CoinbaseImporter(BaseImporter):
                     'quantity transacted' in header_lower and
                     'spot price at transaction' in header_lower
                 )
-        except (OSError, csv.Error):
+        except (OSError, csv.Error, UnicodeDecodeError):
             return False
 
     def parse(

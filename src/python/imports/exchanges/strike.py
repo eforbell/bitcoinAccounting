@@ -64,7 +64,7 @@ class StrikeImporter(BaseImporter):
                     'usd amount' in header_lower and
                     'type' in header_lower
                 )
-        except (OSError, csv.Error):
+        except (OSError, csv.Error, UnicodeDecodeError):
             return False
 
     def parse(

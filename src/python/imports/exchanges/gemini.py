@@ -116,7 +116,7 @@ class GeminiImporter(BaseImporter):
                     'quote-asset' in header_lower and
                     'trade-id' in header_lower
                 )
-        except (OSError, csv.Error):
+        except (OSError, csv.Error, UnicodeDecodeError):
             return False
 
     def _detect_xlsx(self, file_path: str) -> bool:

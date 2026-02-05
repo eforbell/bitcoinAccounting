@@ -92,7 +92,7 @@ class KrakenImporter(BaseImporter):
                     'aclass' in header_lower and
                     'txid' in header_lower
                 )
-        except (OSError, csv.Error):
+        except (OSError, csv.Error, UnicodeDecodeError):
             return False
 
     def parse(

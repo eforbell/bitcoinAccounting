@@ -105,7 +105,7 @@ class RiverImporter(BaseImporter):
                 return _detect_river_format(
                     {col.lower().strip() for col in header}
                 ) is not None
-        except (OSError, csv.Error):
+        except (OSError, csv.Error, UnicodeDecodeError):
             return False
 
     def parse(

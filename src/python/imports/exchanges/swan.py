@@ -67,7 +67,7 @@ class SwanImporter(BaseImporter):
                     'price (usd)' in header_lower and
                     'total (usd)' in header_lower
                 )
-        except (OSError, csv.Error):
+        except (OSError, csv.Error, UnicodeDecodeError):
             return False
 
     def parse(

@@ -73,7 +73,7 @@ class CashAppImporter(BaseImporter):
                     'gain/loss ($)' in header_lower and
                     'amount (btc)' in header_lower
                 )
-        except (OSError, csv.Error):
+        except (OSError, csv.Error, UnicodeDecodeError):
             return False
 
     def parse(

@@ -97,7 +97,7 @@ class NativeImporter(BaseImporter):
                 if header is None:
                     return False
                 return _detect_format(header) is not None
-        except (OSError, csv.Error):
+        except (OSError, csv.Error, UnicodeDecodeError):
             return False
 
     def parse(
