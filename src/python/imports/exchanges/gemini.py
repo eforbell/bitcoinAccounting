@@ -1,25 +1,31 @@
-"""Gemini transaction history CSV parser.
+"""Gemini transaction history parser — CSV and native xlsx.
 
-Gemini exports trade/transfer/earn history via API or xlsx.
-Third-party tools (e.g. gemini-exports) convert to CSV with
-hyphenated column names:
+Two export formats are supported:
 
-  time, base-asset, quote-asset, type, price, quantity, total,
-  fee, fee-currency, trade-id
+1. CSV  (third-party gemini-exports tool)
+   Columns: time, base-asset, quote-asset, type, price, quantity, total,
+            fee, fee-currency, trade-id
+   Filter: base-asset == BTC
 
-Only rows where base-asset == BTC are kept.
+2. xlsx  (native Gemini "Account History" download)
+   30 columns with per-asset Amount/Fee/Balance columns.
+   Key columns used: Date, Type, Symbol, Specification,
+                     USD Amount USD, Fee (USD) USD,
+                     BTC Amount BTC, Fee (BTC) BTC,
+                     Withdrawal Destination
+   Filter: Symbol in ('BTCUSD', 'BTC')
+   Notes:
+     - Buy USD amounts and fees are stored as negative; abs() is applied.
+     - Type 'Credit' + Symbol 'BTC'  → Deposit
+     - Type 'Debit'  + Symbol 'BTC'  → Withdrawal
 
-Transaction types mapped:
-  Buy            -> Trade  (buy BTC, sell quote-asset)
-  Sell           -> Trade  (sell BTC, buy quote-asset)
-  Deposit        -> Deposit
-  Withdrawal     -> Withdrawal (apply --withdraw-to or default)
-  Earn / Earn Interest -> Interest Income (Gemini Earn rewards)
+Only BTC transactions are emitted by either path.
 """
 
 from __future__ import annotations
 
 import csv
+from datetime import datetime as _datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -28,6 +34,18 @@ if TYPE_CHECKING:
 from imports.base import BaseImporter
 from imports.registry import register
 
+# ---------------------------------------------------------------------------
+# Shared output column list
+# ---------------------------------------------------------------------------
+_COLNAMES = [
+    'trans_type', 'created_date', 'exchange', 'buy', 'buy_curr',
+    'sell', 'sell_curr', 'fee', 'fee_curr', 'group', 'comment',
+]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _parse_number(value: str) -> float:
     """Parse a numeric string, handling currency symbols and commas."""
@@ -42,21 +60,50 @@ def _parse_number(value: str) -> float:
         return 0.0
 
 
+def _to_float(value: object) -> float:
+    """Coerce an xlsx cell value (None / int / float / str) to float."""
+    if value is None:
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _fmt_dt(value: object) -> str:
+    """Format an xlsx datetime cell to 'YYYY-MM-DD HH:MM:SS'."""
+    if isinstance(value, _datetime):
+        return value.strftime('%Y-%m-%d %H:%M:%S')
+    return str(value) if value else ''
+
+
+# ---------------------------------------------------------------------------
+# Parser class
+# ---------------------------------------------------------------------------
+
 @register
 class GeminiImporter(BaseImporter):
-    """Parser for Gemini transaction history CSV exports."""
+    """Parser for Gemini transaction history (CSV or native xlsx)."""
 
     name = "Gemini"
     source_type = "exchange"
-    file_patterns = ["*.csv"]
-    description = "Gemini transaction history export"
+    file_patterns = ["*.csv", "*.xlsx"]
+    description = "Gemini transaction history export (CSV or xlsx)"
     expected_columns = [
         "time", "base-asset", "quote-asset", "type", "price",
         "quantity", "total", "fee", "fee-currency", "trade-id",
     ]
 
+    # ---- detection --------------------------------------------------------
+
     def detect(self, file_path: str) -> bool:
-        """Check if file appears to be a Gemini transaction export."""
+        """Return True for either the CSV or native xlsx Gemini format."""
+        if file_path.lower().endswith('.xlsx'):
+            return self._detect_xlsx(file_path)
+        return self._detect_csv(file_path)
+
+    def _detect_csv(self, file_path: str) -> bool:
+        """CSV detection: look for hyphenated column names."""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 reader = csv.reader(f)
@@ -64,7 +111,6 @@ class GeminiImporter(BaseImporter):
                 if header is None:
                     return False
                 header_lower = {col.lower().strip() for col in header}
-                # Hyphenated column names are Gemini-specific
                 return (
                     'base-asset' in header_lower and
                     'quote-asset' in header_lower and
@@ -73,18 +119,39 @@ class GeminiImporter(BaseImporter):
         except (OSError, csv.Error):
             return False
 
+    def _detect_xlsx(self, file_path: str) -> bool:
+        """xlsx detection: look for Gemini native per-asset column names."""
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(file_path)
+            ws = wb.active
+            if ws is None or not ws.max_column:
+                wb.close()
+                return False
+            headers = {
+                str(ws.cell(row=1, column=c).value or '').lower().strip()
+                for c in range(1, ws.max_column + 1)
+            }
+            wb.close()
+            return 'btc amount btc' in headers and 'withdrawal destination' in headers
+        except Exception:
+            return False
+
+    # ---- dispatch ---------------------------------------------------------
+
     def parse(
         self, file_path: str, withdraw_to: str | None = None
     ) -> tuple[list[str], list[dict[str, Any]]]:
-        """Parse a Gemini transaction history CSV.
+        """Route to CSV or xlsx parser based on file extension."""
+        if file_path.lower().endswith('.xlsx'):
+            return self._parse_xlsx(file_path, withdraw_to)
+        return self._parse_csv(file_path, withdraw_to)
 
-        Args:
-            file_path: Path to CSV file
-            withdraw_to: Wallet name for withdrawal destinations
+    # ---- CSV path (unchanged from original) ------------------------------
 
-        Returns:
-            Tuple of (column_names, transactions)
-        """
+    def _parse_csv(
+        self, file_path: str, withdraw_to: str | None = None
+    ) -> tuple[list[str], list[dict[str, Any]]]:
         transactions: list[dict[str, Any]] = []
 
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -95,23 +162,19 @@ class GeminiImporter(BaseImporter):
             col_map = {col.lower().strip(): col for col in reader.fieldnames}
 
             for row in reader:
-                tx = self._parse_row(row, col_map, withdraw_to)
+                tx = self._parse_csv_row(row, col_map, withdraw_to)
                 if tx is not None:
                     transactions.append(tx)
 
-        colnames = [
-            'trans_type', 'created_date', 'exchange', 'buy', 'buy_curr',
-            'sell', 'sell_curr', 'fee', 'fee_curr', 'group', 'comment',
-        ]
-        return colnames, transactions
+        return _COLNAMES, transactions
 
-    def _parse_row(
+    def _parse_csv_row(
         self,
         row: dict[str, str],
         col_map: dict[str, str],
         withdraw_to: str | None,
     ) -> dict[str, Any] | None:
-        """Parse a single row.  Returns None for non-BTC or unknown types."""
+        """Parse a single CSV row.  Returns None for non-BTC or unknown types."""
         def get(col: str) -> str:
             original_col = col_map.get(col.lower(), col)
             return (row.get(original_col) or '').strip()
@@ -133,7 +196,6 @@ class GeminiImporter(BaseImporter):
             return None
 
         if tx_type == 'BUY':
-            # total = quote-asset spent; fall back to price * quantity
             sell_amount = total if total > 0 else price * quantity
             return {
                 'trans_type': 'Trade',
@@ -150,7 +212,6 @@ class GeminiImporter(BaseImporter):
             }
 
         elif tx_type == 'SELL':
-            # total = quote-asset received; fall back to price * quantity
             buy_amount = total if total > 0 else price * quantity
             return {
                 'trans_type': 'Trade',
@@ -197,7 +258,6 @@ class GeminiImporter(BaseImporter):
             }
 
         elif tx_type in ('EARN', 'EARN INTEREST'):
-            # Gemini Earn interest rewards
             return {
                 'trans_type': 'Interest Income',
                 'created_date': timestamp,
@@ -212,5 +272,147 @@ class GeminiImporter(BaseImporter):
                 'comment': 'Gemini Earn',
             }
 
-        # Unknown type — skip
+        return None
+
+    # ---- xlsx path --------------------------------------------------------
+
+    def _parse_xlsx(
+        self, file_path: str, withdraw_to: str | None = None
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        """Parse the native Gemini 'Account History' xlsx export."""
+        import openpyxl
+
+        transactions: list[dict[str, Any]] = []
+        wb = openpyxl.load_workbook(file_path)
+        ws = wb.active
+        if ws is None or not ws.max_row or ws.max_row < 2:
+            wb.close()
+            return _COLNAMES, []
+
+        # header name (lowered) → 1-based column index
+        col_idx: dict[str, int] = {}
+        for c in range(1, (ws.max_column or 0) + 1):
+            name = ws.cell(row=1, column=c).value
+            if name:
+                col_idx[str(name).lower().strip()] = c
+
+        for row_num in range(2, ws.max_row + 1):
+            # Extract all values we need into a plain dict — avoids
+            # closure-over-loop-variable issues and keeps _parse_xlsx_row pure.
+            def _cell(h: str, rn: int = row_num) -> object:
+                i = col_idx.get(h)
+                return ws.cell(row=rn, column=i).value if i else None
+
+            symbol = str(_cell('symbol') or '').upper().strip()
+            if symbol not in ('BTCUSD', 'BTC'):
+                continue
+
+            data: dict[str, Any] = {
+                'date': _cell('date'),
+                'type': str(_cell('type') or '').upper().strip(),
+                'specification': str(_cell('specification') or '').upper().strip(),
+                'btc_amount': _to_float(_cell('btc amount btc')),
+                'fee_btc': _to_float(_cell('fee (btc) btc')),
+                'usd_amount': _to_float(_cell('usd amount usd')),
+                'fee_usd': _to_float(_cell('fee (usd) usd')),
+                'wd_dest': str(_cell('withdrawal destination') or '').strip(),
+            }
+
+            tx = self._parse_xlsx_row(data, symbol, withdraw_to)
+            if tx is not None:
+                transactions.append(tx)
+
+        wb.close()
+        return _COLNAMES, transactions
+
+    def _parse_xlsx_row(
+        self,
+        data: dict[str, Any],
+        symbol: str,
+        withdraw_to: str | None,
+    ) -> dict[str, Any] | None:
+        """Map one native-xlsx row (pre-extracted dict) to a transaction dict."""
+        typ = data['type']
+        spec = data['specification']
+        date_str = _fmt_dt(data['date'])
+
+        if not date_str or not typ:
+            return None
+
+        btc_amt = data['btc_amount']
+        fee_btc = data['fee_btc']
+        usd_amt = data['usd_amount']
+        fee_usd = data['fee_usd']
+        wd_dest = data['wd_dest']
+
+        # --- BTC Buy ---------------------------------------------------------
+        if typ == 'BUY' and symbol == 'BTCUSD':
+            return {
+                'trans_type': 'Trade',
+                'created_date': date_str,
+                'exchange': 'Gemini',
+                'buy': abs(btc_amt),
+                'buy_curr': 'BTC',
+                'sell': abs(usd_amt),       # stored as negative in xlsx
+                'sell_curr': 'USD',
+                'fee': abs(fee_usd),        # stored as negative in xlsx
+                'fee_curr': 'USD' if fee_usd != 0 else '',
+                'group': '',
+                'comment': '',
+            }
+
+        # --- BTC Sell --------------------------------------------------------
+        if typ == 'SELL' and symbol == 'BTCUSD':
+            return {
+                'trans_type': 'Trade',
+                'created_date': date_str,
+                'exchange': 'Gemini',
+                'buy': abs(usd_amt),
+                'buy_curr': 'USD',
+                'sell': abs(btc_amt),       # stored as negative in xlsx
+                'sell_curr': 'BTC',
+                'fee': abs(fee_usd),
+                'fee_curr': 'USD' if fee_usd != 0 else '',
+                'group': '',
+                'comment': '',
+            }
+
+        # --- BTC Withdrawal --------------------------------------------------
+        if typ == 'DEBIT' and symbol == 'BTC' and 'WITHDRAWAL' in spec:
+            parts: list[str] = []
+            if wd_dest:
+                parts.append(f"dest={wd_dest}")
+            if not withdraw_to:
+                parts.append("Review: Verify destination wallet")
+            return {
+                'trans_type': 'Withdrawal',
+                'created_date': date_str,
+                'exchange': self._get_withdrawal_exchange(withdraw_to),
+                'buy': 0.0,
+                'buy_curr': '',
+                'sell': abs(btc_amt),       # stored as negative in xlsx
+                'sell_curr': 'BTC',
+                'fee': abs(fee_btc),
+                'fee_curr': 'BTC' if fee_btc != 0 else '',
+                'group': '',
+                'comment': '; '.join(parts),
+            }
+
+        # --- BTC Deposit -----------------------------------------------------
+        if typ == 'CREDIT' and symbol == 'BTC':
+            return {
+                'trans_type': 'Deposit',
+                'created_date': date_str,
+                'exchange': 'Gemini',
+                'buy': abs(btc_amt),
+                'buy_curr': 'BTC',
+                'sell': 0.0,
+                'sell_curr': '',
+                'fee': 0.0,
+                'fee_curr': '',
+                'group': '',
+                'comment': '',
+            }
+
+        # Unknown xlsx row type — skip
         return None
