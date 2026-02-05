@@ -52,6 +52,7 @@ __all__ = [
     "get_transaction_warnings",
 ]
 
-# Import exchange parsers to trigger registration
+# Import exchange and wallet parsers to trigger registration
 # This must come after the registry is defined
 from . import exchanges  # noqa: F401, E402
+from . import wallets  # noqa: F401, E402

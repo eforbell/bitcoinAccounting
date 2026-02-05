@@ -1068,3 +1068,21 @@ River ships two CSV exports that overlap in columns:
 - Symbol filter (`BTCUSD` / `BTC`) is the primary row gate in xlsx, analogous
   to `base-asset == BTC` in the CSV path.
 
+## WAL-001: Wallet Import Package Structure
+
+- **Package organization**: `src/python/imports/` contains two subpackages:
+  - `exchanges/` for exchange parsers (Coinbase, Kraken, etc.)
+  - `wallets/` for wallet parsers (Ledger, Trezor, Sparrow, Coldcard)
+- **Registration pattern**: Each subpackage has `__init__.py` that imports all
+  parser modules to trigger registration via the `@register` decorator
+- **Top-level imports**: `imports/__init__.py` imports both subpackages to ensure
+  all parsers are registered when the imports package is loaded:
+  ```python
+  from . import exchanges  # noqa: F401, E402
+  from . import wallets    # noqa: F401, E402
+  ```
+- **Lazy evaluation**: Parser modules are only imported when the imports package
+  is imported, avoiding circular dependencies and enabling clean test isolation
+- **source_type field**: Used to distinguish exchange parsers (`source_type='exchange'`)
+  from wallet parsers (`source_type='wallet'`) in CLI output
+
