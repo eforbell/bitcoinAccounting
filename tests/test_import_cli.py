@@ -28,7 +28,7 @@ class _TestExchangeImporter(BaseImporter):
     description = "Simple test parser for integration tests"
     expected_columns = ["date", "type", "amount", "currency"]
 
-    def parse(self, file_path, withdraw_to=None):
+    def parse(self, file_path, wallet_name=None, withdraw_to=None):
         transactions = []
         with open(file_path, 'r') as f:
             reader = csv_mod.DictReader(f)
@@ -617,3 +617,72 @@ class TestCommentPreservation:
         finally:
             os.unlink(csv_path)
 
+
+
+class TestWalletImportRequirements:
+    """Tests for wallet import --wallet-name requirement."""
+
+    def setup_method(self):
+        clear_registry()
+
+    def teardown_method(self):
+        clear_registry()
+
+    def test_wallet_import_without_wallet_name_exits_1(self):
+        """Wallet imports without --wallet-name should fail with exit code 1."""
+        # Create a temporary Ledger CSV
+        csv_path = _make_csv(
+            "Operation Date,Currency,Operation Type,Amount,Fees,Hash,Account Name,xpub,"
+            "Cost Currency,Cost,Cost at Export\n"
+            "2024-01-15 10:30:00,BTC,IN,0.01,0,abc123,Bitcoin 1,xpub123,USD,500.00,51000.00\n"
+        )
+        
+        try:
+            # Import the Ledger parser
+            from imports.wallets.ledger import LedgerImporter
+            register(LedgerImporter)
+            
+            # Run import_csv without --wallet-name
+            result = subprocess.run(
+                ["python", str(SCRIPT_PATH), "--source", "ledger", csv_path],
+                capture_output=True,
+                text=True,
+            )
+            
+            assert result.returncode == 1
+            assert "require --wallet-name" in result.stderr
+        finally:
+            os.unlink(csv_path)
+
+    def test_wallet_import_with_wallet_name_succeeds(self):
+        """Wallet imports with --wallet-name should succeed via programmatic import."""
+        csv_path = _make_csv(
+            "Operation Date,Currency,Operation Type,Amount,Fees,Hash,Account Name,xpub,"
+            "Cost Currency,Cost,Cost at Export\n"
+            "2024-01-15 10:30:00,BTC,IN,0.01,0,abc123,Bitcoin 1,xpub123,USD,500.00,51000.00\n"
+        )
+
+        try:
+            from imports.wallets.ledger import LedgerImporter
+            register(LedgerImporter)
+
+            parser = get_parser("ledger")
+            _, transactions = parser.parse(csv_path, wallet_name="MyLedger")
+
+            assert len(transactions) == 1
+            assert transactions[0]['exchange'] == 'MyLedger'
+            assert transactions[0]['trans_type'] == 'Deposit'
+
+            # Verify it imports to database correctly
+            backend = SqliteBackend(':memory:', auto_create_tables=True)
+            crypto = CryptoAccounts(backend=backend)
+            result = crypto.import_transactions(transactions)
+
+            assert result['imported'] == 1
+            rows = backend.execute("SELECT exchange FROM ledger WHERE trans_type = 'Deposit'")
+            assert len(rows) == 1
+            assert rows[0]['exchange'] == 'MyLedger'
+
+            crypto.close()
+        finally:
+            os.unlink(csv_path)

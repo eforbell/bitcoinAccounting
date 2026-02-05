@@ -86,12 +86,16 @@ class LedgerImporter(BaseImporter):
             return False
 
     def parse(
-        self, file_path: str, withdraw_to: str | None = None
+        self,
+        file_path: str,
+        wallet_name: str | None = None,
+        withdraw_to: str | None = None,
     ) -> tuple[list[str], list[dict[str, Any]]]:
         """Parse a Ledger Live operation history CSV.
 
         Args:
             file_path: Path to CSV file
+            wallet_name: Name of this wallet (required for deposits)
             withdraw_to: Wallet name for withdrawal destinations
 
         Returns:
@@ -145,7 +149,6 @@ class LedgerImporter(BaseImporter):
 
                 transaction: dict[str, Any] = {
                     'created_date': created_date,
-                    'exchange': 'Ledger',
                     'group': None
                 }
 
@@ -154,6 +157,7 @@ class LedgerImporter(BaseImporter):
                     transaction['trans_type'] = 'Deposit'
                     transaction['buy_curr'] = 'BTC'
                     transaction['buy'] = value
+                    transaction['exchange'] = wallet_name if wallet_name else 'Ledger'
                     transactions.append(transaction)
 
                 # Outgoing transactions → Withdrawal

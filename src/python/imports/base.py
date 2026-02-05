@@ -34,12 +34,17 @@ class BaseImporter(ABC):
 
     @abstractmethod
     def parse(
-        self, file_path: str, withdraw_to: str | None = None
+        self,
+        file_path: str,
+        wallet_name: str | None = None,
+        withdraw_to: str | None = None,
     ) -> tuple[list[str], list[dict[str, Any]]]:
         """Parse a CSV file and return transactions.
 
         Args:
             file_path: Path to the CSV file to parse
+            wallet_name: Wallet name for deposits (required for wallet parsers).
+                        For exchange parsers, this parameter is ignored.
             withdraw_to: Optional wallet name for withdrawal destinations.
                         If None, uses "{self.name}-Withdrawal" as placeholder.
 

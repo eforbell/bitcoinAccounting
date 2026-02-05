@@ -134,6 +134,24 @@ class TestLedgerImporterParsing:
         finally:
             os.unlink(csv_path)
 
+    def test_parse_incoming_with_wallet_name(self):
+        """IN operation with wallet_name uses specified name."""
+        csv_path = _make_csv(
+            "Operation Date,Currency,Operation Type,Amount,Fees,Hash,Account Name,xpub,"
+            "Cost Currency,Cost,Cost at Export\n"
+            "2024-01-15 10:30:00,BTC,IN,0.025,0,hash123,Bitcoin 1,xpub123,USD,1250.00,50000.00\n"
+        )
+        try:
+            parser = LedgerImporter()
+            _, transactions = parser.parse(csv_path, wallet_name="MyLedger")
+
+            assert len(transactions) == 1
+            tx = transactions[0]
+            assert tx['trans_type'] == 'Deposit'
+            assert tx['exchange'] == 'MyLedger'
+        finally:
+            os.unlink(csv_path)
+
     def test_parse_outgoing_transaction(self):
         """OUT operation maps to Withdrawal."""
         csv_path = _make_csv(
