@@ -1145,3 +1145,33 @@ River ships two CSV exports that overlap in columns:
   # Exchange import (wallet-name ignored)
   import_csv coinbase.csv
   ```
+
+
+## WAL-003: Trezor Suite Importer
+
+- **Trezor Suite CSV format**: Transaction export with 7 columns including:
+  - Date (YYYY-MM-DD), Time (HH:MM:SS), Type (recv/sent/received/send)
+  - Amount (float BTC), Fee (float BTC)
+  - Address (destination/source), TX ID (transaction hash)
+- **Date and Time combination**: Separate columns that must be combined:
+  - If both present: `created_date = f"{date_str} {time_str}"`
+  - If only Date: `created_date = date_str`
+  - Pattern: gracefully handles missing Time column
+- **Transaction type mapping**: Trezor uses recv/sent variants (case-insensitive)
+  - `recv` or `received` → Deposit (BTC received)
+  - `sent` or `send` → Withdrawal (BTC sent)
+  - Type column is case-normalized with `.lower()` before matching
+- **Detection heuristic**: Uses 'tx id' column as distinctive marker
+  - Ledger uses 'hash', making 'tx id' + 'address' + 'date' a unique fingerprint
+  - Avoids false positives with other wallet/exchange formats
+- **Bitcoin-only**: Unlike Ledger, Trezor Suite's BTC export is single-currency
+  - No currency filtering needed (unlike Ledger's multi-currency export)
+  - All rows are BTC transactions by definition
+- **Similarities to Ledger parser**: Same patterns apply:
+  - Zero-amount filtering, zero-fee handling (`fee_curr=''`), abs() on withdrawals
+  - wallet_name for deposits, withdraw_to for withdrawals
+  - Review comment for unspecified withdrawal destinations
+- **Test fixture**: 5 transactions covering recv, received, sent, send types with
+  varying amounts and fees (including zero-fee withdrawals)
+- **26 comprehensive tests**: Detection (4), parsing (17), registration (3), integration (2)
+  - All tests pass, zero regressions on full suite (590 total tests)
