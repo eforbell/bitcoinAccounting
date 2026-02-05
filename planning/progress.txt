@@ -1155,3 +1155,48 @@
 
 ---
 
+
+## 2026-02-05 - WAL-002: Ledger Live importer class
+
+- What was implemented:
+  - Created `src/python/imports/wallets/ledger.py` with LedgerImporter class
+  - Inherits from BaseImporter with @register decorator
+  - Parses Ledger Live operation history CSV export (11 columns)
+  - Operation Date, Currency, Operation Type (IN/OUT), Amount, Fees, Hash, Account Name, xpub, Cost Currency, Cost, Cost at Export
+  - Filters to BTC transactions only (multi-currency wallet — ETH, etc. skipped)
+  - Operation type mapping:
+    - IN → Deposit (BTC received)
+    - OUT → Withdrawal (BTC sent with fee tracking)
+  - Supports --withdraw-to flag using _get_withdrawal_exchange() helper
+  - Adds "Review: Verify destination wallet" comment for unspecified withdrawals using _get_withdrawal_comment()
+  - Zero-fee guard: empty fee_curr string when fee == 0
+  - Absolute value applied to withdrawal amounts (Ledger may store as negative)
+  - Case-insensitive column detection (Operation Date / OPERATION DATE work)
+  - Created tests/fixtures/csv_samples/ledger_sample.csv (5 operations: 2 IN, 1 ETH filtered, 2 OUT)
+  - Registered in imports/wallets/__init__.py
+  - 20 comprehensive unit tests across 4 test classes
+
+- Files changed:
+  - `src/python/imports/wallets/ledger.py` (new — 172 lines)
+  - `src/python/imports/wallets/__init__.py` (modified — uncommented ledger import)
+  - `tests/fixtures/csv_samples/ledger_sample.csv` (new fixture)
+  - `tests/test_import_ledger.py` (new — 20 tests: 4 detection, 11 parsing, 3 registration, 2 integration)
+  - `AGENTS.md` (updated — WAL-002 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-002 passes: true)
+
+- **Learnings:**
+  - Ledger Live uses simple IN/OUT operation types (not recv/sent variants like Trezor)
+  - Multi-currency wallet exports require early BTC filtering before processing
+  - csv.DictReader.fieldnames returns Sequence[str] | None, not list[str] — convert with list() before passing to functions expecting list
+  - Zero-fee withdrawals need empty fee_curr to avoid orphan currency labels
+  - Withdrawal amounts may be negative in exports — always apply abs() when setting sell amount
+  - Ledger parser appears in import_csv --list with source_type='wallet'
+  - All acceptance criteria met: detect(), parse(), withdraw_to support, review comments, fixtures, tests
+
+- **Test Results:**
+  - 20 new Ledger tests passing
+  - 561 total tests passing (541 existing + 20 new)
+  - Zero regressions
+  - import_csv --list shows Ledger parser correctly
+
+---

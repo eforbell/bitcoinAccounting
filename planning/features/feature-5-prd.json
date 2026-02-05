@@ -44,7 +44,7 @@
         "Create tests/fixtures/csv_samples/ledger_sample.csv"
       ],
       "priority": 2,
-      "passes": false
+      "passes": true
     },
     {
       "id": "WAL-003",
