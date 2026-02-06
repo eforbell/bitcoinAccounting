@@ -62,7 +62,7 @@
         "Unit tests for USD deposit parsing and status filtering"
       ],
       "priority": 3,
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-003",

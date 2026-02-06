@@ -1531,3 +1531,29 @@
   - Zero regressions
 
 ---
+
+## 2026-02-06 - FIAT-002
+- What was implemented:
+  - Added handler for 'USD DEPOSIT' transaction type in Swan parser
+  - USD deposits now produce Deposit(buy_curr='USD', buy=total_usd)
+  - Fee tracking included (USD fee when present, empty fee_curr when zero)
+  - Status filtering (Pending/Failed) already handled by existing check
+  - Updated transaction type mapping in docstring
+  
+- Files changed:
+  - `src/python/imports/exchanges/swan.py` (added USD DEPOSIT handler)
+  - `tests/test_import_swan.py` (updated fixture test, renamed and expanded USD deposit test, added 3 new tests)
+  - `planning/features/feature-6-prd.json` (marked FIAT-002 passes: true)
+  - `AGENTS.md` (added FIAT-002 learnings)
+  
+- **Learnings:**
+  - Status filtering happens before transaction type handlers, so new fiat deposit types automatically benefit from existing filtering logic
+  - Fee handling pattern: fee_curr = 'USD' if fee_usd > 0 else '' (consistent with withdrawal handler)
+  - Transaction count updates ripple through fixture test, integration test, and docstrings
+  - Fiat deposits use same Deposit trans_type as BTC deposits, distinguished only by buy_curr field
+  
+- **Test Results:**
+  - 32 Swan tests passing (27 existing + 5 new/updated)
+  - Zero regressions in Kraken, River, Gemini test suites (spot-checked)
+  
+---

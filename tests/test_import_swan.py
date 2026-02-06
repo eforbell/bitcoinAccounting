@@ -100,21 +100,21 @@ class TestSwanImporterParsing:
     """Row-level parsing for each Swan transaction type."""
 
     def test_parse_fixture_file(self):
-        """Full fixture: 3 Purchase + 1 Withdrawal + 1 Deposit = 5; USD Deposit skipped."""
+        """Full fixture: 3 Purchase + 1 Withdrawal + 1 BTC Deposit + 1 USD Deposit = 6."""
         parser = SwanImporter()
         colnames, transactions = parser.parse(str(FIXTURES_DIR / "swan_sample.csv"))
 
         assert len(colnames) == 11
         assert 'trans_type' in colnames
 
-        assert len(transactions) == 5
+        assert len(transactions) == 6
 
         type_counts: dict[str, int] = {}
         for tx in transactions:
             type_counts[tx['trans_type']] = type_counts.get(tx['trans_type'], 0) + 1
         assert type_counts.get('Trade', 0) == 3
         assert type_counts.get('Withdrawal', 0) == 1
-        assert type_counts.get('Deposit', 0) == 1
+        assert type_counts.get('Deposit', 0) == 2
 
     def test_purchase_maps_to_trade(self):
         """Purchase row maps to Trade with correct DCA fields."""
@@ -243,11 +243,61 @@ class TestSwanImporterParsing:
         finally:
             os.unlink(csv_path)
 
-    def test_usd_deposit_is_skipped(self):
-        """USD Deposit (no BTC) is silently dropped."""
+    def test_usd_deposit_maps_to_deposit(self):
+        """USD Deposit maps to Deposit with USD currency."""
         csv_path = _make_csv(
             _HDR +
             "2024-01-20 12:00:00,USD Deposit,,,250.00,0.00,Completed\n"
+        )
+        try:
+            parser = SwanImporter()
+            _, txs = parser.parse(csv_path)
+            assert len(txs) == 1
+            tx = txs[0]
+
+            assert tx['trans_type'] == 'Deposit'
+            assert tx['exchange'] == 'Swan'
+            assert tx['buy'] == 250.00
+            assert tx['buy_curr'] == 'USD'
+            assert tx['sell'] == 0.0
+            assert tx['fee'] == 0.0
+            assert tx['fee_curr'] == ''
+        finally:
+            os.unlink(csv_path)
+
+    def test_usd_deposit_with_fee(self):
+        """USD Deposit with a non-zero fee tracks fee correctly."""
+        csv_path = _make_csv(
+            _HDR +
+            "2024-01-20 12:00:00,USD Deposit,,,250.00,5.00,Completed\n"
+        )
+        try:
+            parser = SwanImporter()
+            _, txs = parser.parse(csv_path)
+            assert len(txs) == 1
+            assert txs[0]['fee'] == 5.00
+            assert txs[0]['fee_curr'] == 'USD'
+        finally:
+            os.unlink(csv_path)
+
+    def test_usd_deposit_pending_is_skipped(self):
+        """USD Deposit with Status=Pending is filtered out."""
+        csv_path = _make_csv(
+            _HDR +
+            "2024-01-20 12:00:00,USD Deposit,,,250.00,0.00,Pending\n"
+        )
+        try:
+            parser = SwanImporter()
+            _, txs = parser.parse(csv_path)
+            assert len(txs) == 0
+        finally:
+            os.unlink(csv_path)
+
+    def test_usd_deposit_failed_is_skipped(self):
+        """USD Deposit with Status=Failed is filtered out."""
+        csv_path = _make_csv(
+            _HDR +
+            "2024-01-20 12:00:00,USD Deposit,,,250.00,0.00,Failed\n"
         )
         try:
             parser = SwanImporter()
@@ -368,7 +418,7 @@ class TestSwanImporterIntegration:
         crypto = CryptoAccounts(backend=backend)
         import_result = crypto.import_transactions(transactions)
 
-        assert import_result['imported'] == 5
+        assert import_result['imported'] == 6
         assert import_result['skipped'] == 0
 
         rows = backend.execute("SELECT trans_type, COUNT(*) as cnt FROM ledger GROUP BY trans_type")
@@ -376,7 +426,7 @@ class TestSwanImporterIntegration:
 
         assert type_counts.get('Trade', 0) == 3
         assert type_counts.get('Withdrawal', 0) == 1
-        assert type_counts.get('Deposit', 0) == 1
+        assert type_counts.get('Deposit', 0) == 2
 
     def test_dca_group_persisted(self):
         """Purchase transactions retain group='DCA' after import."""

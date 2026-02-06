@@ -10,7 +10,7 @@ Transaction types mapped:
   Purchase    -> Trade  (buy BTC, sell USD)
   Withdrawal  -> Withdrawal
   Deposit     -> Deposit (BTC received from external wallet)
-  USD Deposit -> skipped (no BTC involved)
+  USD Deposit -> Deposit (USD credited to account)
 
 Pending and Failed status rows are skipped.
 """
@@ -179,5 +179,21 @@ class SwanImporter(BaseImporter):
                 'comment': '',
             }
 
-        # USD Deposit and any other type — no BTC involved, skip
+        elif tx_type == 'USD DEPOSIT':
+            # Fiat deposit to Swan account
+            return {
+                'trans_type': 'Deposit',
+                'created_date': date,
+                'exchange': 'Swan',
+                'buy': total_usd,
+                'buy_curr': 'USD',
+                'sell': 0.0,
+                'sell_curr': '',
+                'fee': fee_usd,
+                'fee_curr': 'USD' if fee_usd > 0 else '',
+                'group': '',
+                'comment': '',
+            }
+
+        # Any other type — skip
         return None

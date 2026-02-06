@@ -1310,3 +1310,22 @@ River ships two CSV exports that overlap in columns:
 - **7 comprehensive tests**: USD deposit, EUR deposit, USD withdrawal, altcoin deposit filtered,
   altcoin withdrawal filtered, fiat-only trades filtered, stablecoin deposit support
   - All 38 Kraken tests passing (31 existing + 7 new), zero regressions
+## FIAT-002: Swan USD Deposits
+
+- **USD DEPOSIT transaction type**: Added handler for 'USD DEPOSIT' type (previously skipped).
+- **Produces Deposit(buy_curr='USD')**: USD deposits map to standard Deposit trans_type
+  with `buy_curr='USD'` and amount sourced from Total (USD) column.
+- **Fee tracking**: Fee (USD) column tracked when present; empty fee_curr when zero.
+- **Status filtering preserved**: Pending and Failed USD deposits still filtered by existing
+  status check at parse row level (no changes needed).
+- **Zero-impact on other types**: Purchase, Withdrawal, and BTC Deposit handlers unchanged.
+- **Docstring update**: Updated transaction type mapping to show "USD Deposit -> Deposit (USD credited to account)"
+- **Test updates**: 
+  - Updated `test_parse_fixture_file()` from 5 to 6 transactions (added USD Deposit count)
+  - Renamed `test_usd_deposit_is_skipped()` to `test_usd_deposit_maps_to_deposit()` with full verification
+  - Added 3 new tests: `test_usd_deposit_with_fee()`, `test_usd_deposit_pending_is_skipped()`, `test_usd_deposit_failed_is_skipped()`
+  - Updated integration test from 5 to 6 imported transactions
+  - All 32 Swan tests passing (27 existing + 5 new/updated), zero regressions
+- **Pattern**: Consistent with Kraken fiat handling — status filtering happens before
+  transaction type handlers, so fiat deposits benefit from existing filtering logic.
+
