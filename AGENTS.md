@@ -2,6 +2,22 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Strike Parser: Real Export Format vs Assumed Format (FIAT-005a)
+
+**Issue**: Original Strike parser was built against an assumed CSV format that didn't match real exports from Strike's 'All Transactions' export.
+
+**Key Differences**:
+- Assumed: `Date, Type, Description, BTC Amount, USD Amount, Fee (USD), Fee (BTC)`
+- Real: `Date & Time (UTC), Transaction Type, Amount USD, Fee USD, Amount BTC, Fee BTC, ...` (plus 7 more columns)
+
+**Learnings**:
+1. **Date parsing**: Real Strike dates use format `'Mar 15 2024 14:30:22'` which requires parsing and conversion to standard `'YYYY-MM-DD HH:MM:SS'` format for validation
+2. **Fee signs**: Strike exports fees as negative values in some contexts — always use `abs()` when extracting fees
+3. **Lightning vs On-chain**: Lightning and on-chain BTC sends must target different wallets (e.g., `Coldcard` vs `Coldcard-Lightning`) because hardware wallets typically cannot receive both
+4. **Lightning USD sends**: Pure fiat debits (no BTC amount) from Lightning payments should stay at Strike exchange, not transfer to withdrawal target
+5. **Detection heuristic**: Column name matching must be exact — `'amount btc'` not `'btc amount'`, `'transaction type'` not `'type'`
+6. **Deposit reversals**: Negative USD deposits with `'Reversal'` in description are Withdrawal transactions, not Deposits
+
 ## Python 3.9 Compatibility
 
 **Issue**: Python 3.9 doesn't support `|` union syntax for type hints (e.g., `str | None`)
@@ -1273,3 +1289,129 @@ River ships two CSV exports that overlap in columns:
   - Coldcard: Address Explorer → export to SD card
 - **Detection discriminators make good doc notes**: Users benefit from knowing why
   TXID vs TX ID matters, or why Sparrow's Balance column is distinctive.
+
+## FIAT-000: Fiat Currency Constants and Helper
+
+- **frozenset for constants**: Use `frozenset` for immutable currency sets to prevent
+  accidental modification and enable O(1) membership checks.
+- **Stablecoins as fiat**: USDC, USDT, GUSD, BUSD, DAI, PYUSD are treated as
+  fiat-equivalent for deposit/withdrawal tracking. Goal is to capture all cash
+  flows (traditional + crypto-fiat) in the ledger.
+- **Case-insensitive currency matching**: Currency codes should always be normalized
+  with `.upper()` before checking membership. Users may provide 'usd', 'USD', or 'Usd'.
+- **Centralized currency classification**: Single source of truth (FIAT_CURRENCIES)
+  in base.py enables consistent fiat detection across all exchange parsers.
+- **Helper function pattern**: `is_fiat(currency: str) -> bool` provides clean API
+  for parsers: `if is_fiat(curr): process_fiat_transaction()`.
+- **Export from package root**: Export both `FIAT_CURRENCIES` and `is_fiat` from
+  `imports/__init__.py` for convenient access: `from imports import is_fiat`.
+- **8 comprehensive tests**: Covers traditional fiat (USD, EUR, GBP, CAD, AUD, JPY, CHF),
+  stablecoins (USDC, USDT, GUSD, BUSD, DAI, PYUSD), BTC rejection, altcoin rejection,
+  case-insensitivity, and frozenset immutability.
+  - All tests pass, 31 total import base tests (23 existing + 8 new)
+
+## FIAT-001: Kraken Fiat Deposits and Withdrawals
+
+- **Selective fiat support**: Modified `_process_deposit()` and `_process_withdrawal()`
+  to allow BTC and fiat currencies through: `if asset != 'BTC' and not is_fiat(asset): return None`
+- **Trade and staking unchanged**: `_process_trade()` and `_process_staking()` remain
+  BTC-only to focus on BTC cost basis tracking.
+- **Altcoin filtering preserved**: ETH, LTC, and other altcoins still filtered out
+  from all transaction types (deposits, withdrawals, trades, staking).
+- **ZEUR normalization**: Existing `_normalize_asset()` function already handles ZEUR→EUR
+  mapping, so EUR fiat deposits work without additional changes.
+- **Stablecoin support**: USDC deposits/withdrawals now captured (is_fiat('USDC') returns True).
+- **Fixture updates**: Added 3 fiat rows to kraken_sample.csv (USD deposit, EUR deposit, USD withdrawal)
+  - Total transactions increased from 6 to 9 (3 deposits, 2 withdrawals, 2 trades, 2 staking)
+- **7 comprehensive tests**: USD deposit, EUR deposit, USD withdrawal, altcoin deposit filtered,
+  altcoin withdrawal filtered, fiat-only trades filtered, stablecoin deposit support
+  - All 38 Kraken tests passing (31 existing + 7 new), zero regressions
+## FIAT-002: Swan USD Deposits
+
+- **USD DEPOSIT transaction type**: Added handler for 'USD DEPOSIT' type (previously skipped).
+- **Produces Deposit(buy_curr='USD')**: USD deposits map to standard Deposit trans_type
+  with `buy_curr='USD'` and amount sourced from Total (USD) column.
+- **Fee tracking**: Fee (USD) column tracked when present; empty fee_curr when zero.
+- **Status filtering preserved**: Pending and Failed USD deposits still filtered by existing
+  status check at parse row level (no changes needed).
+- **Zero-impact on other types**: Purchase, Withdrawal, and BTC Deposit handlers unchanged.
+- **Docstring update**: Updated transaction type mapping to show "USD Deposit -> Deposit (USD credited to account)"
+- **Test updates**: 
+  - Updated `test_parse_fixture_file()` from 5 to 6 transactions (added USD Deposit count)
+  - Renamed `test_usd_deposit_is_skipped()` to `test_usd_deposit_maps_to_deposit()` with full verification
+  - Added 3 new tests: `test_usd_deposit_with_fee()`, `test_usd_deposit_pending_is_skipped()`, `test_usd_deposit_failed_is_skipped()`
+  - Updated integration test from 5 to 6 imported transactions
+  - All 32 Swan tests passing (27 existing + 5 new/updated), zero regressions
+- **Pattern**: Consistent with Kraken fiat handling — status filtering happens before
+  transaction type handlers, so fiat deposits benefit from existing filtering logic.
+
+## FIAT-003: River Cash Deposits
+
+- **Filter modification**: Changed Account Activity filter from BTC-only to BTC-or-fiat:
+  `if sent_curr != 'BTC' and recv_curr != 'BTC' and not is_fiat(sent_curr) and not is_fiat(recv_curr): return None`
+- **Cash Deposit handler**: Added handler for 'CASH DEPOSIT' transaction type producing
+  Deposit(buy_curr=recv_curr, buy=recv_amt) with Reference Code preserved in comment field.
+- **Bitcoin Activity unchanged**: BTC Activity format remains BTC-only by design (no Transaction Type
+  column, so fiat-only rows can't be identified).
+- **Altcoin filtering preserved**: Altcoin-only rows (ETH, LTC, etc.) still filtered out — only
+  BTC and fiat currencies pass through.
+- **Import is_fiat**: Added `is_fiat` to imports from `imports.base` module.
+- **Docstring update**: Updated transaction type mapping to show "Cash Deposit -> Deposit (USD credited to account)"
+- **Test updates**:
+  - Updated `test_parse_fixture_file()` from 5 to 6 transactions
+  - Renamed `test_cash_deposit_is_skipped()` to `test_cash_deposit_maps_to_deposit()` with full verification
+  - Added `test_altcoin_only_transaction_filtered()` to verify ETH/LTC still filtered
+  - Updated integration test from 5 to 6 imported transactions
+  - All 37 River tests passing (35 existing + 2 new/updated), zero regressions
+- **Pattern**: The filter change allows both BTC and fiat through, maintaining backward compatibility
+  while extending support for fiat transactions. Altcoin filtering remains intact.
+
+## FIAT-004: Gemini xlsx USD credit/debit
+
+- **Symbol filter expansion**: Added 'USD' to xlsx symbol filter alongside 'BTCUSD' and 'BTC'.
+  Filter changed from `if symbol not in ('BTCUSD', 'BTC')` to `if symbol not in ('BTCUSD', 'BTC', 'USD')`.
+- **USD Credit handler**: CREDIT + Symbol=USD produces Deposit(buy_curr='USD', buy=abs(usd_amt))
+  with fee tracking (fee_curr='USD' if fee_usd != 0 else '').
+- **USD Debit Withdrawal handler**: DEBIT + Symbol=USD + 'WITHDRAWAL' in spec produces
+  Withdrawal(sell_curr='USD', sell=abs(usd_amt)) with fee tracking.
+- **Non-withdrawal USD debits skipped**: DEBIT + Symbol=USD without 'WITHDRAWAL' in spec
+  returns None (e.g., fee debits are filtered out).
+- **CSV path unchanged**: gemini-exports tool CSV format remains BTC-only (no fiat rows in export).
+- **Docstring update**: Updated xlsx notes to document USD CREDIT/DEBIT behavior and clarify
+  that CSV emits only BTC while xlsx emits BTC and USD.
+- **Test updates**:
+  - Added `test_usd_credit_maps_to_deposit()` - verifies USD deposit with zero fee
+  - Added `test_usd_debit_withdrawal_maps_to_withdrawal()` - verifies USD withdrawal with fee
+  - Added `test_usd_debit_non_withdrawal_skipped()` - verifies non-withdrawal USD debits filtered
+  - All 61 Gemini tests passing (58 existing + 3 new), zero regressions
+- **Pattern**: Consistent with BTC handling — CREDIT/DEBIT + symbol + spec-based filtering.
+  Withdrawal identification via 'WITHDRAWAL' in spec field works for both BTC and USD.
+
+
+## FIAT-005b: Coinbase Pro Importer (2026-02-06)
+
+**Context**: Coinbase Pro uses a multi-row format for trades (2 match rows + 1 fee row per trade). Needed trade pairing logic similar to Kraken.
+
+**Implementation Strategy**:
+1. Group rows by `trade_id` using `defaultdict(list)` in first pass
+2. Separate match rows and fee rows in second pass  
+3. Identify buy/sell legs by amount sign (positive=buy, negative=sell)
+4. Only import trades where BTC is on one side (filter altcoin-only trades)
+5. Deposits and withdrawals are single rows (no pairing needed)
+
+**Key Patterns**:
+- Trade pairing: `rows_by_trade_id[trade_id].append(normalized_row)` → process groups
+- BTC filter: `if buy_curr != 'BTC' and sell_curr != 'BTC': return None`
+- Fiat detection: `is_fiat(currency)` handles USD + stablecoins (USDC, USDT, etc.)
+- USD withdrawals = bank transfers (stay at CoinbasePro, don't use --withdraw-to)
+- BTC withdrawals support --withdraw-to for self-custody tracking
+
+**Learnings**:
+- Fixture already existed at `tests/fixtures/csv_samples/coinbase_pro_sample.csv` — always check for existing fixtures
+- Test setup pattern: `setup_method()` calls `clear_registry() + register(Parser)`, `teardown_method()` calls `clear_registry()`
+- defaultdict(list) is perfect for ID-based row grouping
+- Trade pairing logic is reusable: Kraken uses refid, Coinbase Pro uses trade_id, same pattern
+- Separating standalone rows (deposits/withdrawals) from grouped rows (trades) keeps parse() logic clean
+
+**Test Coverage**: 30 tests (4 detection, 6 parse_number, 14 trade parsing + BTC filter, 8 deposits/withdrawals, 3 registration, 2 integration)
+

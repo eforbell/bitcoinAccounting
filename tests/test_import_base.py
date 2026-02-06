@@ -4,7 +4,7 @@ import pytest
 import tempfile
 import os
 
-from imports.base import BaseImporter
+from imports.base import BaseImporter, FIAT_CURRENCIES, is_fiat
 from imports.registry import (
     register,
     get_parser,
@@ -116,6 +116,72 @@ class TestBaseImporter:
         comment = parser._get_withdrawal_comment(None, "Original note")
         assert "Original note" in comment
         assert "Review: Verify destination wallet" in comment
+
+
+class TestFiatCurrencies:
+    """Tests for FIAT_CURRENCIES and is_fiat() helper (FIAT-000)."""
+
+    def test_fiat_currencies_contains_traditional_fiat(self):
+        """FIAT_CURRENCIES should contain traditional fiat currencies."""
+        assert 'USD' in FIAT_CURRENCIES
+        assert 'EUR' in FIAT_CURRENCIES
+        assert 'GBP' in FIAT_CURRENCIES
+        assert 'CAD' in FIAT_CURRENCIES
+        assert 'AUD' in FIAT_CURRENCIES
+        assert 'JPY' in FIAT_CURRENCIES
+        assert 'CHF' in FIAT_CURRENCIES
+
+    def test_fiat_currencies_contains_stablecoins(self):
+        """FIAT_CURRENCIES should contain stablecoins."""
+        assert 'USDC' in FIAT_CURRENCIES
+        assert 'USDT' in FIAT_CURRENCIES
+        assert 'GUSD' in FIAT_CURRENCIES
+        assert 'BUSD' in FIAT_CURRENCIES
+        assert 'DAI' in FIAT_CURRENCIES
+        assert 'PYUSD' in FIAT_CURRENCIES
+
+    def test_fiat_currencies_is_frozenset(self):
+        """FIAT_CURRENCIES should be a frozenset (immutable)."""
+        assert isinstance(FIAT_CURRENCIES, frozenset)
+
+    def test_is_fiat_recognizes_traditional_fiat(self):
+        """is_fiat() should recognize traditional fiat currencies."""
+        assert is_fiat('USD') is True
+        assert is_fiat('EUR') is True
+        assert is_fiat('GBP') is True
+        assert is_fiat('CAD') is True
+        assert is_fiat('AUD') is True
+        assert is_fiat('JPY') is True
+        assert is_fiat('CHF') is True
+
+    def test_is_fiat_recognizes_stablecoins(self):
+        """is_fiat() should recognize stablecoins as fiat-equivalent."""
+        assert is_fiat('USDC') is True
+        assert is_fiat('USDT') is True
+        assert is_fiat('GUSD') is True
+        assert is_fiat('BUSD') is True
+        assert is_fiat('DAI') is True
+        assert is_fiat('PYUSD') is True
+
+    def test_is_fiat_rejects_btc(self):
+        """is_fiat() should reject BTC."""
+        assert is_fiat('BTC') is False
+
+    def test_is_fiat_rejects_altcoins(self):
+        """is_fiat() should reject altcoins."""
+        assert is_fiat('ETH') is False
+        assert is_fiat('LTC') is False
+        assert is_fiat('XRP') is False
+        assert is_fiat('DOGE') is False
+
+    def test_is_fiat_case_insensitive(self):
+        """is_fiat() should be case-insensitive."""
+        assert is_fiat('usd') is True
+        assert is_fiat('Usd') is True
+        assert is_fiat('usdc') is True
+        assert is_fiat('USDC') is True
+        assert is_fiat('btc') is False
+        assert is_fiat('Btc') is False
 
 
 class TestRegistry:

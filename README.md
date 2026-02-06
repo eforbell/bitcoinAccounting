@@ -271,7 +271,7 @@ Add `src/scripts` to your PATH or run scripts directly with full path.
 
 ### Importing from Exchanges and Wallets
 
-Bulk-import transaction history from exchange CSV/xlsx exports and hardware wallet exports:
+Bulk-import transaction history from exchange CSV/xlsx exports and hardware wallet exports. **Fiat tracking** is automatically enabled: USD deposits/withdrawals and other fiat currencies are captured alongside BTC transactions for complete accounting.
 
 - **Auto-detect and import**: `import_csv coinbase_export.csv`
 - **Preview first**: `import_csv --dry-run coinbase_export.csv`
@@ -280,7 +280,10 @@ Bulk-import transaction history from exchange CSV/xlsx exports and hardware wall
 - **List supported parsers**: `import_csv --list`
 - **Show expected format**: `import_csv --format gemini`
 
-**Exchanges**: Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini (CSV + native xlsx), and a Native pass-through format.
+**Exchanges**: Coinbase, Coinbase Pro, Kraken, Strike, River, Swan, Cash App, Gemini (CSV + native xlsx), and a Native pass-through format.
+
+- **Fiat support**: Kraken, Strike, River, Swan, Gemini (xlsx), and Coinbase Pro automatically capture fiat deposits/withdrawals (USD, EUR, stablecoins)
+- **BTC-only**: Cash App (gain/loss export) and standard Coinbase imports include BTC transactions only
 
 **Wallets**: Ledger Live, Trezor Suite, Sparrow Wallet, Coldcard. Wallet imports require `--wallet-name` to identify the destination:
 
@@ -292,7 +295,7 @@ import_csv --wallet-name MyLedger ledger_operations.csv
 import_csv --wallet-name MyTrezor --withdraw-to ColdStorage trezor_export.csv
 ```
 
-All parsers extract BTC transactions only. See [docs/CSV_FORMAT_GUIDE.md](docs/CSV_FORMAT_GUIDE.md) for per-parser export instructions and column details.
+See [docs/CSV_FORMAT_GUIDE.md](docs/CSV_FORMAT_GUIDE.md) for per-parser export instructions and column details.
 
 **Withdrawal handling**: Use `--withdraw-to` to set the destination wallet name
 (e.g. `--withdraw-to ColdCard`). Without it, withdrawals are tagged with a

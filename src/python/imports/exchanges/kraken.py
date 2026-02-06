@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any
 
-from imports.base import BaseImporter
+from imports.base import BaseImporter, is_fiat
 from imports.registry import register
 
 
@@ -256,8 +256,8 @@ class KrakenImporter(BaseImporter):
         row = rows[0]
         asset = _normalize_asset(row['asset'])
 
-        # Only BTC deposits
-        if asset != 'BTC':
+        # Only BTC and fiat deposits (filter out altcoins)
+        if asset != 'BTC' and not is_fiat(asset):
             return None
 
         amount = _parse_number(row['amount'])
@@ -286,8 +286,8 @@ class KrakenImporter(BaseImporter):
         row = rows[0]
         asset = _normalize_asset(row['asset'])
 
-        # Only BTC withdrawals
-        if asset != 'BTC':
+        # Only BTC and fiat withdrawals (filter out altcoins)
+        if asset != 'BTC' and not is_fiat(asset):
             return None
 
         # Withdrawal amount is negative in Kraken

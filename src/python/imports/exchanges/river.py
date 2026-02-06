@@ -19,7 +19,7 @@ Transaction type mapping:
     Buy              -> Trade  (buy BTC, sell USD)
     Send             -> Withdrawal
     Interest Payout  -> Interest Income
-    Cash Deposit     -> skipped (USD-only, no BTC)
+    Cash Deposit     -> Deposit (USD credited to account)
 
   Bitcoin Activity (inferred from Tag + sent/received pattern):
     Tag=Buy          -> Trade
@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any
 
-from imports.base import BaseImporter
+from imports.base import BaseImporter, is_fiat
 from imports.registry import register
 
 # Columns present in Account Activity but absent from Bitcoin Activity.
@@ -177,8 +177,8 @@ class RiverImporter(BaseImporter):
         sent_curr = get('Sent Currency')
         recv_curr = get('Received Currency')
 
-        # Drop rows that don't touch BTC (e.g. Cash Deposit)
-        if sent_curr != 'BTC' and recv_curr != 'BTC':
+        # Drop rows that don't touch BTC or fiat (altcoin-only rows filtered out)
+        if sent_curr != 'BTC' and recv_curr != 'BTC' and not is_fiat(sent_curr) and not is_fiat(recv_curr):
             return None
 
         sent_amt  = _parse_number(get('Sent Amount'))
@@ -227,6 +227,22 @@ class RiverImporter(BaseImporter):
                 'exchange':     'River',
                 'buy':          recv_amt,
                 'buy_curr':     'BTC',
+                'sell':         0.0,
+                'sell_curr':    '',
+                'fee':          0.0,
+                'fee_curr':     '',
+                'group':        '',
+                'comment':      ref_code,
+            }
+
+        if tx_upper == 'CASH DEPOSIT':
+            # Fiat deposit to River account
+            return {
+                'trans_type':   'Deposit',
+                'created_date': date,
+                'exchange':     'River',
+                'buy':          recv_amt,
+                'buy_curr':     recv_curr,
                 'sell':         0.0,
                 'sell_curr':    '',
                 'fee':          0.0,

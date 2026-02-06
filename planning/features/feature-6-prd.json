@@ -29,7 +29,7 @@
         "Unit tests: recognizes fiat, rejects BTC, handles stablecoins, case-insensitive"
       ],
       "priority": 1,
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-001",
@@ -47,7 +47,7 @@
         "Unit tests for USD deposit, EUR deposit, USD withdrawal, altcoin still filtered"
       ],
       "priority": 2,
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-002",
@@ -62,7 +62,7 @@
         "Unit tests for USD deposit parsing and status filtering"
       ],
       "priority": 3,
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-003",
@@ -78,7 +78,7 @@
         "Unit tests for cash deposit parsing"
       ],
       "priority": 4,
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-004",
@@ -92,7 +92,7 @@
         "Unit tests for USD credit, USD withdrawal debit, non-withdrawal debit skipped"
       ],
       "priority": 5,
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-005a",
@@ -117,7 +117,7 @@
         "Add integration test: full import with mixed fiat and BTC transactions"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "The existing Strike parser was built against an assumed CSV format. The real Strike 'All Transactions' export uses different column names and includes fiat transaction types (Deposit, USD Send) that are currently invisible to the parser. This is both a format correction and a fiat-tracking enhancement. DESIGN DECISIONS: (1) No new trans_types — all transactions use standard Trade/Deposit/Withdrawal. Goal is USD+BTC tally and cost basis tracking, not categorizing payment methods. (2) Lightning BTC sends get a different --withdraw-to target than on-chain sends because the same hardware wallet cannot receive both on-chain and Lightning. (3) Lightning USD sends (no BTC amount) are pure USD debits from the Strike account — just Withdrawal(sell_curr='USD')."
     },
     {
@@ -145,7 +145,7 @@
         "Unit tests: detection, trade pairing, fee aggregation, BTC filter, fiat deposits/withdrawals, registration",
         "Existing CoinbaseImporter (standard format) completely unchanged"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-006",
@@ -160,7 +160,7 @@
         "Update AGENTS.md with learnings"
       ],
       "priority": 8,
-      "passes": false
+      "passes": true
     }
   ],
   "riskAssessment": {

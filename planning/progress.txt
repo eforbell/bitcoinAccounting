@@ -1464,3 +1464,285 @@
   - import_csv --list verified: shows Sparrow as wallet type
 
 ---
+
+## 2026-02-06 - FIAT-000: Add FIAT_CURRENCIES constant and is_fiat() helper
+
+- What was implemented:
+  - Added FIAT_CURRENCIES frozenset to src/python/imports/base.py
+  - Included traditional fiat currencies: USD, EUR, GBP, CAD, AUD, JPY, CHF
+  - Included stablecoins (fiat-equivalent): USDC, USDT, GUSD, BUSD, DAI, PYUSD
+  - Added is_fiat(currency: str) -> bool helper function with case-insensitive matching
+  - Exported both FIAT_CURRENCIES and is_fiat from imports/__init__.py
+  - Added 8 comprehensive unit tests in tests/test_import_base.py
+
+- Files changed:
+  - `src/python/imports/base.py` (added FIAT_CURRENCIES frozenset and is_fiat() function)
+  - `src/python/imports/__init__.py` (added exports to __all__)
+  - `tests/test_import_base.py` (added TestFiatCurrencies class with 8 tests)
+  - `AGENTS.md` (added FIAT-000 learnings)
+  - `planning/features/feature-6-prd.json` (marked FIAT-000 passes: true)
+
+- **Learnings:**
+  - frozenset provides O(1) membership checks and immutability for currency constants
+  - Case-insensitive matching via .upper() normalization is essential for user input
+  - Stablecoins (USDC, USDT, etc.) treated as fiat-equivalent for cash flow tracking
+  - Centralized currency classification in base.py ensures consistent behavior across all parsers
+  - Helper function pattern (is_fiat()) provides clean API for parser implementations
+
+- **Test Results:**
+  - 8 new tests passing (fiat recognition, stablecoin support, BTC/altcoin rejection, case-insensitivity)
+  - 31 total import base tests passing (23 existing + 8 new)
+  - Zero regressions
+
+---
+
+## 2026-02-06 - FIAT-001: Kraken fiat deposits and withdrawals
+
+- What was implemented:
+  - Modified _process_deposit() filter to allow BTC and fiat currencies through
+  - Modified _process_withdrawal() filter to allow BTC and fiat currencies through
+  - Kept _process_trade() BTC-only filter unchanged (trades require BTC on one side)
+  - Kept _process_staking() BTC-only filter unchanged (staking rewards are BTC-only)
+  - USD deposits produce Deposit(buy_curr='USD', buy=amount)
+  - USD withdrawals produce Withdrawal(sell_curr='USD', sell=amount)
+  - EUR deposits/withdrawals work via existing _normalize_asset() (ZEUR->EUR)
+  - Altcoin deposits (ETH) still filtered out
+  - Added 3 fiat rows to kraken_sample.csv fixture (USD deposit, EUR deposit, USD withdrawal)
+  - Added 7 comprehensive unit tests for fiat currency support
+
+- Files changed:
+  - `src/python/imports/exchanges/kraken.py` (modified - added is_fiat import, updated filters)
+  - `tests/fixtures/csv_samples/kraken_sample.csv` (added 3 fiat transaction rows)
+  - `tests/test_import_kraken.py` (added TestKrakenFiatCurrencySupport class with 7 tests)
+  - `AGENTS.md` (added FIAT-001 learnings)
+  - `planning/features/feature-6-prd.json` (marked FIAT-001 passes: true)
+
+- **Learnings:**
+  - Selective filter pattern: `if asset != 'BTC' and not is_fiat(asset): return None`
+  - Trade and staking filters remain BTC-only to maintain focus on BTC cost basis
+  - Existing asset normalization (ZEUR->EUR) extends naturally to fiat support
+  - Filter logic placement: deposit/withdrawal handlers (multi-currency) vs trade/staking handlers (BTC-only)
+  - Stablecoins (USDC) automatically supported via is_fiat() without parser changes
+
+- **Test Results:**
+  - 7 new tests passing (USD/EUR deposit, USD withdrawal, altcoin filtering, stablecoin support)
+  - 38 total Kraken tests passing (31 existing + 7 new)
+  - Integration test confirms all 9 transactions imported correctly (3 deposits, 2 withdrawals, 2 trades, 2 staking)
+  - Zero regressions
+
+---
+
+## 2026-02-06 - FIAT-002
+- What was implemented:
+  - Added handler for 'USD DEPOSIT' transaction type in Swan parser
+  - USD deposits now produce Deposit(buy_curr='USD', buy=total_usd)
+  - Fee tracking included (USD fee when present, empty fee_curr when zero)
+  - Status filtering (Pending/Failed) already handled by existing check
+  - Updated transaction type mapping in docstring
+  
+- Files changed:
+  - `src/python/imports/exchanges/swan.py` (added USD DEPOSIT handler)
+  - `tests/test_import_swan.py` (updated fixture test, renamed and expanded USD deposit test, added 3 new tests)
+  - `planning/features/feature-6-prd.json` (marked FIAT-002 passes: true)
+  - `AGENTS.md` (added FIAT-002 learnings)
+  
+- **Learnings:**
+  - Status filtering happens before transaction type handlers, so new fiat deposit types automatically benefit from existing filtering logic
+  - Fee handling pattern: fee_curr = 'USD' if fee_usd > 0 else '' (consistent with withdrawal handler)
+  - Transaction count updates ripple through fixture test, integration test, and docstrings
+  - Fiat deposits use same Deposit trans_type as BTC deposits, distinguished only by buy_curr field
+  
+- **Test Results:**
+  - 32 Swan tests passing (27 existing + 5 new/updated)
+  - Zero regressions in Kraken, River, Gemini test suites (spot-checked)
+  
+---
+
+## 2026-02-06 - FIAT-003
+- What was implemented:
+  - Modified Account Activity filter to allow BTC or fiat currencies through
+  - Added handler for 'CASH DEPOSIT' transaction type in River parser
+  - Cash deposits produce Deposit(buy_curr=recv_curr, buy=recv_amt)
+  - Reference Code preserved in comment field
+  - Bitcoin Activity format unchanged (BTC-only by design)
+  - Altcoin-only rows still filtered out
+  
+- Files changed:
+  - `src/python/imports/exchanges/river.py` (added is_fiat import, modified filter, added Cash Deposit handler)
+  - `tests/test_import_river.py` (updated fixture test, renamed and expanded cash deposit test, added altcoin filter test)
+  - `planning/features/feature-6-prd.json` (marked FIAT-003 passes: true)
+  - `AGENTS.md` (added FIAT-003 learnings)
+  
+- **Learnings:**
+  - Filter logic: Changed from "must have BTC" to "must have BTC or fiat" using four-condition check
+  - The filter naturally prevents altcoin-only transactions (ETH/LTC) while allowing USD/BTC
+  - Bitcoin Activity format stays BTC-only because it lacks Transaction Type column for fiat identification
+  - Reference Code preserved in comment field for traceability (consistent with other River transaction types)
+  - is_fiat() helper simplifies currency classification (imported from imports.base)
+  
+- **Test Results:**
+  - 37 River tests passing (35 existing + 2 new/updated)
+  - Zero regressions in related parsers
+  
+---
+
+## 2026-02-06 - FIAT-004
+- What was implemented:
+  - Added 'USD' to xlsx symbol filter alongside 'BTCUSD' and 'BTC'
+  - Added handler for CREDIT + Symbol=USD producing Deposit(buy_curr='USD')
+  - Added handler for DEBIT + Symbol=USD + 'WITHDRAWAL' in spec producing Withdrawal(sell_curr='USD')
+  - DEBIT + Symbol=USD without 'WITHDRAWAL' in spec is skipped (e.g., fee debits)
+  - CSV path unchanged (gemini-exports tool has no fiat rows)
+  - Fee tracking included for both USD deposits and withdrawals
+  
+- Files changed:
+  - `src/python/imports/exchanges/gemini.py` (updated symbol filter, added USD CREDIT and DEBIT handlers, updated docstring)
+  - `tests/test_import_gemini.py` (added 3 new tests for USD credit, withdrawal, and non-withdrawal debit)
+  - `planning/features/feature-6-prd.json` (marked FIAT-004 passes: true)
+  - `AGENTS.md` (added FIAT-004 learnings)
+  
+- **Learnings:**
+  - Symbol filter expansion is straightforward tuple update: ('BTCUSD', 'BTC') → ('BTCUSD', 'BTC', 'USD')
+  - Handlers mirror BTC pattern: CREDIT → Deposit, DEBIT + 'WITHDRAWAL' in spec → Withdrawal
+  - Specification field is key for withdrawal identification (same pattern for BTC and USD)
+  - Non-withdrawal debits (fees, etc.) are filtered by absence of 'WITHDRAWAL' in spec
+  - CSV and xlsx paths diverge: CSV remains BTC-only, xlsx supports BTC and USD
+  - abs() applied consistently to handle negative amounts in xlsx exports
+  
+- **Test Results:**
+  - 61 Gemini tests passing (58 existing + 3 new)
+  - Zero regressions across CSV and xlsx paths
+  
+---
+## 2026-02-06 - FIAT-005a: Strike parser real format and fiat transactions
+
+- What was implemented:
+  - Updated Strike parser from assumed format to real 'All Transactions' export format
+  - Changed detection heuristic: 'amount btc', 'amount usd', 'transaction type' (lowercase)
+  - Updated column mappings: 'Date & Time (UTC)', 'Transaction Type', 'Amount USD', 'Fee USD', etc.
+  - Added date parsing: Strike format 'Mar 15 2024 14:30:22' → standard 'YYYY-MM-DD HH:MM:SS'
+  - Added abs() to fee extraction (fees are negative in CSV)
+  - Implemented USD Deposit handler: positive Amount USD → Deposit(buy_curr='USD')
+  - Implemented Deposit Reversal handler: negative USD + 'Reversal' → Withdrawal(sell_curr='USD')
+  - Implemented On-chain BTC Send handler: Amount BTC + bc1/1/3 destination → uses withdraw_to
+  - Implemented Lightning BTC Send handler: Amount BTC + lnbc destination → uses {withdraw_to}-Lightning
+  - Implemented Lightning USD Send handler: Amount USD + lnbc destination → Withdrawal(sell_curr='USD')
+  - Preserved Destination and Transaction Hash in comments
+  - Replaced strike_sample.csv with real v2 format fixture (18 transactions)
+  - Updated all 29 Strike tests for v2 format
+
+- Files changed:
+  - `src/python/imports/exchanges/strike.py` (updated — date parsing, new handlers, v2 columns)
+  - `tests/fixtures/csv_samples/strike_sample.csv` (replaced with v2 format)
+  - `tests/test_import_strike.py` (updated — 29 tests for v2 format)
+  - `AGENTS.md` (added FIAT-005a learnings)
+  - `planning/features/feature-6-prd.json` (marked FIAT-005a passes: true)
+
+- **Learnings:**
+  - Real Strike exports use different column names than assumed format — always verify format with actual exports
+  - Strike date format ('Mar 15 2024 14:30:22') requires parsing with '%b %d %Y %H:%M:%S' and conversion to standard format
+  - Fees in Strike CSV can be negative — always use abs() when extracting fee values
+  - Lightning and on-chain BTC sends must target different wallets (e.g., Coldcard vs Coldcard-Lightning) because hardware wallets can't receive both
+  - Lightning USD sends (no BTC amount) are pure fiat debits — exchange stays 'Strike', not withdraw_to
+  - Deposit reversals are identified by negative USD amount + 'Reversal' in description field
+  - Detection heuristic column matching must be exact and lowercase-normalized
+
+- **Test Results:**
+  - 675 tests passing (29 Strike tests updated)
+  - Zero regressions
+
+---
+
+
+## 2026-02-06 - FIAT-005b
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/coinbase_pro.py` with CoinbaseProImporter class
+  - Inherits from BaseImporter with @register decorator
+  - Parses Coinbase Pro account statement CSV export (9 columns)
+  - Columns: portfolio, type, time, amount, balance, amount/balance unit, transfer id, trade id, order id
+  - Trade pairing logic: groups 'match' rows by trade_id, pairs buy/sell legs (positive=buy, negative=sell)
+  - Fee aggregation: 'fee' rows grouped by trade_id, added to corresponding trade
+  - BTC filter: only imports trades where BTC is on at least one side (filters LTC/USD, LINK/USD, etc.)
+  - Deposit parsing: type='deposit', currency from 'amount/balance unit'
+    - BTC deposits: Deposit(buy_curr='BTC')
+    - USD deposits: Deposit(buy_curr='USD') — fiat tracked via is_fiat()
+    - USDC deposits: allowed (stablecoin = fiat-equivalent)
+    - Altcoin deposits: filtered out (CGLD, etc.)
+  - Withdrawal parsing: type='withdrawal', currency from 'amount/balance unit'
+    - BTC withdrawals: Withdrawal(sell_curr='BTC') with --withdraw-to support
+    - USD withdrawals: Withdrawal(sell_curr='USD') stay at CoinbasePro (bank transfers)
+    - Altcoin withdrawals: filtered out (LTC, etc.)
+  - Detection heuristic: 'portfolio' + 'trade id' + 'amount/balance unit' columns
+  - 30 comprehensive unit tests across 6 classes (detection, parsing, BTC filter, deposits, withdrawals, registration, integration)
+  - Registered in imports/exchanges/__init__.py
+  - Existing CoinbaseImporter (standard format) completely unchanged
+
+- Files changed:
+  - `src/python/imports/exchanges/coinbase_pro.py` (new — 327 lines)
+  - `src/python/imports/exchanges/__init__.py` (added coinbase_pro import)
+  - `tests/test_import_coinbase_pro.py` (new — 30 tests across 6 classes)
+  - `planning/features/feature-6-prd.json` (marked FIAT-005b passes: true)
+
+- **Learnings:**
+  - Trade pairing pattern: group rows by trade_id in first pass, process groups in second pass
+  - Coinbase Pro has 2 match rows per trade (buy leg + sell leg) + 1 optional fee row
+  - Positive amount = received (buy), negative amount = spent (sell) — use abs() for sell amounts
+  - BTC filter: `if buy_curr != 'BTC' and sell_curr != 'BTC': return None` — simple and effective
+  - USD withdrawals are bank transfers and stay at the exchange (don't use --withdraw-to)
+  - BTC withdrawals support --withdraw-to for tracking self-custody transfers
+  - Fixture already existed at tests/fixtures/csv_samples/coinbase_pro_sample.csv (real export format)
+  - Test pattern: setup_method() calls clear_registry() + register(Parser), teardown_method() calls clear_registry()
+  - Trade pairing is similar to Kraken's refid grouping but with different row types (match/fee vs trade/deposit/withdrawal)
+  - defaultdict(list) is perfect for grouping rows by ID: `rows_by_trade_id[trade_id].append(row)`
+
+- **Test Results:**
+  - 30 new Coinbase Pro tests passing
+  - All 503 import tests passing (473 existing + 30 new)
+  - Zero regressions from adding Coinbase Pro parser
+
+---
+
+## 2026-02-06 - FIAT-006
+
+- What was implemented:
+  - Updated README.md:
+    - Added "Coinbase Pro" to supported exchange list
+    - Added fiat tracking description: "USD deposits/withdrawals and other fiat currencies are captured alongside BTC transactions for complete accounting"
+    - Added bullet listing which exchanges support fiat imports (Kraken, Strike, River, Swan, Gemini xlsx, Coinbase Pro)
+    - Noted BTC-only exchanges (Cash App gain/loss export, standard Coinbase)
+  - Updated docs/CSV_FORMAT_GUIDE.md:
+    - Added "Fiat support" column to Quick Reference table (all 9 exchanges documented)
+    - Added complete Coinbase Pro section with:
+      - Export instructions (Accounts → Statements)
+      - Row types explanation (match, fee, deposit, withdrawal)
+      - Multi-row trade format details (2 match rows + optional fee row)
+      - Transaction type mappings (BTC trades, fiat deposits/withdrawals, altcoin filtering)
+      - Fiat support notes (USD, USDC, USDT deposits/withdrawals)
+    - Updated Strike section:
+      - Real export format: 12 columns (Date & Time (UTC), Transaction Type, Amount USD, Fee USD, Amount BTC, Fee BTC, Reference, BTC Price, Cost Basis (USD), Destination, Transaction Hash, Note)
+      - New transaction types: Deposit (USD), Deposit Reversal (negative USD + "Reversal"), Send (Lightning BTC vs on-chain), Send (Lightning USD)
+      - Fiat tracking notes: USD deposits and USD sends captured automatically
+    - Added fiat support notes to Kraken section (USD, EUR deposits/withdrawals)
+    - Added fiat support notes to River section (Cash deposits in Account Activity format)
+    - Updated Swan section: USD Deposit now captured (was previously skipped)
+    - Updated Gemini section: USD Credit/Debit captured in xlsx format
+
+- Files changed:
+  - `README.md` (updated — fiat tracking description, Coinbase Pro added, BTC-only vs fiat-enabled exchanges documented)
+  - `docs/CSV_FORMAT_GUIDE.md` (updated — Coinbase Pro section, Strike real format, fiat support notes added to 6 exchanges)
+  - `planning/features/feature-6-prd.json` (marked FIAT-006 passes: true)
+
+- **Learnings:**
+  - Documentation should explicitly state default-on behavior: "Fiat tracking is automatically enabled"
+  - Quick reference tables benefit from visual columns like "Fiat support: Yes/No" for at-a-glance comparison
+  - Export instructions are critical: users need to know WHERE in the app to find the correct export
+  - Multi-row formats (Kraken refid, Coinbase Pro trade_id) need extra explanation of row grouping
+  - Strike's real format is dramatically different from assumed format — documentation prevents user confusion
+  - Stablecoins (USDC, USDT) are fiat-equivalent and should be called out in examples
+
+- **Test Results:**
+  - No code changes — documentation-only update
+  - All 503 import tests still passing
+
+---

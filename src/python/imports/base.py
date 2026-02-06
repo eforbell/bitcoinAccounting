@@ -12,6 +12,27 @@ if TYPE_CHECKING:
     from typing import Any
 
 
+# Recognized fiat currencies and stablecoins
+FIAT_CURRENCIES = frozenset({
+    # Traditional fiat currencies
+    'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF',
+    # Stablecoins (fiat-equivalent)
+    'USDC', 'USDT', 'GUSD', 'BUSD', 'DAI', 'PYUSD',
+})
+
+
+def is_fiat(currency: str) -> bool:
+    """Check if a currency is fiat or fiat-equivalent (stablecoin).
+
+    Args:
+        currency: Currency code to check (e.g., 'USD', 'usdc', 'BTC')
+
+    Returns:
+        bool: True if currency is recognized as fiat or stablecoin, False otherwise
+    """
+    return currency.upper() in FIAT_CURRENCIES
+
+
 class BaseImporter(ABC):
     """Abstract base class for transaction importers.
 

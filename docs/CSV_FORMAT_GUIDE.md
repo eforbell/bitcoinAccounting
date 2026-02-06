@@ -12,16 +12,17 @@ specific parser without opening this file.
 
 ### Exchanges
 
-| Exchange | File type | Auto-detected | Key detection columns |
-|----------|-----------|---------------|----------------------|
-| Coinbase | CSV | Yes | `Transaction Type`, `Quantity Transacted`, `Spot Price at Transaction` |
-| Kraken | CSV | Yes | `txid`, `refid`, `aclass` |
-| Strike | CSV | Yes | `BTC Amount`, `USD Amount`, `Type` |
-| River | CSV | Yes | Account Activity: `Reference Code`, `Transaction Type`, `Bitcoin Price Amount`; Bitcoin Activity: 8-column set without `Transaction Type` |
-| Swan | CSV | Yes | `Amount (BTC)`, `Price (USD)`, `Total (USD)` |
-| Cash App | CSV | Yes | `Cost Basis ($)`, `Gain/Loss ($)`, `Amount (BTC)` |
-| Gemini | CSV or xlsx | Yes | CSV: `base-asset`, `quote-asset`, `trade-id`; xlsx: `BTC Amount BTC`, `Withdrawal Destination` |
-| Native | CSV | Yes | Clean or legacy column set (see Native section) |
+| Exchange | File type | Auto-detected | Fiat support | Key detection columns |
+|----------|-----------|---------------|--------------|----------------------|
+| Coinbase | CSV | Yes | No | `Transaction Type`, `Quantity Transacted`, `Spot Price at Transaction` |
+| Coinbase Pro | CSV | Yes | Yes (USD) | `portfolio`, `trade id`, `amount/balance unit` |
+| Kraken | CSV | Yes | Yes (USD, EUR) | `txid`, `refid`, `aclass` |
+| Strike | CSV | Yes | Yes (USD) | `Amount BTC`, `Amount USD`, `Transaction Type` |
+| River | CSV | Yes | Yes (USD) | Account Activity: `Reference Code`, `Transaction Type`, `Bitcoin Price Amount`; Bitcoin Activity: 8-column set without `Transaction Type` |
+| Swan | CSV | Yes | Yes (USD) | `Amount (BTC)`, `Price (USD)`, `Total (USD)` |
+| Cash App | CSV | Yes | No | `Cost Basis ($)`, `Gain/Loss ($)`, `Amount (BTC)` |
+| Gemini | CSV or xlsx | Yes | Yes (USD, xlsx only) | CSV: `base-asset`, `quote-asset`, `trade-id`; xlsx: `BTC Amount BTC`, `Withdrawal Destination` |
+| Native | CSV | Yes | Yes | Clean or legacy column set (see Native section) |
 
 ### Wallets
 
@@ -68,6 +69,44 @@ Spot Price at Transaction, Subtotal, Total, Fees, Notes
 
 ---
 
+## Coinbase Pro
+
+**How to export**: From the Coinbase Pro website, go to **Accounts → (select portfolio) → Statements** and download the CSV for the desired date range. Coinbase Pro exports use a multi-row format where each trade consists of 2-3 rows.
+
+**Expected columns**:
+```
+portfolio, type, time, amount, balance, amount/balance unit, transfer id, trade id, order id
+```
+
+**Row types**:
+- `match`: One leg of a trade (buy or sell). Each trade has 2 match rows.
+- `fee`: Trading fee. Each trade has 0-1 fee rows.
+- `deposit`: Fiat or BTC deposit (single row)
+- `withdrawal`: Fiat or BTC withdrawal (single row)
+
+**Transaction types mapped**:
+
+| Source type | Maps to | Notes |
+|-------------|---------|-------|
+| match (BTC trade) | Trade | Two match rows paired by `trade id`; positive amount = buy leg, negative = sell leg; fees aggregated from fee row |
+| match (altcoin) | *(skipped)* | Trades without BTC on either side (e.g., LTC/USD, LINK/USD) are filtered out |
+| deposit (BTC) | Deposit | BTC received from external wallet |
+| deposit (USD) | Deposit | **Fiat support**: USD deposit captured |
+| deposit (USDC) | Deposit | **Fiat support**: Stablecoin deposit captured |
+| deposit (altcoin) | *(skipped)* | Non-BTC, non-fiat deposits filtered out |
+| withdrawal (BTC) | Withdrawal | Apply `--withdraw-to` or defaults to `CoinbasePro-Withdrawal` |
+| withdrawal (USD) | Withdrawal | **Fiat support**: Bank withdrawal; stays at `CoinbasePro` (not self-custody) |
+| withdrawal (altcoin) | *(skipped)* | Non-BTC, non-fiat withdrawals filtered out |
+
+**Notes**:
+- **Fiat tracking enabled**: USD and stablecoin (USDC, USDT, etc.) deposits/withdrawals captured automatically
+- Trade pairing: Parser groups rows by `trade id`, pairs buy/sell legs, and aggregates fees
+- BTC filter: Only trades where BTC is on at least one side are imported
+- Transfer IDs are preserved in transaction comments for deposits/withdrawals
+- Coinbase Pro format is distinct from standard Coinbase exports; the parser auto-detects which format you have
+
+---
+
 ## Kraken
 
 **How to export**: From the Kraken website, go to **Funds → History → Ledger**
@@ -91,38 +130,44 @@ txid, refid, time, type, subtype, aclass, asset, amount, fee, balance
 | dividend | Interest Income | |
 
 **Notes**:
+- **Fiat tracking enabled**: USD and EUR deposits/withdrawals captured automatically
 - Kraken uses non-standard asset codes: `XXBT` and `XBT` both mean BTC;
-  `ZUSD` means USD. The parser normalises these automatically.
+  `ZUSD` means USD, `ZEUR` means EUR. The parser normalises these automatically.
 - Trades appear as **two rows** with the same `refid` — one positive amount (buy leg)
   and one negative amount (sell leg). The parser pairs them before emitting a single
   Trade transaction.
-- Only transactions involving BTC are imported.
+- Only transactions involving BTC or fiat currencies are imported; altcoin-only transactions are filtered out.
 
 ---
 
 ## Strike
 
-**How to export**: From the Strike app, look for a transaction history or
-statement export option. The download should be a CSV with the columns listed below.
+**How to export**: From the Strike app, go to **Settings → Export All Transactions**. The download will be a CSV with 12 columns including BTC and USD amounts, fees, and transaction metadata.
 
 **Expected columns**:
 ```
-Date, Type, Description, BTC Amount, USD Amount
+Date & Time (UTC), Transaction Type, Description, Amount USD, Fee USD, Amount BTC,
+Fee BTC, Reference, BTC Price, Cost Basis (USD), Destination, Transaction Hash, Note
 ```
-Optional columns (present in some exports): `Fee (USD)`, `Fee (BTC)`
 
 **Transaction types mapped**:
 
 | Source type | Maps to | Notes |
 |-------------|---------|-------|
-| Purchase | Trade | Fee added to USD Amount for total cost |
-| Send | Withdrawal | Apply `--withdraw-to` or defaults to `Strike-Withdrawal` |
-| Payment | Withdrawal | Lightning Network payment |
-| Receive | Deposit | |
+| Purchase | Trade | USD spent for BTC; fee captured separately |
+| Deposit | Deposit | **Fiat support**: Positive Amount USD = fiat deposit |
+| Deposit (Reversal) | Withdrawal | Negative Amount USD + "Reversal" in Description = fiat withdrawal |
+| Send (on-chain) | Withdrawal | Destination starts with `bc1`/`1`/`3`; uses `--withdraw-to` for on-chain wallet |
+| Send (Lightning BTC) | Withdrawal | Destination starts with `lnbc`; uses separate Lightning wallet target (e.g., `{withdraw_to}-Lightning`) |
+| Send (Lightning USD) | Withdrawal | **Fiat support**: Amount USD only (no BTC); pure fiat debit, stays at Strike |
 
 **Notes**:
-- Strike is Bitcoin-only; no asset filtering is needed.
-- Fee handling: BTC fee is preferred when present; falls back to USD fee.
+- **Fiat tracking enabled**: USD deposits and USD sends are captured automatically
+- Strike supports both Bitcoin and USD balances; parser imports both
+- On-chain and Lightning BTC sends use different destination wallets (hardware wallets can't receive Lightning)
+- Lightning USD sends (no BTC amount) are pure fiat transactions
+- Deposit reversals are identified by negative Amount USD + "Reversal" in Description
+- Destination address and Transaction Hash are preserved in transaction comments
 
 ---
 
@@ -170,11 +215,12 @@ Fee Amount, Fee Currency, Tag
 | *(empty tag, BTC sent)* | Withdrawal |
 
 **Notes**:
-- Cash-only rows (no BTC on either side) are skipped in both formats.
+- **Fiat tracking enabled**: Cash deposits in Account Activity format are captured as USD Deposit transactions
+- Cash-only rows without BTC or fiat (e.g., altcoin-only) are skipped in both formats
 - Account Activity is checked first during auto-detection; if both column sets
-  are present, the Account Activity path is used.
+  are present, the Account Activity path is used
 - For Bitcoin Activity trades: fee is only added to the sell amount when it is
-  denominated in the same currency as the sent amount.
+  denominated in the same currency as the sent amount
 
 ---
 
@@ -195,10 +241,11 @@ Date, Type, Amount (BTC), Price (USD), Total (USD), Fee (USD), Status
 | Purchase | Trade | Tagged with group `DCA` |
 | Withdrawal | Withdrawal | Apply `--withdraw-to` or defaults to `Swan-Withdrawal` |
 | Deposit | Deposit | BTC received from external wallet |
-| USD Deposit | *(skipped)* | No BTC involved |
+| USD Deposit | Deposit | **Fiat support**: USD deposit captured |
 
 **Notes**:
-- Rows with Status `Pending` or `Failed` are silently skipped.
+- **Fiat tracking enabled**: USD deposits are now captured (previously skipped)
+- Rows with Status `Pending` or `Failed` are silently skipped
 - `Total (USD)` already includes the fee — it represents the full USD amount
   deducted from your account. The fee is still tracked separately for tax reporting.
 
@@ -278,10 +325,13 @@ Withdrawal Destination
 |---------------|---------|-------|
 | Buy + BTCUSD | Trade | USD amounts stored as negative; abs() applied |
 | Sell + BTCUSD | Trade | BTC amount stored as negative; abs() applied |
-| Credit + BTC | Deposit | |
+| Credit + BTC | Deposit | BTC received from external wallet |
+| Credit + USD | Deposit | **Fiat support**: USD deposit captured |
 | Debit + BTC *(spec contains "Withdrawal")* | Withdrawal | Destination address captured in comment |
+| Debit + USD *(spec contains "Withdrawal")* | Withdrawal | **Fiat support**: Bank withdrawal captured |
 
 **Notes**:
+- **Fiat tracking enabled** (xlsx only): USD deposits and withdrawals are captured
 - The xlsx column set is **dynamic** — it includes per-asset columns only for
   assets you currently hold. The parser discovers columns at runtime, so missing
   columns (GUSD, BAT, etc.) are silently ignored.
