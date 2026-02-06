@@ -1462,7 +1462,7 @@ params['end_date_exclusive'] = next_day.strftime('%Y-%m-%d')
 5. **CSV export testing**: Use `tempfile.NamedTemporaryFile` with `delete=False` + try/finally cleanup for file-based tests.
 6. **ORDER BY consistency**: Add both `createddate ASC` and `id ASC` for deterministic ordering (multiple transactions can have same timestamp).
 
-**Test Coverage**: 7 new tests added to TestExportTxScript:
+**Test Coverage**: 9 tests in TestExportTxScript:
 - Basic transaction export (pre-existing)
 - Wallet filter only
 - Date range filter only
@@ -1470,6 +1470,8 @@ params['end_date_exclusive'] = next_day.strftime('%Y-%m-%d')
 - Empty result sets
 - CSV file creation with filters
 - Fee currency inclusion in coin filter
+- Multiple wallets filter (list)
+- Multiple wallets combined with coin filter
 
 **CLI Examples**:
 ```bash
@@ -1479,8 +1481,33 @@ export_tx --wallet Strike --dry-run
 # Export with filters
 export_tx output.csv --wallet Strike --coin BTC --start-date 2024-01-01
 
+# Export multiple wallets (wallet ecosystem)
+export_tx custody.csv --wallets Strike,River,Coldcard
+
 # Round-trip test: export → reimport
 export_tx wallet_export.csv --wallet Strike
 import_csv --source native wallet_export.csv --dry-run
+```
+
+**EXPORT-006 Enhancement: Multiple Wallet Support (2026-02-06)**
+
+Added `--wallets` parameter to support exporting multiple wallets in one command.
+
+**Implementation**:
+- `get_transactions()` now accepts `wallet` as string or list
+- SQL uses OR conditions: `(l.exchange = :wallet0 OR l.exchange = :wallet1 ...)`
+- CLI accepts comma-separated wallets: `--wallets Strike,Coldcard,Vault`
+- Mutually exclusive with `--wallet` (validation error if both used)
+
+**Use Case**: Export related wallet ecosystem for analysis database or sharing with accountant:
+```bash
+# Export from main database
+export DB_BACKEND=sqlite
+export SQLITE_DB_PATH=~/.cryptoaccounting/main.db
+export_tx custody_chain.csv --wallets Strike,River,Coldcard
+
+# Import to analysis database
+export SQLITE_DB_PATH=~/.cryptoaccounting/custody_analysis.db
+import_csv --source native custody_chain.csv
 ```
 

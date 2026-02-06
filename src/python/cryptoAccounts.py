@@ -111,7 +111,9 @@ class CryptoAccounts(object):
 
         Args:
             coin: Optional currency code to filter by (e.g., 'BTC', 'ETH')
-            wallet: Optional wallet/exchange name to filter by (e.g., 'Strike', 'Coldcard')
+            wallet: Optional wallet/exchange name(s) to filter by. Can be:
+                   - Single string: 'Strike'
+                   - List of strings: ['Strike', 'Coldcard']
             start_date: Optional start date (YYYY-MM-DD format or date object)
             end_date: Optional end date (YYYY-MM-DD format or date object)
 
@@ -133,8 +135,19 @@ class CryptoAccounts(object):
             params['coin'] = coin
 
         if wallet is not None:
-            where_clauses.append("l.exchange = :wallet")
-            params['wallet'] = wallet
+            # Support both single wallet string and list of wallets
+            if isinstance(wallet, str):
+                where_clauses.append("l.exchange = :wallet")
+                params['wallet'] = wallet
+            elif isinstance(wallet, (list, tuple)):
+                # Build OR conditions for multiple wallets
+                wallet_conditions = []
+                for i, w in enumerate(wallet):
+                    wallet_conditions.append(f"l.exchange = :wallet{i}")
+                    params[f'wallet{i}'] = w
+                where_clauses.append(f"({' OR '.join(wallet_conditions)})")
+            else:
+                raise ValueError(f"wallet must be string or list, not {type(wallet)}")
 
         if start_date is not None:
             where_clauses.append("l.createddate >= :start_date")

@@ -719,6 +719,52 @@ class TestExportTxScript:
 
         crypto.close()
 
+    def test_export_with_multiple_wallets(self) -> None:
+        """Verify export can filter by multiple wallets using list."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Add transactions to different wallets
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Coldcard', deposit_date=datetime(2025, 1, 2), buy=0.5, buy_curr='BTC')
+        crypto.deposit(exchange='Vault', deposit_date=datetime(2025, 1, 3), buy=0.3, buy_curr='BTC')
+        crypto.deposit(exchange='River', deposit_date=datetime(2025, 1, 4), buy=0.2, buy_curr='BTC')
+
+        # Filter by multiple wallets
+        headers, transactions = crypto.get_transactions(wallet=['Strike', 'Vault'])
+
+        assert len(transactions) == 2
+        exchanges = {tx['Exchange'] for tx in transactions}
+        assert exchanges == {'Strike', 'Vault'}
+        assert transactions[0]['Buy'] == 1.0
+        assert transactions[1]['Buy'] == 0.3
+
+        crypto.close()
+
+    def test_export_with_multiple_wallets_and_coin(self) -> None:
+        """Verify multiple wallets can be combined with other filters."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Add diverse transactions
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 2), buy=100.0, buy_curr='USD')
+        crypto.deposit(exchange='Coldcard', deposit_date=datetime(2025, 1, 3), buy=0.5, buy_curr='BTC')
+        crypto.deposit(exchange='Vault', deposit_date=datetime(2025, 1, 4), buy=0.3, buy_curr='BTC')
+
+        # Filter: (Strike OR Vault) AND BTC
+        headers, transactions = crypto.get_transactions(
+            coin='BTC',
+            wallet=['Strike', 'Vault']
+        )
+
+        assert len(transactions) == 2
+        assert all(tx['Buy Cur.'] == 'BTC' for tx in transactions)
+        exchanges = {tx['Exchange'] for tx in transactions}
+        assert exchanges == {'Strike', 'Vault'}
+
+        crypto.close()
+
 
 class TestGainsTrackerScript:
     """Tests for 'gains_tracker' script functionality."""

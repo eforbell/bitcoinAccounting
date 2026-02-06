@@ -33,6 +33,7 @@ Examples:
   # Filter by wallet/exchange
   %(prog)s output.csv --wallet Strike                    # Export Strike transactions only
   %(prog)s output.csv --wallet Coldcard --coin BTC       # Export BTC from Coldcard
+  %(prog)s output.csv --wallets Strike,Coldcard,Vault    # Export multiple wallets
 
   # Filter by date range
   %(prog)s output.csv --start-date 2024-01-01            # From Jan 1, 2024 onwards
@@ -60,6 +61,11 @@ Examples:
         '--wallet',
         metavar='WALLET',
         help='Filter by wallet/exchange name (e.g., Strike, Coldcard)',
+    )
+    parser.add_argument(
+        '--wallets',
+        metavar='WALLET1,WALLET2,...',
+        help='Filter by multiple wallets (comma-separated, e.g., Strike,Coldcard,Vault)',
     )
     parser.add_argument(
         '--start-date',
@@ -107,7 +113,7 @@ def print_dry_run_preview(transactions, coin, wallet, start_date, end_date):
     Args:
         transactions: List of transaction dictionaries
         coin: Coin filter (or None)
-        wallet: Wallet filter (or None)
+        wallet: Wallet filter (string, list, or None)
         start_date: Start date filter (or None)
         end_date: End date filter (or None)
     """
@@ -117,7 +123,13 @@ def print_dry_run_preview(transactions, coin, wallet, start_date, end_date):
 
     # Display applied filters
     print("Filters:")
-    print(f"  Wallet:     {wallet if wallet else 'All wallets'}")
+    if wallet:
+        if isinstance(wallet, list):
+            print(f"  Wallets:    {', '.join(wallet)}")
+        else:
+            print(f"  Wallet:     {wallet}")
+    else:
+        print(f"  Wallet:     All wallets")
     print(f"  Coin:       {coin if coin else 'All currencies'}")
     print(f"  Date range: {start_date if start_date else 'Beginning'} to {end_date if end_date else 'Now'}")
     print()
@@ -180,6 +192,19 @@ def main():
     """Main entry point."""
     args = parse_arguments()
 
+    # Validate mutually exclusive wallet options
+    if args.wallet and args.wallets:
+        print("Error: Cannot use both --wallet and --wallets. Use --wallets for multiple wallets.", file=sys.stderr)
+        sys.exit(1)
+
+    # Parse wallet filter
+    wallet_filter = None
+    if args.wallet:
+        wallet_filter = args.wallet
+    elif args.wallets:
+        # Split comma-separated wallets and strip whitespace
+        wallet_filter = [w.strip() for w in args.wallets.split(',')]
+
     # Validate dates if provided
     start_date = validate_date(args.start_date, '--start-date') if args.start_date else None
     end_date = validate_date(args.end_date, '--end-date') if args.end_date else None
@@ -196,14 +221,14 @@ def main():
         # Get transactions with filters
         colnames, transactions = crypto.get_transactions(
             coin=args.coin,
-            wallet=args.wallet,
+            wallet=wallet_filter,
             start_date=start_date,
             end_date=end_date
         )
 
         # Dry-run preview
         if args.dry_run:
-            print_dry_run_preview(transactions, args.coin, args.wallet, start_date, end_date)
+            print_dry_run_preview(transactions, args.coin, wallet_filter, start_date, end_date)
             sys.exit(0)
 
         # Export to CSV
@@ -211,7 +236,7 @@ def main():
         crypto.export_transactions_csv(
             args.output_file,
             coin=args.coin,
-            wallet=args.wallet,
+            wallet=wallet_filter,
             start_date=start_date,
             end_date=end_date
         )
