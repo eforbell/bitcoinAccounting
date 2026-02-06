@@ -145,7 +145,7 @@
         "Unit tests: detection, trade pairing, fee aggregation, BTC filter, fiat deposits/withdrawals, registration",
         "Existing CoinbaseImporter (standard format) completely unchanged"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-006",

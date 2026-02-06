@@ -1387,3 +1387,31 @@ River ships two CSV exports that overlap in columns:
 - **Pattern**: Consistent with BTC handling — CREDIT/DEBIT + symbol + spec-based filtering.
   Withdrawal identification via 'WITHDRAWAL' in spec field works for both BTC and USD.
 
+
+## FIAT-005b: Coinbase Pro Importer (2026-02-06)
+
+**Context**: Coinbase Pro uses a multi-row format for trades (2 match rows + 1 fee row per trade). Needed trade pairing logic similar to Kraken.
+
+**Implementation Strategy**:
+1. Group rows by `trade_id` using `defaultdict(list)` in first pass
+2. Separate match rows and fee rows in second pass  
+3. Identify buy/sell legs by amount sign (positive=buy, negative=sell)
+4. Only import trades where BTC is on one side (filter altcoin-only trades)
+5. Deposits and withdrawals are single rows (no pairing needed)
+
+**Key Patterns**:
+- Trade pairing: `rows_by_trade_id[trade_id].append(normalized_row)` → process groups
+- BTC filter: `if buy_curr != 'BTC' and sell_curr != 'BTC': return None`
+- Fiat detection: `is_fiat(currency)` handles USD + stablecoins (USDC, USDT, etc.)
+- USD withdrawals = bank transfers (stay at CoinbasePro, don't use --withdraw-to)
+- BTC withdrawals support --withdraw-to for self-custody tracking
+
+**Learnings**:
+- Fixture already existed at `tests/fixtures/csv_samples/coinbase_pro_sample.csv` — always check for existing fixtures
+- Test setup pattern: `setup_method()` calls `clear_registry() + register(Parser)`, `teardown_method()` calls `clear_registry()`
+- defaultdict(list) is perfect for ID-based row grouping
+- Trade pairing logic is reusable: Kraken uses refid, Coinbase Pro uses trade_id, same pattern
+- Separating standalone rows (deposits/withdrawals) from grouped rows (trades) keeps parse() logic clean
+
+**Test Coverage**: 30 tests (4 detection, 6 parse_number, 14 trade parsing + BTC filter, 8 deposits/withdrawals, 3 registration, 2 integration)
+

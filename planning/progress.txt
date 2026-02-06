@@ -1653,3 +1653,52 @@
 
 ---
 
+
+## 2026-02-06 - FIAT-005b
+
+- What was implemented:
+  - Created `src/python/imports/exchanges/coinbase_pro.py` with CoinbaseProImporter class
+  - Inherits from BaseImporter with @register decorator
+  - Parses Coinbase Pro account statement CSV export (9 columns)
+  - Columns: portfolio, type, time, amount, balance, amount/balance unit, transfer id, trade id, order id
+  - Trade pairing logic: groups 'match' rows by trade_id, pairs buy/sell legs (positive=buy, negative=sell)
+  - Fee aggregation: 'fee' rows grouped by trade_id, added to corresponding trade
+  - BTC filter: only imports trades where BTC is on at least one side (filters LTC/USD, LINK/USD, etc.)
+  - Deposit parsing: type='deposit', currency from 'amount/balance unit'
+    - BTC deposits: Deposit(buy_curr='BTC')
+    - USD deposits: Deposit(buy_curr='USD') — fiat tracked via is_fiat()
+    - USDC deposits: allowed (stablecoin = fiat-equivalent)
+    - Altcoin deposits: filtered out (CGLD, etc.)
+  - Withdrawal parsing: type='withdrawal', currency from 'amount/balance unit'
+    - BTC withdrawals: Withdrawal(sell_curr='BTC') with --withdraw-to support
+    - USD withdrawals: Withdrawal(sell_curr='USD') stay at CoinbasePro (bank transfers)
+    - Altcoin withdrawals: filtered out (LTC, etc.)
+  - Detection heuristic: 'portfolio' + 'trade id' + 'amount/balance unit' columns
+  - 30 comprehensive unit tests across 6 classes (detection, parsing, BTC filter, deposits, withdrawals, registration, integration)
+  - Registered in imports/exchanges/__init__.py
+  - Existing CoinbaseImporter (standard format) completely unchanged
+
+- Files changed:
+  - `src/python/imports/exchanges/coinbase_pro.py` (new — 327 lines)
+  - `src/python/imports/exchanges/__init__.py` (added coinbase_pro import)
+  - `tests/test_import_coinbase_pro.py` (new — 30 tests across 6 classes)
+  - `planning/features/feature-6-prd.json` (marked FIAT-005b passes: true)
+
+- **Learnings:**
+  - Trade pairing pattern: group rows by trade_id in first pass, process groups in second pass
+  - Coinbase Pro has 2 match rows per trade (buy leg + sell leg) + 1 optional fee row
+  - Positive amount = received (buy), negative amount = spent (sell) — use abs() for sell amounts
+  - BTC filter: `if buy_curr != 'BTC' and sell_curr != 'BTC': return None` — simple and effective
+  - USD withdrawals are bank transfers and stay at the exchange (don't use --withdraw-to)
+  - BTC withdrawals support --withdraw-to for tracking self-custody transfers
+  - Fixture already existed at tests/fixtures/csv_samples/coinbase_pro_sample.csv (real export format)
+  - Test pattern: setup_method() calls clear_registry() + register(Parser), teardown_method() calls clear_registry()
+  - Trade pairing is similar to Kraken's refid grouping but with different row types (match/fee vs trade/deposit/withdrawal)
+  - defaultdict(list) is perfect for grouping rows by ID: `rows_by_trade_id[trade_id].append(row)`
+
+- **Test Results:**
+  - 30 new Coinbase Pro tests passing
+  - All 503 import tests passing (473 existing + 30 new)
+  - Zero regressions from adding Coinbase Pro parser
+
+---
