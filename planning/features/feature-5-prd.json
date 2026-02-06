@@ -1,11 +1,12 @@
 {
   "branchName": "feature/wallet-import-integration",
   "projectName": "Wallet Import Integration",
-  "description": "Integrate the 4 standalone wallet parsers (Ledger, Trezor, Sparrow, Coldcard) into the CLI import system, providing wallet users the same DX as exchange imports",
+  "description": "Integrate the 4 standalone wallet parsers (Ledger, Trezor, Sparrow, Coldcard) into the CLI import system, providing wallet users with consistent import semantics",
   "principles": [
-    "Reuse existing infrastructure - no new CLI flags or patterns",
+    "Reuse existing infrastructure - leverage BaseImporter and registry pattern",
     "Consistent output format - same (colnames, transactions) tuple",
     "Mechanical refactoring - convert functions to classes",
+    "Wallet-specific semantics - require --wallet-name for deposits, optional --withdraw-to for withdrawals",
     "Clean removal - delete orphaned wallet_imports.py after migration"
   ],
   "techStack": {
@@ -26,7 +27,7 @@
         "Wallet parsers should appear with source_type='wallet' in list output"
       ],
       "priority": 1,
-      "passes": false
+      "passes": true
     },
     {
       "id": "WAL-002",
@@ -37,14 +38,16 @@
         "Set name='Ledger', source_type='wallet'",
         "Set expected_columns for Ledger Live CSV format",
         "Implement detect() to identify Ledger Live exports",
-        "Implement parse() - port logic from import_ledger_live_csv()",
+        "Implement parse(file_path, wallet_name, withdraw_to) with wallet_name for deposits",
         "Add --withdraw-to support using _get_withdrawal_exchange() helper",
         "Add review comment for unspecified withdrawals using _get_withdrawal_comment()",
         "Unit tests with sample Ledger Live CSV fixture",
-        "Create tests/fixtures/csv_samples/ledger_sample.csv"
+        "Create tests/fixtures/csv_samples/ledger_sample.csv",
+        "Update CLI to require --wallet-name for wallet imports",
+        "Update BaseImporter.parse() signature to accept wallet_name parameter"
       ],
       "priority": 2,
-      "passes": false
+      "passes": true
     },
     {
       "id": "WAL-003",
@@ -55,14 +58,14 @@
         "Set name='Trezor', source_type='wallet'",
         "Set expected_columns for Trezor Suite CSV format",
         "Implement detect() to identify Trezor Suite exports",
-        "Implement parse() - port logic from import_trezor_suite_csv()",
+        "Implement parse(file_path, wallet_name, withdraw_to) with wallet_name for deposits",
         "Add --withdraw-to support using _get_withdrawal_exchange() helper",
         "Add review comment for unspecified withdrawals using _get_withdrawal_comment()",
         "Unit tests with sample Trezor Suite CSV fixture",
         "Create tests/fixtures/csv_samples/trezor_sample.csv"
       ],
       "priority": 3,
-      "passes": false
+      "passes": true
     },
     {
       "id": "WAL-004",
@@ -73,7 +76,7 @@
         "Set name='Sparrow', source_type='wallet'",
         "Set expected_columns for Sparrow Wallet CSV format",
         "Implement detect() to identify Sparrow exports",
-        "Implement parse() - port logic from import_sparrow_csv()",
+        "Implement parse(file_path, wallet_name, withdraw_to) with wallet_name for deposits",
         "Preserve satoshi-to-BTC conversion logic",
         "Preserve label → comment mapping",
         "Add --withdraw-to support using _get_withdrawal_exchange() helper",
@@ -82,7 +85,7 @@
         "Create tests/fixtures/csv_samples/sparrow_sample.csv"
       ],
       "priority": 4,
-      "passes": false
+      "passes": true
     },
     {
       "id": "WAL-005",
@@ -93,7 +96,7 @@
         "Set name='Coldcard', source_type='wallet'",
         "Set expected_columns for Coldcard CSV format",
         "Implement detect() to identify Coldcard exports",
-        "Implement parse() - port logic from import_coldcard_csv()",
+        "Implement parse(file_path, wallet_name, withdraw_to) with wallet_name for deposits",
         "Preserve case-insensitive column matching",
         "Add --withdraw-to support using _get_withdrawal_exchange() helper",
         "Add review comment for unspecified withdrawals using _get_withdrawal_comment()",
@@ -101,7 +104,7 @@
         "Create tests/fixtures/csv_samples/coldcard_sample.csv"
       ],
       "priority": 5,
-      "passes": false
+      "passes": true
     },
     {
       "id": "WAL-006",
@@ -113,7 +116,7 @@
         "Update any __all__ exports if needed"
       ],
       "priority": 6,
-      "passes": false
+      "passes": true
     },
     {
       "id": "WAL-007",
@@ -129,7 +132,7 @@
         "Update AGENTS.md with any learnings from this feature"
       ],
       "priority": 7,
-      "passes": false
+      "passes": true
     }
   ],
   "riskAssessment": {

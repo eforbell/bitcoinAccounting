@@ -77,12 +77,16 @@ class CashAppImporter(BaseImporter):
             return False
 
     def parse(
-        self, file_path: str, withdraw_to: str | None = None
+        self,
+        file_path: str,
+        wallet_name: str | None = None,
+        withdraw_to: str | None = None,
     ) -> tuple[list[str], list[dict[str, Any]]]:
         """Parse a Cash App Bitcoin gain/loss CSV.
 
         Args:
             file_path: Path to CSV file
+            wallet_name: Ignored for exchange parsers
             withdraw_to: Wallet name for withdrawal destinations
 
         Returns:

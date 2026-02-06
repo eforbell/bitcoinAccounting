@@ -109,9 +109,21 @@ class RiverImporter(BaseImporter):
             return False
 
     def parse(
-        self, file_path: str, withdraw_to: str | None = None
+        self,
+        file_path: str,
+        wallet_name: str | None = None,
+        withdraw_to: str | None = None,
     ) -> tuple[list[str], list[dict[str, Any]]]:
-        """Parse a River CSV, auto-detecting Account vs Bitcoin Activity."""
+        """Parse a River CSV, auto-detecting Account vs Bitcoin Activity.
+
+        Args:
+            file_path: Path to CSV file
+            wallet_name: Ignored for exchange parsers
+            withdraw_to: Wallet name for withdrawal destinations
+
+        Returns:
+            Tuple of (column_names, transactions)
+        """
         transactions: list[dict[str, Any]] = []
 
         with open(file_path, 'r', encoding='utf-8') as f:

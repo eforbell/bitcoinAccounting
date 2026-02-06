@@ -1,0 +1,6 @@
+Operation Date,Currency,Operation Type,Amount,Fees,Hash,Account Name,xpub,Cost Currency,Cost,Cost at Export
+2024-01-15 10:30:00,BTC,IN,0.01,0,abc123hash,Bitcoin 1,xpub123,USD,500.00,51000.00
+2024-01-16 14:45:00,ETH,IN,1.5,0,def456hash,Ethereum 1,xpub456,USD,2000.00,2100.00
+2024-01-17 09:20:00,BTC,OUT,-0.005,0.00001,ghi789hash,Bitcoin 1,xpub123,USD,250.00,52000.00
+2024-01-18 16:00:00,BTC,IN,0.02,0,jkl012hash,Bitcoin 2,xpub789,USD,1000.00,50000.00
+2024-01-19 11:30:00,BTC,OUT,-0.001,0.000005,mno345hash,Bitcoin 1,xpub123,USD,50.00,51500.00

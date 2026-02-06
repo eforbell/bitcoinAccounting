@@ -1,0 +1,155 @@
+{
+  "branchName": "feature/fiat-currency-tracking",
+  "projectName": "Fiat Currency Tracking",
+  "description": "Add fiat deposit/withdrawal tracking to exchange CSV importers so the ledger captures cash flowing in and out of exchanges, not just BTC transactions",
+  "principles": [
+    "Default-on - fiat deposits/withdrawals captured without a CLI flag",
+    "Stablecoins are fiat - USDC, GUSD, BUSD treated as fiat-equivalent",
+    "Trade filter unchanged - trades still require BTC on at least one side",
+    "No database changes - import_transactions() already accepts any currency",
+    "Backward compatible - existing BTC imports produce identical results"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest + pytest-cov",
+    "csv": "csv module (stdlib)",
+    "datetime": "datetime module (stdlib)"
+  },
+  "userStories": [
+    {
+      "id": "FIAT-000",
+      "title": "Add FIAT_CURRENCIES constant and is_fiat() helper",
+      "acceptanceCriteria": [
+        "Add FIAT_CURRENCIES frozenset to src/python/imports/base.py",
+        "Include USD, EUR, GBP, CAD, AUD, JPY, CHF (traditional fiat)",
+        "Include USDC, USDT, GUSD, BUSD, DAI, PYUSD (stablecoins)",
+        "Add is_fiat(currency: str) -> bool helper function",
+        "Case-insensitive matching (is_fiat('usd') == True)",
+        "Export from imports/__init__.py",
+        "Unit tests: recognizes fiat, rejects BTC, handles stablecoins, case-insensitive"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "FIAT-001",
+      "title": "Kraken fiat deposits and withdrawals",
+      "acceptanceCriteria": [
+        "Modify _process_deposit() filter: allow BTC and fiat currencies through",
+        "Modify _process_withdrawal() filter: allow BTC and fiat currencies through",
+        "Keep _process_trade() BTC-only filter unchanged",
+        "Keep _process_staking() BTC-only filter unchanged",
+        "USD deposit produces Deposit(buy_curr='USD', buy=amount)",
+        "USD withdrawal produces Withdrawal(sell_curr='USD', sell=amount)",
+        "EUR deposit/withdrawal also works (via _normalize_asset ZEUR->EUR)",
+        "Altcoin deposits (e.g. ETH) still filtered out",
+        "Add fiat rows to fixture CSV",
+        "Unit tests for USD deposit, EUR deposit, USD withdrawal, altcoin still filtered"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "FIAT-002",
+      "title": "Swan USD deposits",
+      "acceptanceCriteria": [
+        "Add handler for 'USD DEPOSIT' transaction type (currently returns None)",
+        "USD amount sourced from Total (USD) column",
+        "Produces Deposit(buy_curr='USD', buy=total_usd)",
+        "Pending/Failed USD deposits still filtered by status check",
+        "Fee tracked if present",
+        "Update existing test that asserts USD deposits are skipped",
+        "Unit tests for USD deposit parsing and status filtering"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "FIAT-003",
+      "title": "River cash deposits",
+      "acceptanceCriteria": [
+        "Modify Account Activity filter to also allow fiat currencies through",
+        "Add handler for 'Cash Deposit' transaction type",
+        "Produces Deposit(buy_curr='USD', buy=received_amount)",
+        "Reference Code preserved in comment field",
+        "Bitcoin Activity format unchanged (BTC-only by design)",
+        "Altcoin-only rows still filtered out",
+        "Update existing test that asserts cash deposits are skipped",
+        "Unit tests for cash deposit parsing"
+      ],
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "FIAT-004",
+      "title": "Gemini xlsx USD credit/debit",
+      "acceptanceCriteria": [
+        "Add 'USD' to xlsx symbol filter alongside 'BTCUSD' and 'BTC'",
+        "CREDIT + Symbol=USD produces Deposit(buy_curr='USD')",
+        "DEBIT + Symbol=USD + spec contains 'Withdrawal' produces Withdrawal(sell_curr='USD')",
+        "DEBIT + Symbol=USD without Withdrawal spec is skipped",
+        "CSV path unchanged (gemini-exports tool has no fiat rows)",
+        "Unit tests for USD credit, USD withdrawal debit, non-withdrawal debit skipped"
+      ],
+      "priority": 5,
+      "passes": false
+    },
+    {
+      "id": "FIAT-005",
+      "title": "Coinbase Pro importer class",
+      "acceptanceCriteria": [
+        "Create src/python/imports/exchanges/coinbase_pro.py with CoinbaseProImporter class",
+        "Inherit from BaseImporter with @register decorator",
+        "Set name='CoinbasePro', source_type='exchange'",
+        "Columns: portfolio, type, time, amount, balance, amount/balance unit, transfer id, trade id, order id",
+        "Detection heuristic: 'portfolio' + 'trade id' + 'amount/balance unit' columns",
+        "Trade parsing: group 'match' rows by trade_id, pair buy/sell legs (positive=buy, negative=sell)",
+        "Fee parsing: 'fee' rows grouped by trade_id, add to corresponding trade",
+        "Only import trades where BTC is on one side (filter LTC/USD, LINK/USD etc.)",
+        "Deposit parsing: type='deposit', currency from 'amount/balance unit'",
+        "  - BTC deposits: Deposit(buy_curr='BTC')",
+        "  - USD deposits: Deposit(buy_curr='USD') — fiat tracked via is_fiat()",
+        "  - Altcoin deposits: filtered out (not BTC, not fiat)",
+        "Withdrawal parsing: type='withdrawal', currency from 'amount/balance unit'",
+        "  - BTC withdrawals: Withdrawal(sell_curr='BTC') with --withdraw-to support",
+        "  - USD withdrawals: Withdrawal(sell_curr='USD')",
+        "  - Altcoin withdrawals: filtered out",
+        "Create tests/fixtures/csv_samples/coinbase_pro_sample.csv from real export data",
+        "Unit tests: detection, trade pairing, fee aggregation, BTC filter, fiat deposits/withdrawals, registration",
+        "Existing CoinbaseImporter (standard format) completely unchanged"
+      ],
+      "priority": 6,
+      "passes": false
+    },
+    {
+      "id": "FIAT-006",
+      "title": "Documentation update",
+      "acceptanceCriteria": [
+        "Update docs/CSV_FORMAT_GUIDE.md: note fiat support per exchange",
+        "Update README.md import section to mention fiat tracking",
+        "Document which exchanges include fiat rows (Kraken, Gemini, River, Swan, Coinbase Pro)",
+        "Document which exchanges don't (Strike, Cash App - BTC-only exports)",
+        "Add Coinbase Pro section to CSV Format Guide with export instructions and column details",
+        "Update AGENTS.md with learnings"
+      ],
+      "priority": 7,
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [],
+    "medium": [
+      "Coinbase Pro trade pairing: multi-fill orders create many match rows per trade_id — must handle variable row counts"
+    ],
+    "low": [
+      "Stablecoin set may need expansion as new stablecoins emerge",
+      "Some exchanges may change fiat labels in future export versions"
+    ]
+  },
+  "futureEnhancements": [
+    "Standard Coinbase (non-Pro) fiat deposit/withdrawal support once export format confirmed",
+    "Exchange fiat balance reconciliation report",
+    "Cash flow summary (total fiat deployed vs returned)",
+    "Per-exchange fiat balance tracking"
+  ]
+}

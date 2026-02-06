@@ -1,0 +1,6 @@
+Date,Type,Amount,Fee,TXID
+2024-01-15,receive,0.5,0,abc123def456789
+2024-02-10,send,-0.1,0.00005,def456abc789012
+2024-03-20,received,0.25,0,ghi789jkl012345
+2024-04-05,sent,-0.05,0.00003,jkl012mno345678
+2024-05-15,receive,0.75,0,mno345pqr678901

@@ -140,9 +140,21 @@ class GeminiImporter(BaseImporter):
     # ---- dispatch ---------------------------------------------------------
 
     def parse(
-        self, file_path: str, withdraw_to: str | None = None
+        self,
+        file_path: str,
+        wallet_name: str | None = None,
+        withdraw_to: str | None = None,
     ) -> tuple[list[str], list[dict[str, Any]]]:
-        """Route to CSV or xlsx parser based on file extension."""
+        """Route to CSV or xlsx parser based on file extension.
+
+        Args:
+            file_path: Path to CSV or xlsx file
+            wallet_name: Ignored for exchange parsers
+            withdraw_to: Wallet name for withdrawal destinations
+
+        Returns:
+            Tuple of (column_names, transactions)
+        """
         if file_path.lower().endswith('.xlsx'):
             return self._parse_xlsx(file_path, withdraw_to)
         return self._parse_csv(file_path, withdraw_to)

@@ -1,18 +1,18 @@
 {
-  "currentFeature": "feature-5",
-  "featureName": "Wallet Import Integration",
-  "prdPath": "planning/features/feature-5-prd.json",
-  "summaryPath": "planning/features/feature-5-summary.md",
-  "branch": "feature/wallet-import-integration",
+  "currentFeature": "feature-6",
+  "featureName": "Fiat Currency Tracking",
+  "prdPath": "planning/features/feature-6-prd.json",
+  "summaryPath": "planning/features/feature-6-summary.md",
+  "branch": "feature/fiat-currency-tracking",
   "status": "in_progress",
   "stories": [
-    {"id": "WAL-001", "title": "Create wallets package structure", "status": "pending"},
-    {"id": "WAL-002", "title": "Ledger Live importer class", "status": "pending"},
-    {"id": "WAL-003", "title": "Trezor Suite importer class", "status": "pending"},
-    {"id": "WAL-004", "title": "Sparrow Wallet importer class", "status": "pending"},
-    {"id": "WAL-005", "title": "Coldcard importer class", "status": "pending"},
-    {"id": "WAL-006", "title": "Remove standalone wallet_imports.py", "status": "pending"},
-    {"id": "WAL-007", "title": "Documentation update", "status": "pending"}
+    {"id": "FIAT-000", "title": "Add FIAT_CURRENCIES constant and is_fiat() helper", "status": "pending"},
+    {"id": "FIAT-001", "title": "Kraken fiat deposits and withdrawals", "status": "pending"},
+    {"id": "FIAT-002", "title": "Swan USD deposits", "status": "pending"},
+    {"id": "FIAT-003", "title": "River cash deposits", "status": "pending"},
+    {"id": "FIAT-004", "title": "Gemini xlsx USD credit/debit", "status": "pending"},
+    {"id": "FIAT-005", "title": "Coinbase Pro importer class", "status": "pending"},
+    {"id": "FIAT-006", "title": "Documentation update", "status": "pending"}
   ],
   "completedFeatures": [
     {
@@ -46,11 +46,19 @@
       "mergedDate": "2026-02-05",
       "stories": 12,
       "notes": "CLI import system with registry, validation, 8 exchange parsers (Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini, Native), --dry-run and --withdraw-to support"
+    },
+    {
+      "featureId": "feature-5",
+      "featureName": "Wallet Import Integration",
+      "branch": "feature/wallet-import-integration",
+      "mergedDate": null,
+      "stories": 7,
+      "notes": "Wallet import parsers (Ledger Live, Trezor Suite, Sparrow, Coldcard) integrated into CLI import system with --wallet-name support"
     }
   ],
   "futureEnhancements": [
-    "Feature #6: TUI Import Wizard with Textual",
-    "Feature #7: Multi-coin support (ETH, other assets)",
-    "Feature #8: Tax optimization tools"
+    "Feature #7: TUI Import Wizard with Textual",
+    "Feature #8: Multi-coin support (ETH, other assets)",
+    "Feature #9: Tax optimization tools"
   ]
 }

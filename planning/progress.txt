@@ -1,3 +1,162 @@
+## 2026-02-05 - WAL-007: Documentation update
+
+- What was implemented:
+  - Updated README.md:
+    - Added wallet parsers (Ledger, Trezor, Sparrow, Coldcard) to Key Features bullet
+    - Renamed "Importing from Exchanges" to "Importing from Exchanges and Wallets"
+    - Added wallet import section with --wallet-name examples
+    - Updated test count from 370+ to 640+
+    - Updated import parser test section to include 4 wallet parsers
+  - Updated docs/CSV_FORMAT_GUIDE.md:
+    - Renamed guide title to "Exchange & Wallet Imports"
+    - Added Wallets quick reference table alongside Exchanges table
+    - Added 4 new wallet sections with full documentation:
+      - Ledger Live: Settings → Accounts → Export operations
+      - Trezor Suite: Transactions → Export
+      - Sparrow Wallet: Tools → Export CSV
+      - Coldcard: Address Explorer export to SD card
+    - Each section includes expected columns, type mappings, notes, and usage examples
+  - Updated AGENTS.md with WAL-006 and WAL-007 learnings
+
+- Files changed:
+  - `README.md` (updated — wallet imports, test counts)
+  - `docs/CSV_FORMAT_GUIDE.md` (updated — 4 wallet sections added)
+  - `AGENTS.md` (updated — WAL-006, WAL-007 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-007 passes: true)
+
+- **Learnings:**
+  - Documentation should mirror code organization: exchanges and wallets as separate sections
+  - Wallet imports have a different UX requirement (--wallet-name) that needs prominent documentation
+  - Export instructions vary by wallet: some are in-app, Coldcard uses SD card export
+  - Detection heuristic differences (TXID vs TX ID, presence/absence of columns) make good documentation notes
+
+- **Test Results:**
+  - 647 tests passing (unchanged — documentation-only changes)
+  - Zero regressions
+
+---
+
+## 2026-02-05 - WAL-006: Remove standalone wallet_imports.py
+
+- What was implemented:
+  - Verified no active imports of wallet_imports module remain in codebase
+  - Only references are in planning/documentation files (progress.txt, PRDs, summaries)
+  - Deleted src/python/wallet_imports.py (294 lines, 4 standalone functions)
+  - All 4 wallet parsers already migrated to imports/wallets/ package (WAL-002 through WAL-005)
+  - Full test suite passes with zero regressions
+
+- Files changed:
+  - `src/python/wallet_imports.py` (deleted)
+  - `AGENTS.md` (updated — WAL-006 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-006 passes: true)
+
+- **Learnings:**
+  - Always grep entire codebase before deleting a module to verify no hidden dependencies
+  - Planning/documentation references to deleted modules are historical and don't need updating
+  - Migration from standalone functions to class-based parsers was clean — no runtime dependencies remained
+
+- **Test Results:**
+  - 647 tests passing (unchanged — no code depended on wallet_imports.py)
+  - Zero regressions
+
+---
+
+## 2026-02-05 - WAL-005: Coldcard importer class
+
+- What was implemented:
+  - Created `src/python/imports/wallets/coldcard.py` with ColdcardImporter class
+  - Inherits from BaseImporter with @register decorator
+  - Parses Coldcard address explorer transaction history CSV export (5 columns)
+  - Columns: Date, Type, Amount, Fee, TXID
+  - Dual transaction detection: type-based AND sign-based fallback
+  - Type values: receive/received/in → Deposit, send/sent/out → Withdrawal
+  - Sign fallback: empty type + positive amount → Deposit, empty type + negative amount → Withdrawal
+  - Amount in decimal BTC (no satoshi conversion needed unlike Sparrow)
+  - wallet_name for deposits (uses specified name or defaults to 'Coldcard')
+  - withdraw_to for withdrawals (uses specified destination or 'Coldcard-Withdrawal')
+  - Review comment added for unspecified withdrawal destinations
+  - Zero-amount filtering, zero-fee handling (empty fee_curr), abs() on amounts
+  - Case-insensitive type and column matching
+  - Detection heuristic: 'type' + 'amount' + 'txid' columns, NOT 'address' or 'label'
+  - 30 comprehensive unit tests across 4 classes (detection, parsing, registration, integration)
+  - Created tests/fixtures/csv_samples/coldcard_sample.csv (5 transactions)
+  - Registered in imports/wallets/__init__.py
+  - Verified with `import_csv --list` (shows as wallet type)
+
+- Files changed:
+  - `src/python/imports/wallets/coldcard.py` (new — 158 lines)
+  - `src/python/imports/wallets/__init__.py` (uncommented coldcard import)
+  - `tests/fixtures/csv_samples/coldcard_sample.csv` (new fixture)
+  - `tests/test_import_coldcard.py` (new — 30 tests: 5 detection, 20 parsing, 3 registration, 2 integration)
+  - `AGENTS.md` (updated — WAL-005 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-005 passes: true)
+
+- **Learnings:**
+  - Coldcard uses decimal BTC amounts (not satoshis like Sparrow) — no conversion needed
+  - Dual detection: type-based + sign-based fallback handles firmware version variations
+  - Detection heuristic: 'type' + 'amount' + 'txid' is unique to Coldcard
+  - Negative checks ('address' not in header, 'label' not in header) prevent Trezor/Sparrow false positives
+  - Trezor uses 'tx id' (two words), Coldcard uses 'txid' (one word) — natural discriminator
+  - Same core patterns as all wallet parsers: zero-amount skip, zero-fee empty string, abs() on amounts
+  - Type fallback pattern: `is_deposit = (tx_type in known_types) or (not tx_type and amount > 0)`
+
+- **Test Results:**
+  - 30 new Coldcard tests passing
+  - 647 total tests passing (617 existing + 30 new)
+  - Zero regressions from adding Coldcard parser
+  - import_csv --list verified: shows Coldcard as wallet type
+
+---
+
+## 2026-02-05 - WAL-003: Trezor Suite importer class
+
+- What was implemented:
+  - Created `src/python/imports/wallets/trezor.py` with TrezorImporter class
+  - Inherits from BaseImporter with @register decorator
+  - Parses Trezor Suite transaction history CSV export (7 columns)
+  - Columns: Date, Time, Type, Amount, Fee, Address, TX ID
+  - Transaction type mapping:
+    - recv/received → Deposit (BTC received to wallet)
+    - sent/send → Withdrawal (BTC sent from wallet)
+  - Date and Time combination: Separate columns merged into `created_date = f"{date} {time}"`
+  - wallet_name for deposits (uses specified name or defaults to 'Trezor')
+  - withdraw_to for withdrawals (uses specified destination or 'Trezor-Withdrawal' placeholder)
+  - Review comment added for unspecified withdrawal destinations
+  - Zero-amount filtering, zero-fee handling (empty fee_curr), abs() on withdrawals
+  - Case-insensitive type matching (RECV, recv, ReCv all work)
+  - Detection heuristic: 'tx id' + 'address' + 'date' columns (distinguishes from Ledger's 'hash')
+  - Bitcoin-only export (no currency filtering needed unlike Ledger)
+  - 26 comprehensive unit tests across 4 classes (detection, parsing, registration, integration)
+  - Created tests/fixtures/csv_samples/trezor_sample.csv (5 transactions)
+  - Registered in imports/wallets/__init__.py
+  - Verified with `import_csv --list` (shows as wallet type)
+
+- Files changed:
+  - `src/python/imports/wallets/trezor.py` (new — 172 lines)
+  - `src/python/imports/wallets/__init__.py` (uncommented trezor import)
+  - `tests/fixtures/csv_samples/trezor_sample.csv` (new fixture)
+  - `tests/test_import_trezor.py` (new — 26 tests: 4 detection, 17 parsing, 3 registration, 2 integration)
+  - `AGENTS.md` (updated — WAL-003 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-003 passes: true)
+
+- **Learnings:**
+  - Trezor Suite separates Date and Time (unlike Ledger's single timestamp column)
+  - Missing Time column is graceful: use date only if time not present
+  - Trezor uses 'recv'/'received' and 'sent'/'send' (Ledger uses 'IN'/'OUT')
+  - 'TX ID' column distinguishes Trezor from Ledger (which uses 'Hash')
+  - Bitcoin-only export simplifies parsing (no multi-currency filtering)
+  - Same patterns as Ledger: zero-amount skip, zero-fee empty string, abs() on withdrawals
+  - Type matching is case-insensitive: normalize with `.lower()` before checking
+  - All wallet parsers follow same structure: detect(), parse(), registration, helpers
+
+- **Test Results:**
+  - 26 new Trezor tests passing
+  - 590 total tests passing (564 existing + 26 new)
+  - Zero regressions from adding Trezor parser
+  - import_csv --list verified: shows Trezor as wallet type
+
+---
+
 ## 2026-02-05 - IMP-012: Fold parser — SKIPPED
 
 - Skipped: no reliable documentation of Fold's CSV export format available.
@@ -1123,5 +1282,185 @@
   - 15 new tests (6 CLI + 9 integration)
   - 282 total tests passing (267 existing + 15 new)
   - Zero regressions
+
+---
+## 2026-02-05 - WAL-001: Create wallets package structure
+
+- What was implemented:
+  - Created src/python/imports/wallets/ directory structure
+  - Created imports/wallets/__init__.py with parser registration pattern (initially empty, ready for wallet parsers)
+  - Updated imports/__init__.py to import wallets subpackage alongside exchanges
+  - Verified import_csv --list command works correctly (shows 8 exchange parsers)
+  - All 541 tests passing with no regressions
+
+- Files changed:
+  - `src/python/imports/wallets/__init__.py` (new - placeholder for wallet parsers)
+  - `src/python/imports/__init__.py` (modified - added wallets subpackage import)
+  - `AGENTS.md` (updated - added WAL-001 package structure pattern)
+  - `planning/features/feature-5-prd.json` (marked WAL-001 passes: true)
+
+- **Learnings:**
+  - Package organization pattern: subpackages (exchanges/, wallets/) under imports/ with separate __init__.py for each
+  - Each subpackage's __init__.py imports parser modules to trigger @register decorator
+  - Top-level imports/__init__.py imports both subpackages with # noqa: F401, E402 to ensure all parsers are registered
+  - source_type field distinguishes exchange parsers from wallet parsers in CLI output
+  - Lazy evaluation: parser modules only imported when imports package is imported
+  - This pattern enables clean test isolation (clear_registry() between tests)
+
+- **Test Results:**
+  - 541 tests passing (unchanged from before)
+  - Zero regressions from adding wallets subpackage
+  - import_csv --list verified working (shows 8 parsers)
+
+---
+
+
+## 2026-02-05 - WAL-002: Ledger Live importer class
+
+- What was implemented:
+  - Created `src/python/imports/wallets/ledger.py` with LedgerImporter class
+  - Inherits from BaseImporter with @register decorator
+  - Parses Ledger Live operation history CSV export (11 columns)
+  - Operation Date, Currency, Operation Type (IN/OUT), Amount, Fees, Hash, Account Name, xpub, Cost Currency, Cost, Cost at Export
+  - Filters to BTC transactions only (multi-currency wallet — ETH, etc. skipped)
+  - Operation type mapping:
+    - IN → Deposit (BTC received)
+    - OUT → Withdrawal (BTC sent with fee tracking)
+  - Supports --withdraw-to flag using _get_withdrawal_exchange() helper
+  - Adds "Review: Verify destination wallet" comment for unspecified withdrawals using _get_withdrawal_comment()
+  - Zero-fee guard: empty fee_curr string when fee == 0
+  - Absolute value applied to withdrawal amounts (Ledger may store as negative)
+  - Case-insensitive column detection (Operation Date / OPERATION DATE work)
+  - Created tests/fixtures/csv_samples/ledger_sample.csv (5 operations: 2 IN, 1 ETH filtered, 2 OUT)
+  - Registered in imports/wallets/__init__.py
+  - 20 comprehensive unit tests across 4 test classes
+
+- Files changed:
+  - `src/python/imports/wallets/ledger.py` (new — 172 lines)
+  - `src/python/imports/wallets/__init__.py` (modified — uncommented ledger import)
+  - `tests/fixtures/csv_samples/ledger_sample.csv` (new fixture)
+  - `tests/test_import_ledger.py` (new — 20 tests: 4 detection, 11 parsing, 3 registration, 2 integration)
+  - `AGENTS.md` (updated — WAL-002 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-002 passes: true)
+
+- **Learnings:**
+  - Ledger Live uses simple IN/OUT operation types (not recv/sent variants like Trezor)
+  - Multi-currency wallet exports require early BTC filtering before processing
+  - csv.DictReader.fieldnames returns Sequence[str] | None, not list[str] — convert with list() before passing to functions expecting list
+  - Zero-fee withdrawals need empty fee_curr to avoid orphan currency labels
+  - Withdrawal amounts may be negative in exports — always apply abs() when setting sell amount
+  - Ledger parser appears in import_csv --list with source_type='wallet'
+  - All acceptance criteria met: detect(), parse(), withdraw_to support, review comments, fixtures, tests
+
+- **Test Results:**
+  - 20 new Ledger tests passing
+  - 561 total tests passing (541 existing + 20 new)
+  - Zero regressions
+  - import_csv --list shows Ledger parser correctly
+
+---
+
+## 2026-02-05 - WAL-002 Enhancement: --wallet-name Requirement
+
+- What was implemented:
+  - Added --wallet-name CLI parameter to import_csv script
+  - Updated BaseImporter.parse() signature to accept wallet_name parameter
+  - Modified LedgerImporter to use wallet_name for deposit transactions
+  - CLI validation: wallet parsers (source_type='wallet') now require --wallet-name
+  - Updated all 8 exchange parsers to accept (but ignore) wallet_name parameter
+  - Added comprehensive tests for wallet-name requirement
+
+- Rationale for change:
+  - Semantic clarity: deposits to a wallet should use the user's wallet name
+  - Eliminates ambiguity between "Ledger" (user wallet) and "Ledger-Withdrawal" (placeholder)
+  - Makes deposit location explicit rather than inferred
+  - Withdrawal destinations remain optional (placeholder used if unspecified)
+  - Future-proofs for cross-wallet transfer matching
+
+- Files changed:
+  - `src/scripts/import_csv` (added --wallet-name arg, validation logic)
+  - `src/python/imports/base.py` (updated parse() signature, docstring)
+  - `src/python/imports/wallets/ledger.py` (use wallet_name for deposits)
+  - `src/python/imports/exchanges/*.py` (8 files - added wallet_name parameter)
+  - `tests/test_import_ledger.py` (added test_parse_incoming_with_wallet_name)
+  - `tests/test_import_cli.py` (added TestWalletImportRequirements class, 2 tests)
+  - `planning/features/feature-5-prd.json` (updated acceptance criteria)
+
+- **Learnings:**
+  - Wallet vs exchange semantics differ: wallets need explicit identification
+  - Placeholder naming matters: "Ledger-Withdrawal" looks like a wallet name
+  - User experience: required parameters prevent ambiguous defaults
+  - Backward compatibility: optional parameters with None defaults maintain exchange parser compatibility
+  - CLI validation layer catches semantic errors early (wallet without --wallet-name)
+
+- **Test Results:**
+  - 564 tests passing (2 new wallet requirement tests)
+  - Zero regressions from signature changes
+  - All exchange imports still work without wallet_name
+
+- **Usage Examples:**
+  ```bash
+  # Wallet import (required)
+  import_csv --wallet-name Ledger ledger.csv
+  
+  # Wallet with withdrawal destination
+  import_csv --wallet-name Ledger --withdraw-to Coldcard ledger.csv
+  
+  # Exchange import (unchanged)
+  import_csv coinbase.csv
+  ```
+
+---
+
+## 2026-02-05 - WAL-004: Sparrow Wallet importer class
+
+- What was implemented:
+  - Created `src/python/imports/wallets/sparrow.py` with SparrowImporter class
+  - Inherits from BaseImporter with @register decorator
+  - Parses Sparrow Wallet transaction history CSV export (6 columns)
+  - Columns: Date, Label, Value, Balance, Fee, TXID
+  - Satoshi to BTC conversion with fallback to decimal:
+    - Primary: `int(value_str) / 100_000_000` for satoshi values
+    - Fallback: `float(value_str)` for decimal BTC values
+    - Applied to both Value and Fee columns
+  - Transaction type mapping based on value sign:
+    - Positive value → Deposit (BTC received to wallet)
+    - Negative value → Withdrawal (BTC sent from wallet, abs() applied)
+  - Label → comment mapping preserved for all transactions
+  - wallet_name for deposits (uses specified name or defaults to 'Sparrow')
+  - withdraw_to for withdrawals (uses specified destination or 'Sparrow-Withdrawal')
+  - Combined label and review comment for withdrawals: "{label}; {review}"
+  - Zero-fee handling (empty fee_curr when fee == 0)
+  - Detection heuristic: 'label' + 'balance' + 'value' + 'date' + 'txid' columns
+  - Case-insensitive column matching with _normalize_header() helper
+  - 27 comprehensive unit tests across 4 classes (detection, parsing, registration, integration)
+  - Created tests/fixtures/csv_samples/sparrow_sample.csv (5 transactions)
+  - Registered in imports/wallets/__init__.py
+  - Verified with `import_csv --list` (shows as wallet type)
+
+- Files changed:
+  - `src/python/imports/wallets/sparrow.py` (new — 203 lines)
+  - `src/python/imports/wallets/__init__.py` (uncommented sparrow import)
+  - `tests/fixtures/csv_samples/sparrow_sample.csv` (new fixture)
+  - `tests/test_import_sparrow.py` (new — 27 tests: 4 detection, 17 parsing, 3 registration, 3 integration)
+  - `AGENTS.md` (updated — WAL-004 learnings)
+  - `planning/features/feature-5-prd.json` (marked WAL-004 passes: true)
+
+- **Learnings:**
+  - Sparrow uses satoshis (not BTC) for Value and Fee columns — requires division by 100M
+  - Two-step conversion pattern handles both satoshi integers and decimal BTC gracefully
+  - Sign-based type detection: positive = deposit, negative = withdrawal (no explicit type column)
+  - Label field is preserved as comment for both deposits and withdrawals
+  - Withdrawal comment combines user label + review note: "Label text; Review: Verify destination wallet"
+  - Balance column is unique to Sparrow format — good detection heuristic
+  - Same patterns as Trezor/Ledger: zero-amount skip, zero-fee empty string, abs() on withdrawals
+  - All wallet parsers follow same structure: detect(), parse(), registration, helpers
+  - _parse_satoshis() helper encapsulates conversion logic and fallback pattern
+
+- **Test Results:**
+  - 27 new Sparrow tests passing
+  - 617 total tests passing (590 existing + 27 new)
+  - Zero regressions from adding Sparrow parser
+  - import_csv --list verified: shows Sparrow as wallet type
 
 ---

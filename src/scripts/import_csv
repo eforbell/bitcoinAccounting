@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Import transactions from exchange CSV exports.
+"""Import transactions from exchange and wallet CSV exports.
 
 Usage:
-    import_csv --list                          # Show available parsers
-    import_csv --format coinbase               # Show expected format
-    import_csv coinbase_export.csv             # Auto-detect and import
-    import_csv --source coinbase file.csv      # Import with explicit parser
-    import_csv --dry-run file.csv              # Preview without importing
-    import_csv --withdraw-to Ledger file.csv   # Set withdrawal destination
+    import_csv --list                                       # Show available parsers
+    import_csv --format coinbase                            # Show expected format
+    import_csv coinbase_export.csv                          # Auto-detect and import (exchange)
+    import_csv --source coinbase file.csv                   # Import with explicit parser
+    import_csv --dry-run file.csv                           # Preview without importing
+    import_csv --withdraw-to Coldcard file.csv              # Set withdrawal destination
+    import_csv --wallet-name Ledger ledger.csv              # Import wallet (required for wallets)
+    import_csv --wallet-name Ledger --withdraw-to Coldcard ledger.csv  # Wallet with withdrawals
 """
 
 from __future__ import annotations
@@ -32,16 +34,25 @@ from imports import (
 def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Import transactions from exchange CSV exports",
+        description="Import transactions from exchange and wallet CSV exports",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --list                              # Show available parsers
-  %(prog)s --format coinbase                   # Show expected CSV format
-  %(prog)s coinbase_export.csv                 # Auto-detect parser and import
-  %(prog)s --source coinbase file.csv          # Specify parser explicitly
-  %(prog)s --dry-run file.csv                  # Preview without importing
-  %(prog)s --withdraw-to Ledger file.csv       # Set withdrawal destination
+  # General
+  %(prog)s --list                                         # Show available parsers
+  %(prog)s --format coinbase                              # Show expected CSV format
+
+  # Exchange imports
+  %(prog)s coinbase_export.csv                            # Auto-detect parser and import
+  %(prog)s --source coinbase file.csv                     # Specify parser explicitly
+  %(prog)s --withdraw-to Ledger file.csv                  # Set withdrawal destination
+
+  # Wallet imports (--wallet-name required)
+  %(prog)s --wallet-name Ledger ledger.csv                # Import wallet transactions
+  %(prog)s --wallet-name Ledger --withdraw-to Coldcard ledger.csv  # With withdrawals
+
+  # Preview
+  %(prog)s --dry-run file.csv                             # Preview without importing
         """
     )
 
@@ -64,6 +75,11 @@ Examples:
         '--format',
         metavar='NAME',
         help='Show expected CSV format for a parser and exit',
+    )
+    parser.add_argument(
+        '--wallet-name',
+        metavar='NAME',
+        help='Wallet name for deposits (required for wallet imports)',
     )
     parser.add_argument(
         '--withdraw-to',
@@ -154,9 +170,15 @@ def main() -> None:
 
     print(f"Parser: {importer.name}")
 
+    # Validate wallet imports require --wallet-name
+    if importer.source_type == 'wallet' and not args.wallet_name:
+        print(f"Error: Wallet imports require --wallet-name parameter.", file=sys.stderr)
+        print(f"Example: import_csv --wallet-name {importer.name} {file_path}", file=sys.stderr)
+        sys.exit(1)
+
     # Parse
     try:
-        colnames, transactions = importer.parse(str(file_path), args.withdraw_to)
+        colnames, transactions = importer.parse(str(file_path), args.wallet_name, args.withdraw_to)
     except Exception as e:
         print(f"Error: Parse failed: {e}", file=sys.stderr)
         sys.exit(2)

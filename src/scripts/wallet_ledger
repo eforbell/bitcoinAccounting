@@ -101,7 +101,8 @@ def main():
         print(f"{'-' * 120}")
         
         for entry in reversed(ledger_entries):
-            date_str = entry['date'].strftime('%Y-%m-%d %H:%M:%S')
+            date_val = entry['date']
+            date_str = date_val.strftime('%Y-%m-%d %H:%M:%S') if hasattr(date_val, 'strftime') else str(date_val)[:19]
             credit_str = f"+{entry['credit']:.8f}" if entry['credit'] > 0 else ""
             debit_str = f"-{entry['debit']:.8f}" if entry['debit'] > 0 else ""
             fee_str = f"-{entry['fee']:.8f}" if entry['fee'] > 0 else ""
