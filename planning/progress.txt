@@ -1614,3 +1614,42 @@
   - Zero regressions across CSV and xlsx paths
   
 ---
+## 2026-02-06 - FIAT-005a: Strike parser real format and fiat transactions
+
+- What was implemented:
+  - Updated Strike parser from assumed format to real 'All Transactions' export format
+  - Changed detection heuristic: 'amount btc', 'amount usd', 'transaction type' (lowercase)
+  - Updated column mappings: 'Date & Time (UTC)', 'Transaction Type', 'Amount USD', 'Fee USD', etc.
+  - Added date parsing: Strike format 'Mar 15 2024 14:30:22' → standard 'YYYY-MM-DD HH:MM:SS'
+  - Added abs() to fee extraction (fees are negative in CSV)
+  - Implemented USD Deposit handler: positive Amount USD → Deposit(buy_curr='USD')
+  - Implemented Deposit Reversal handler: negative USD + 'Reversal' → Withdrawal(sell_curr='USD')
+  - Implemented On-chain BTC Send handler: Amount BTC + bc1/1/3 destination → uses withdraw_to
+  - Implemented Lightning BTC Send handler: Amount BTC + lnbc destination → uses {withdraw_to}-Lightning
+  - Implemented Lightning USD Send handler: Amount USD + lnbc destination → Withdrawal(sell_curr='USD')
+  - Preserved Destination and Transaction Hash in comments
+  - Replaced strike_sample.csv with real v2 format fixture (18 transactions)
+  - Updated all 29 Strike tests for v2 format
+
+- Files changed:
+  - `src/python/imports/exchanges/strike.py` (updated — date parsing, new handlers, v2 columns)
+  - `tests/fixtures/csv_samples/strike_sample.csv` (replaced with v2 format)
+  - `tests/test_import_strike.py` (updated — 29 tests for v2 format)
+  - `AGENTS.md` (added FIAT-005a learnings)
+  - `planning/features/feature-6-prd.json` (marked FIAT-005a passes: true)
+
+- **Learnings:**
+  - Real Strike exports use different column names than assumed format — always verify format with actual exports
+  - Strike date format ('Mar 15 2024 14:30:22') requires parsing with '%b %d %Y %H:%M:%S' and conversion to standard format
+  - Fees in Strike CSV can be negative — always use abs() when extracting fee values
+  - Lightning and on-chain BTC sends must target different wallets (e.g., Coldcard vs Coldcard-Lightning) because hardware wallets can't receive both
+  - Lightning USD sends (no BTC amount) are pure fiat debits — exchange stays 'Strike', not withdraw_to
+  - Deposit reversals are identified by negative USD amount + 'Reversal' in description field
+  - Detection heuristic column matching must be exact and lowercase-normalized
+
+- **Test Results:**
+  - 675 tests passing (29 Strike tests updated)
+  - Zero regressions
+
+---
+
