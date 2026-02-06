@@ -1557,3 +1557,31 @@
   - Zero regressions in Kraken, River, Gemini test suites (spot-checked)
   
 ---
+
+## 2026-02-06 - FIAT-003
+- What was implemented:
+  - Modified Account Activity filter to allow BTC or fiat currencies through
+  - Added handler for 'CASH DEPOSIT' transaction type in River parser
+  - Cash deposits produce Deposit(buy_curr=recv_curr, buy=recv_amt)
+  - Reference Code preserved in comment field
+  - Bitcoin Activity format unchanged (BTC-only by design)
+  - Altcoin-only rows still filtered out
+  
+- Files changed:
+  - `src/python/imports/exchanges/river.py` (added is_fiat import, modified filter, added Cash Deposit handler)
+  - `tests/test_import_river.py` (updated fixture test, renamed and expanded cash deposit test, added altcoin filter test)
+  - `planning/features/feature-6-prd.json` (marked FIAT-003 passes: true)
+  - `AGENTS.md` (added FIAT-003 learnings)
+  
+- **Learnings:**
+  - Filter logic: Changed from "must have BTC" to "must have BTC or fiat" using four-condition check
+  - The filter naturally prevents altcoin-only transactions (ETH/LTC) while allowing USD/BTC
+  - Bitcoin Activity format stays BTC-only because it lacks Transaction Type column for fiat identification
+  - Reference Code preserved in comment field for traceability (consistent with other River transaction types)
+  - is_fiat() helper simplifies currency classification (imported from imports.base)
+  
+- **Test Results:**
+  - 37 River tests passing (35 existing + 2 new/updated)
+  - Zero regressions in related parsers
+  
+---

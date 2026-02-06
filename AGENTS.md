@@ -1329,3 +1329,24 @@ River ships two CSV exports that overlap in columns:
 - **Pattern**: Consistent with Kraken fiat handling — status filtering happens before
   transaction type handlers, so fiat deposits benefit from existing filtering logic.
 
+## FIAT-003: River Cash Deposits
+
+- **Filter modification**: Changed Account Activity filter from BTC-only to BTC-or-fiat:
+  `if sent_curr != 'BTC' and recv_curr != 'BTC' and not is_fiat(sent_curr) and not is_fiat(recv_curr): return None`
+- **Cash Deposit handler**: Added handler for 'CASH DEPOSIT' transaction type producing
+  Deposit(buy_curr=recv_curr, buy=recv_amt) with Reference Code preserved in comment field.
+- **Bitcoin Activity unchanged**: BTC Activity format remains BTC-only by design (no Transaction Type
+  column, so fiat-only rows can't be identified).
+- **Altcoin filtering preserved**: Altcoin-only rows (ETH, LTC, etc.) still filtered out — only
+  BTC and fiat currencies pass through.
+- **Import is_fiat**: Added `is_fiat` to imports from `imports.base` module.
+- **Docstring update**: Updated transaction type mapping to show "Cash Deposit -> Deposit (USD credited to account)"
+- **Test updates**:
+  - Updated `test_parse_fixture_file()` from 5 to 6 transactions
+  - Renamed `test_cash_deposit_is_skipped()` to `test_cash_deposit_maps_to_deposit()` with full verification
+  - Added `test_altcoin_only_transaction_filtered()` to verify ETH/LTC still filtered
+  - Updated integration test from 5 to 6 imported transactions
+  - All 37 River tests passing (35 existing + 2 new/updated), zero regressions
+- **Pattern**: The filter change allows both BTC and fiat through, maintaining backward compatibility
+  while extending support for fiat transactions. Altcoin filtering remains intact.
+

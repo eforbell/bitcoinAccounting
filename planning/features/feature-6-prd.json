@@ -78,7 +78,7 @@
         "Unit tests for cash deposit parsing"
       ],
       "priority": 4,
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-004",
