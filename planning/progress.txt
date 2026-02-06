@@ -1585,3 +1585,32 @@
   - Zero regressions in related parsers
   
 ---
+
+## 2026-02-06 - FIAT-004
+- What was implemented:
+  - Added 'USD' to xlsx symbol filter alongside 'BTCUSD' and 'BTC'
+  - Added handler for CREDIT + Symbol=USD producing Deposit(buy_curr='USD')
+  - Added handler for DEBIT + Symbol=USD + 'WITHDRAWAL' in spec producing Withdrawal(sell_curr='USD')
+  - DEBIT + Symbol=USD without 'WITHDRAWAL' in spec is skipped (e.g., fee debits)
+  - CSV path unchanged (gemini-exports tool has no fiat rows)
+  - Fee tracking included for both USD deposits and withdrawals
+  
+- Files changed:
+  - `src/python/imports/exchanges/gemini.py` (updated symbol filter, added USD CREDIT and DEBIT handlers, updated docstring)
+  - `tests/test_import_gemini.py` (added 3 new tests for USD credit, withdrawal, and non-withdrawal debit)
+  - `planning/features/feature-6-prd.json` (marked FIAT-004 passes: true)
+  - `AGENTS.md` (added FIAT-004 learnings)
+  
+- **Learnings:**
+  - Symbol filter expansion is straightforward tuple update: ('BTCUSD', 'BTC') → ('BTCUSD', 'BTC', 'USD')
+  - Handlers mirror BTC pattern: CREDIT → Deposit, DEBIT + 'WITHDRAWAL' in spec → Withdrawal
+  - Specification field is key for withdrawal identification (same pattern for BTC and USD)
+  - Non-withdrawal debits (fees, etc.) are filtered by absence of 'WITHDRAWAL' in spec
+  - CSV and xlsx paths diverge: CSV remains BTC-only, xlsx supports BTC and USD
+  - abs() applied consistently to handle negative amounts in xlsx exports
+  
+- **Test Results:**
+  - 61 Gemini tests passing (58 existing + 3 new)
+  - Zero regressions across CSV and xlsx paths
+  
+---

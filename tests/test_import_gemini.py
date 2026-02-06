@@ -692,6 +692,63 @@ class TestGeminiXlsxParsing:
         finally:
             os.unlink(path)
 
+    def test_usd_credit_maps_to_deposit(self):
+        """CREDIT + USD → Deposit with USD currency."""
+        dt = datetime(2024, 6, 15, 10, 30, 0)
+        path = _make_xlsx([
+            _xlsx_row(date=dt, typ="Credit", symbol="USD",
+                      usd_amt=1000.0, fee_usd=0.0),
+        ])
+        try:
+            _, txs = GeminiImporter().parse(path)
+            assert len(txs) == 1
+            tx = txs[0]
+            assert tx['trans_type'] == 'Deposit'
+            assert tx['exchange'] == 'Gemini'
+            assert tx['buy'] == pytest.approx(1000.0)
+            assert tx['buy_curr'] == 'USD'
+            assert tx['sell'] == 0.0
+            assert tx['fee'] == 0.0
+            assert tx['fee_curr'] == ''
+        finally:
+            os.unlink(path)
+
+    def test_usd_debit_withdrawal_maps_to_withdrawal(self):
+        """DEBIT + USD + Withdrawal spec → Withdrawal with USD currency."""
+        dt = datetime(2024, 7, 20, 14, 0, 0)
+        path = _make_xlsx([
+            _xlsx_row(date=dt, typ="Debit", symbol="USD",
+                      spec="Withdrawal (USD)",
+                      usd_amt=-500.0, fee_usd=-5.0),
+        ])
+        try:
+            _, txs = GeminiImporter().parse(path)
+            assert len(txs) == 1
+            tx = txs[0]
+            assert tx['trans_type'] == 'Withdrawal'
+            assert tx['exchange'] == 'Gemini'
+            assert tx['sell'] == pytest.approx(500.0)
+            assert tx['sell_curr'] == 'USD'
+            assert tx['buy'] == 0.0
+            assert tx['fee'] == pytest.approx(5.0)
+            assert tx['fee_curr'] == 'USD'
+        finally:
+            os.unlink(path)
+
+    def test_usd_debit_non_withdrawal_skipped(self):
+        """DEBIT + USD but spec doesn't contain 'Withdrawal' → skipped."""
+        dt = datetime(2024, 8, 10, 9, 0, 0)
+        path = _make_xlsx([
+            _xlsx_row(date=dt, typ="Debit", symbol="USD",
+                      spec="Fee (USD)",
+                      usd_amt=-10.0, fee_usd=0.0),
+        ])
+        try:
+            _, txs = GeminiImporter().parse(path)
+            assert len(txs) == 0
+        finally:
+            os.unlink(path)
+
     def test_non_btc_rows_filtered(self):
         """Rows with Symbol != BTCUSD/BTC are silently skipped."""
         dt = datetime(2024, 6, 1, 10, 0, 0)

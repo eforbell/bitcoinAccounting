@@ -92,7 +92,7 @@
         "Unit tests for USD credit, USD withdrawal debit, non-withdrawal debit skipped"
       ],
       "priority": 5,
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-005a",

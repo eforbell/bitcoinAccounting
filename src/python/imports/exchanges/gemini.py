@@ -13,13 +13,16 @@ Two export formats are supported:
                      USD Amount USD, Fee (USD) USD,
                      BTC Amount BTC, Fee (BTC) BTC,
                      Withdrawal Destination
-   Filter: Symbol in ('BTCUSD', 'BTC')
+   Filter: Symbol in ('BTCUSD', 'BTC', 'USD')
    Notes:
      - Buy USD amounts and fees are stored as negative; abs() is applied.
-     - Type 'Credit' + Symbol 'BTC'  → Deposit
-     - Type 'Debit'  + Symbol 'BTC'  → Withdrawal
+     - Type 'Credit' + Symbol 'BTC'  → Deposit (BTC)
+     - Type 'Credit' + Symbol 'USD'  → Deposit (USD)
+     - Type 'Debit'  + Symbol 'BTC' + spec='Withdrawal' → Withdrawal (BTC)
+     - Type 'Debit'  + Symbol 'USD' + spec='Withdrawal' → Withdrawal (USD)
+     - Type 'Debit'  + Symbol 'USD' + spec != 'Withdrawal' → skipped
 
-Only BTC transactions are emitted by either path.
+CSV path emits only BTC transactions; xlsx path emits BTC and USD.
 """
 
 from __future__ import annotations
@@ -316,7 +319,7 @@ class GeminiImporter(BaseImporter):
                 return ws.cell(row=rn, column=i).value if i else None
 
             symbol = str(_cell('symbol') or '').upper().strip()
-            if symbol not in ('BTCUSD', 'BTC'):
+            if symbol not in ('BTCUSD', 'BTC', 'USD'):
                 continue
 
             data: dict[str, Any] = {
@@ -422,6 +425,38 @@ class GeminiImporter(BaseImporter):
                 'sell_curr': '',
                 'fee': 0.0,
                 'fee_curr': '',
+                'group': '',
+                'comment': '',
+            }
+
+        # --- USD Deposit -----------------------------------------------------
+        if typ == 'CREDIT' and symbol == 'USD':
+            return {
+                'trans_type': 'Deposit',
+                'created_date': date_str,
+                'exchange': 'Gemini',
+                'buy': abs(usd_amt),
+                'buy_curr': 'USD',
+                'sell': 0.0,
+                'sell_curr': '',
+                'fee': abs(fee_usd),
+                'fee_curr': 'USD' if fee_usd != 0 else '',
+                'group': '',
+                'comment': '',
+            }
+
+        # --- USD Withdrawal --------------------------------------------------
+        if typ == 'DEBIT' and symbol == 'USD' and 'WITHDRAWAL' in spec:
+            return {
+                'trans_type': 'Withdrawal',
+                'created_date': date_str,
+                'exchange': 'Gemini',
+                'buy': 0.0,
+                'buy_curr': '',
+                'sell': abs(usd_amt),
+                'sell_curr': 'USD',
+                'fee': abs(fee_usd),
+                'fee_curr': 'USD' if fee_usd != 0 else '',
                 'group': '',
                 'comment': '',
             }

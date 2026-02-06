@@ -1350,3 +1350,24 @@ River ships two CSV exports that overlap in columns:
 - **Pattern**: The filter change allows both BTC and fiat through, maintaining backward compatibility
   while extending support for fiat transactions. Altcoin filtering remains intact.
 
+## FIAT-004: Gemini xlsx USD credit/debit
+
+- **Symbol filter expansion**: Added 'USD' to xlsx symbol filter alongside 'BTCUSD' and 'BTC'.
+  Filter changed from `if symbol not in ('BTCUSD', 'BTC')` to `if symbol not in ('BTCUSD', 'BTC', 'USD')`.
+- **USD Credit handler**: CREDIT + Symbol=USD produces Deposit(buy_curr='USD', buy=abs(usd_amt))
+  with fee tracking (fee_curr='USD' if fee_usd != 0 else '').
+- **USD Debit Withdrawal handler**: DEBIT + Symbol=USD + 'WITHDRAWAL' in spec produces
+  Withdrawal(sell_curr='USD', sell=abs(usd_amt)) with fee tracking.
+- **Non-withdrawal USD debits skipped**: DEBIT + Symbol=USD without 'WITHDRAWAL' in spec
+  returns None (e.g., fee debits are filtered out).
+- **CSV path unchanged**: gemini-exports tool CSV format remains BTC-only (no fiat rows in export).
+- **Docstring update**: Updated xlsx notes to document USD CREDIT/DEBIT behavior and clarify
+  that CSV emits only BTC while xlsx emits BTC and USD.
+- **Test updates**:
+  - Added `test_usd_credit_maps_to_deposit()` - verifies USD deposit with zero fee
+  - Added `test_usd_debit_withdrawal_maps_to_withdrawal()` - verifies USD withdrawal with fee
+  - Added `test_usd_debit_non_withdrawal_skipped()` - verifies non-withdrawal USD debits filtered
+  - All 61 Gemini tests passing (58 existing + 3 new), zero regressions
+- **Pattern**: Consistent with BTC handling — CREDIT/DEBIT + symbol + spec-based filtering.
+  Withdrawal identification via 'WITHDRAWAL' in spec field works for both BTC and USD.
+
