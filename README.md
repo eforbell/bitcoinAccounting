@@ -312,7 +312,12 @@ review comment so you can update them later.
 - **Cost basis**: `forecast_gains` - Preview capital gains with FIFO/per-wallet
 - **Realized gains**: `gains_tracker` - Review past sales and gains
 - **1099-B export**: `export_1099b` - Generate tax report
-- **Transaction export**: `export_tx` - CSV export for external tools
+- **Transaction export**: `export_tx` - CSV export with filtering
+  - Filter by wallet: `export_tx output.csv --wallet Strike`
+  - Filter by date: `export_tx output.csv --start-date 2024-01-01 --end-date 2024-12-31`
+  - Preview before export: `export_tx --wallet Coldcard --dry-run`
+  - Combine filters: `export_tx output.csv --wallet Strike --coin BTC --start-date 2024-01-01`
+  - Round-trip compatible with `import_csv --source native`
 
 ### Data Validation
 

@@ -106,11 +106,14 @@ class CryptoAccounts(object):
         except requests.exceptions.RequestException as e:
             return f"Error fetching price: {e}"
             
-    def get_transactions(self, coin = None):
-        """Get all transactions, optionally filtered by coin.
+    def get_transactions(self, coin=None, wallet=None, start_date=None, end_date=None):
+        """Get all transactions, optionally filtered by coin, wallet, and date range.
 
         Args:
             coin: Optional currency code to filter by (e.g., 'BTC', 'ETH')
+            wallet: Optional wallet/exchange name to filter by (e.g., 'Strike', 'Coldcard')
+            start_date: Optional start date (YYYY-MM-DD format)
+            end_date: Optional end date (YYYY-MM-DD format)
 
         Returns:
             tuple: (column_names, transactions)
@@ -118,12 +121,35 @@ class CryptoAccounts(object):
                 - transactions: List of transaction dictionaries
         """
         baseQuery = '''select l.trans_type "Type", l.buy "Buy", l.buy_curr "Buy Cur.", l.sell "Sell", l.sell_curr "Sell Cur.", l.fee "Fee", l.fee_curr "Fee Cur.", l.exchange "Exchange", l."group" "Group", l."comment" "Comment", l.createddate "Date" from ledger l'''
+
+        # Build WHERE clause with filters
+        where_clauses = []
+        params = {}
+
         if coin is not None:
-            query = baseQuery + " where l.buy_curr = :coin or l.sell_curr = :coin order by createddate"
-            rows = self.backend.execute(query, {"coin": coin})
+            where_clauses.append("(l.buy_curr = :coin OR l.sell_curr = :coin OR l.fee_curr = :coin)")
+            params['coin'] = coin
+
+        if wallet is not None:
+            where_clauses.append("l.exchange = :wallet")
+            params['wallet'] = wallet
+
+        if start_date is not None:
+            where_clauses.append("l.createddate >= :start_date")
+            params['start_date'] = start_date
+
+        if end_date is not None:
+            # Include the entire end date by comparing to the start of the next day
+            where_clauses.append("l.createddate < date(:end_date, '+1 day')")
+            params['end_date'] = end_date
+
+        # Build final query
+        if where_clauses:
+            query = baseQuery + " WHERE " + " AND ".join(where_clauses) + " ORDER BY createddate ASC, l.id ASC"
         else:
-            query = baseQuery + " order by createddate"
-            rows = self.backend.execute(query)
+            query = baseQuery + " ORDER BY createddate ASC, l.id ASC"
+
+        rows = self.backend.execute(query, params) if params else self.backend.execute(query)
 
         transactions = [dict(row) for row in rows]
         colnames = list(transactions[0].keys()) if transactions else []
@@ -152,8 +178,17 @@ class CryptoAccounts(object):
             total_cost = "{:.2f}".format(trade['total_cost']) if trade['total_cost'] is not None else "N/A"
             exchange = trade.get('exchange', '(Unknown)')
             print(f"{date}\t{quantity}\t{unit_cost}\t{total_cost}\t{exchange}", sep="\t")
-    def export_transactions_csv(self, out_file, coin = None):
-        colnames, transactions = self.get_transactions(coin)
+    def export_transactions_csv(self, out_file, coin=None, wallet=None, start_date=None, end_date=None):
+        """Export transactions to CSV file with optional filtering.
+
+        Args:
+            out_file: Output CSV file path
+            coin: Optional currency code to filter by (e.g., 'BTC', 'ETH')
+            wallet: Optional wallet/exchange name to filter by (e.g., 'Strike', 'Coldcard')
+            start_date: Optional start date (YYYY-MM-DD format)
+            end_date: Optional end date (YYYY-MM-DD format)
+        """
+        colnames, transactions = self.get_transactions(coin=coin, wallet=wallet, start_date=start_date, end_date=end_date)
         with open(out_file, 'w', newline='') as csv_out:
             trans_writer = csv.DictWriter(csv_out, fieldnames=colnames)
             trans_writer.writeheader()

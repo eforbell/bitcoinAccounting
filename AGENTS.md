@@ -1415,3 +1415,61 @@ River ships two CSV exports that overlap in columns:
 
 **Test Coverage**: 30 tests (4 detection, 6 parse_number, 14 trade parsing + BTC filter, 8 deposits/withdrawals, 3 registration, 2 integration)
 
+
+## EXPORT-001 to EXPORT-005: Export Improvements (2026-02-06)
+
+**Context**: The `export_tx` script used basic positional arguments and lacked filtering capabilities. Needed to modernize it to match `import_csv` usability with wallet filtering, date ranges, and dry-run preview.
+
+**Implementation Strategy**:
+1. Extend `get_transactions()` method with optional filter parameters (coin, wallet, start_date, end_date)
+2. Build dynamic SQL WHERE clause with parameterized queries for security
+3. Replace sys.argv parsing with argparse for better CLI UX
+4. Add dry-run preview showing filters, sample transactions, and summary statistics
+5. Comprehensive test coverage for all filter combinations
+
+**Key Patterns**:
+- Dynamic SQL building: `where_clauses.append()` + `" AND ".join(where_clauses)` prevents empty WHERE clause
+- Parameterized queries: Always use `:param` syntax with params dict to prevent SQL injection
+- Date inclusivity: `l.createddate < date(:end_date, '+1 day')` to include entire end date (not just midnight)
+- Dry-run format: Show filters → sample data → summary stats → instruction to run without --dry-run
+- Test structure: Separate tests for each filter type + combined filters + edge cases (empty results)
+
+**Date Filter Implementation Detail**:
+```python
+# WRONG: Excludes transactions on end_date after midnight
+where_clauses.append("l.createddate <= :end_date")
+
+# CORRECT: Includes entire end_date by comparing to start of next day
+where_clauses.append("l.createddate < date(:end_date, '+1 day')")
+```
+
+**Learnings**:
+1. **Date comparison gotcha**: String date comparisons in SQLite (`<=` with 'YYYY-MM-DD') exclude same-day transactions with timestamps. Solution: use SQLite's `date()` function with '+1 day' offset.
+2. **Backward compatibility**: All new parameters must have `None` defaults to preserve existing behavior for scripts/code calling old signature.
+3. **Argparse epilog**: Use `formatter_class=argparse.RawDescriptionHelpFormatter` to preserve example formatting in help text.
+4. **Filter display**: Always show what filters are active in dry-run output (including "All wallets"/"All currencies" when None) for clarity.
+5. **CSV export testing**: Use `tempfile.NamedTemporaryFile` with `delete=False` + try/finally cleanup for file-based tests.
+6. **ORDER BY consistency**: Add both `createddate ASC` and `id ASC` for deterministic ordering (multiple transactions can have same timestamp).
+
+**Test Coverage**: 7 new tests added to TestExportTxScript:
+- Basic transaction export (pre-existing)
+- Wallet filter only
+- Date range filter only
+- Combined filters (wallet + coin + dates)
+- Empty result sets
+- CSV file creation with filters
+- Fee currency inclusion in coin filter
+
+**CLI Examples**:
+```bash
+# Preview before exporting
+export_tx --wallet Strike --dry-run
+
+# Export with filters
+export_tx output.csv --wallet Strike --coin BTC --start-date 2024-01-01
+
+# Round-trip test: export → reimport
+export_tx wallet_export.csv --wallet Strike
+import_csv --source native wallet_export.csv --dry-run
+```
+
