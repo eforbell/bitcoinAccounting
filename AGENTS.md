@@ -1439,13 +1439,24 @@ River ships two CSV exports that overlap in columns:
 # WRONG: Excludes transactions on end_date after midnight
 where_clauses.append("l.createddate <= :end_date")
 
-# CORRECT: Includes entire end_date by comparing to start of next day
+# WRONG: SQLite-specific syntax (fails on PostgreSQL)
 where_clauses.append("l.createddate < date(:end_date, '+1 day')")
+
+# CORRECT: Database-agnostic - do date math in Python, not SQL
+from datetime import datetime, timedelta
+if isinstance(end_date, str):
+    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+else:
+    end_date_obj = end_date
+next_day = end_date_obj + timedelta(days=1)
+where_clauses.append("l.createddate < :end_date_exclusive")
+params['end_date_exclusive'] = next_day.strftime('%Y-%m-%d')
 ```
 
 **Learnings**:
-1. **Date comparison gotcha**: String date comparisons in SQLite (`<=` with 'YYYY-MM-DD') exclude same-day transactions with timestamps. Solution: use SQLite's `date()` function with '+1 day' offset.
-2. **Backward compatibility**: All new parameters must have `None` defaults to preserve existing behavior for scripts/code calling old signature.
+1. **Date comparison gotcha**: String date comparisons (`<=` with 'YYYY-MM-DD') exclude same-day transactions with timestamps. Solution: add 1 day in Python and use `<` comparison.
+2. **Cross-database compatibility**: SQLite's `date(:param, '+1 day')` syntax fails in PostgreSQL with "function date(unknown, unknown) does not exist". Always do date arithmetic in Python, not SQL, to support both backends.
+3. **Backward compatibility**: All new parameters must have `None` defaults to preserve existing behavior for scripts/code calling old signature.
 3. **Argparse epilog**: Use `formatter_class=argparse.RawDescriptionHelpFormatter` to preserve example formatting in help text.
 4. **Filter display**: Always show what filters are active in dry-run output (including "All wallets"/"All currencies" when None) for clarity.
 5. **CSV export testing**: Use `tempfile.NamedTemporaryFile` with `delete=False` + try/finally cleanup for file-based tests.

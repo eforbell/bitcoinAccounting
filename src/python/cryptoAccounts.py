@@ -112,14 +112,16 @@ class CryptoAccounts(object):
         Args:
             coin: Optional currency code to filter by (e.g., 'BTC', 'ETH')
             wallet: Optional wallet/exchange name to filter by (e.g., 'Strike', 'Coldcard')
-            start_date: Optional start date (YYYY-MM-DD format)
-            end_date: Optional end date (YYYY-MM-DD format)
+            start_date: Optional start date (YYYY-MM-DD format or date object)
+            end_date: Optional end date (YYYY-MM-DD format or date object)
 
         Returns:
             tuple: (column_names, transactions)
                 - column_names: List of column names
                 - transactions: List of transaction dictionaries
         """
+        from datetime import datetime, timedelta
+
         baseQuery = '''select l.trans_type "Type", l.buy "Buy", l.buy_curr "Buy Cur.", l.sell "Sell", l.sell_curr "Sell Cur.", l.fee "Fee", l.fee_curr "Fee Cur.", l.exchange "Exchange", l."group" "Group", l."comment" "Comment", l.createddate "Date" from ledger l'''
 
         # Build WHERE clause with filters
@@ -139,9 +141,14 @@ class CryptoAccounts(object):
             params['start_date'] = start_date
 
         if end_date is not None:
-            # Include the entire end date by comparing to the start of the next day
-            where_clauses.append("l.createddate < date(:end_date, '+1 day')")
-            params['end_date'] = end_date
+            # Include the entire end date by adding 1 day in Python (database-agnostic)
+            if isinstance(end_date, str):
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            else:
+                end_date_obj = end_date
+            next_day = end_date_obj + timedelta(days=1)
+            where_clauses.append("l.createddate < :end_date_exclusive")
+            params['end_date_exclusive'] = next_day.strftime('%Y-%m-%d')
 
         # Build final query
         if where_clauses:
