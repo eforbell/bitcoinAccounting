@@ -160,7 +160,7 @@
         "Update AGENTS.md with learnings"
       ],
       "priority": 8,
-      "passes": false
+      "passes": true
     }
   ],
   "riskAssessment": {

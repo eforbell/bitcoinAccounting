@@ -1702,3 +1702,47 @@
   - Zero regressions from adding Coinbase Pro parser
 
 ---
+
+## 2026-02-06 - FIAT-006
+
+- What was implemented:
+  - Updated README.md:
+    - Added "Coinbase Pro" to supported exchange list
+    - Added fiat tracking description: "USD deposits/withdrawals and other fiat currencies are captured alongside BTC transactions for complete accounting"
+    - Added bullet listing which exchanges support fiat imports (Kraken, Strike, River, Swan, Gemini xlsx, Coinbase Pro)
+    - Noted BTC-only exchanges (Cash App gain/loss export, standard Coinbase)
+  - Updated docs/CSV_FORMAT_GUIDE.md:
+    - Added "Fiat support" column to Quick Reference table (all 9 exchanges documented)
+    - Added complete Coinbase Pro section with:
+      - Export instructions (Accounts → Statements)
+      - Row types explanation (match, fee, deposit, withdrawal)
+      - Multi-row trade format details (2 match rows + optional fee row)
+      - Transaction type mappings (BTC trades, fiat deposits/withdrawals, altcoin filtering)
+      - Fiat support notes (USD, USDC, USDT deposits/withdrawals)
+    - Updated Strike section:
+      - Real export format: 12 columns (Date & Time (UTC), Transaction Type, Amount USD, Fee USD, Amount BTC, Fee BTC, Reference, BTC Price, Cost Basis (USD), Destination, Transaction Hash, Note)
+      - New transaction types: Deposit (USD), Deposit Reversal (negative USD + "Reversal"), Send (Lightning BTC vs on-chain), Send (Lightning USD)
+      - Fiat tracking notes: USD deposits and USD sends captured automatically
+    - Added fiat support notes to Kraken section (USD, EUR deposits/withdrawals)
+    - Added fiat support notes to River section (Cash deposits in Account Activity format)
+    - Updated Swan section: USD Deposit now captured (was previously skipped)
+    - Updated Gemini section: USD Credit/Debit captured in xlsx format
+
+- Files changed:
+  - `README.md` (updated — fiat tracking description, Coinbase Pro added, BTC-only vs fiat-enabled exchanges documented)
+  - `docs/CSV_FORMAT_GUIDE.md` (updated — Coinbase Pro section, Strike real format, fiat support notes added to 6 exchanges)
+  - `planning/features/feature-6-prd.json` (marked FIAT-006 passes: true)
+
+- **Learnings:**
+  - Documentation should explicitly state default-on behavior: "Fiat tracking is automatically enabled"
+  - Quick reference tables benefit from visual columns like "Fiat support: Yes/No" for at-a-glance comparison
+  - Export instructions are critical: users need to know WHERE in the app to find the correct export
+  - Multi-row formats (Kraken refid, Coinbase Pro trade_id) need extra explanation of row grouping
+  - Strike's real format is dramatically different from assumed format — documentation prevents user confusion
+  - Stablecoins (USDC, USDT) are fiat-equivalent and should be called out in examples
+
+- **Test Results:**
+  - No code changes — documentation-only update
+  - All 503 import tests still passing
+
+---
