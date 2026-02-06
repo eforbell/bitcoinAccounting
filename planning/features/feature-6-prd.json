@@ -29,7 +29,7 @@
         "Unit tests: recognizes fiat, rejects BTC, handles stablecoins, case-insensitive"
       ],
       "priority": 1,
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-001",

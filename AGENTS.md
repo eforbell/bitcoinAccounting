@@ -1273,3 +1273,23 @@ River ships two CSV exports that overlap in columns:
   - Coldcard: Address Explorer → export to SD card
 - **Detection discriminators make good doc notes**: Users benefit from knowing why
   TXID vs TX ID matters, or why Sparrow's Balance column is distinctive.
+
+## FIAT-000: Fiat Currency Constants and Helper
+
+- **frozenset for constants**: Use `frozenset` for immutable currency sets to prevent
+  accidental modification and enable O(1) membership checks.
+- **Stablecoins as fiat**: USDC, USDT, GUSD, BUSD, DAI, PYUSD are treated as
+  fiat-equivalent for deposit/withdrawal tracking. Goal is to capture all cash
+  flows (traditional + crypto-fiat) in the ledger.
+- **Case-insensitive currency matching**: Currency codes should always be normalized
+  with `.upper()` before checking membership. Users may provide 'usd', 'USD', or 'Usd'.
+- **Centralized currency classification**: Single source of truth (FIAT_CURRENCIES)
+  in base.py enables consistent fiat detection across all exchange parsers.
+- **Helper function pattern**: `is_fiat(currency: str) -> bool` provides clean API
+  for parsers: `if is_fiat(curr): process_fiat_transaction()`.
+- **Export from package root**: Export both `FIAT_CURRENCIES` and `is_fiat` from
+  `imports/__init__.py` for convenient access: `from imports import is_fiat`.
+- **8 comprehensive tests**: Covers traditional fiat (USD, EUR, GBP, CAD, AUD, JPY, CHF),
+  stablecoins (USDC, USDT, GUSD, BUSD, DAI, PYUSD), BTC rejection, altcoin rejection,
+  case-insensitivity, and frozenset immutability.
+  - All tests pass, 31 total import base tests (23 existing + 8 new)

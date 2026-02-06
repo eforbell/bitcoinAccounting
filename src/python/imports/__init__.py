@@ -20,7 +20,7 @@ Usage:
         print(f"{parser.name}: {parser.description}")
 """
 
-from .base import BaseImporter
+from .base import BaseImporter, FIAT_CURRENCIES, is_fiat
 from .registry import (
     register,
     get_parser,
@@ -39,6 +39,8 @@ from .validation import (
 
 __all__ = [
     "BaseImporter",
+    "FIAT_CURRENCIES",
+    "is_fiat",
     "register",
     "get_parser",
     "get_all_parsers",

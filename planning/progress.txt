@@ -1464,3 +1464,34 @@
   - import_csv --list verified: shows Sparrow as wallet type
 
 ---
+
+## 2026-02-06 - FIAT-000: Add FIAT_CURRENCIES constant and is_fiat() helper
+
+- What was implemented:
+  - Added FIAT_CURRENCIES frozenset to src/python/imports/base.py
+  - Included traditional fiat currencies: USD, EUR, GBP, CAD, AUD, JPY, CHF
+  - Included stablecoins (fiat-equivalent): USDC, USDT, GUSD, BUSD, DAI, PYUSD
+  - Added is_fiat(currency: str) -> bool helper function with case-insensitive matching
+  - Exported both FIAT_CURRENCIES and is_fiat from imports/__init__.py
+  - Added 8 comprehensive unit tests in tests/test_import_base.py
+
+- Files changed:
+  - `src/python/imports/base.py` (added FIAT_CURRENCIES frozenset and is_fiat() function)
+  - `src/python/imports/__init__.py` (added exports to __all__)
+  - `tests/test_import_base.py` (added TestFiatCurrencies class with 8 tests)
+  - `AGENTS.md` (added FIAT-000 learnings)
+  - `planning/features/feature-6-prd.json` (marked FIAT-000 passes: true)
+
+- **Learnings:**
+  - frozenset provides O(1) membership checks and immutability for currency constants
+  - Case-insensitive matching via .upper() normalization is essential for user input
+  - Stablecoins (USDC, USDT, etc.) treated as fiat-equivalent for cash flow tracking
+  - Centralized currency classification in base.py ensures consistent behavior across all parsers
+  - Helper function pattern (is_fiat()) provides clean API for parser implementations
+
+- **Test Results:**
+  - 8 new tests passing (fiat recognition, stablecoin support, BTC/altcoin rejection, case-insensitivity)
+  - 31 total import base tests passing (23 existing + 8 new)
+  - Zero regressions
+
+---
