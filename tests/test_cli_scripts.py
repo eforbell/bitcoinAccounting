@@ -561,6 +561,38 @@ class TestExportTxScript:
 
         crypto.close()
 
+    def test_spend_transaction_import_export(self) -> None:
+        """Verify Spend transactions can be imported and exported."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Import a Spend transaction (like UTXO consolidation or payment)
+        spend_tx = {
+            'trans_type': 'Spend',
+            'created_date': '2025-01-31 21:16:36',
+            'sell': 0.00000914,
+            'sell_curr': 'BTC',
+            'fee': 0.00000914,
+            'fee_curr': 'BTC',
+            'exchange': 'Vault',
+            'group': '',
+            'comment': 'UTXO consolidation',
+        }
+
+        result = crypto.import_transactions([spend_tx])
+        assert result['imported'] == 1
+        assert result['skipped'] == 0
+
+        # Export and verify
+        headers, transactions = crypto.get_transactions('BTC')
+        assert len(transactions) == 1
+        assert transactions[0]['Type'] == 'Spend'
+        assert float(transactions[0]['Sell']) == 0.00000914
+        assert float(transactions[0]['Fee']) == 0.00000914
+        assert transactions[0]['Exchange'] == 'Vault'
+
+        crypto.close()
+
     def test_export_with_wallet_filter(self) -> None:
         """Verify export can filter by wallet/exchange."""
         backend = SqliteBackend(':memory:', auto_create_tables=True)

@@ -220,7 +220,7 @@ class CryptoAccounts(object):
 
         Args:
             transactions: List of transaction dicts. Each must have:
-                - trans_type: One of Trade, Deposit, Withdrawal, Interest Income,
+                - trans_type: One of Trade, Deposit, Withdrawal, Spend, Interest Income,
                               Mining, Interest, or Staking (last two normalize to Interest Income)
                 - created_date: Transaction date string
                 - exchange: Exchange/wallet name
@@ -230,6 +230,10 @@ class CryptoAccounts(object):
             dict with keys:
                 - imported: Number of transactions successfully imported
                 - skipped: Number of transactions with unknown trans_type
+
+        Notes:
+            - Spend: Like Withdrawal but for payments/UTXO consolidation (not custody transfers)
+            - Withdrawal: Transfer to another wallet you control
         """
         imported = 0
         skipped = 0
@@ -294,6 +298,20 @@ class CryptoAccounts(object):
 
             elif trans_type == "Withdrawal":
                 query = self.getWithdrawQuery()
+                self.backend.execute(query, {
+                    "createddate": transaction.get('created_date', ''),
+                    "sell": transaction.get('sell', 0.0),
+                    "sell_curr": transaction.get('sell_curr', ''),
+                    "fee": transaction.get('fee', 0.0),
+                    "fee_curr": transaction.get('fee_curr', ''),
+                    "exchange": transaction.get('exchange', ''),
+                    "group": transaction.get('group', ''),
+                    "comment": transaction.get('comment', ''),
+                })
+                imported += 1
+
+            elif trans_type == "Spend":
+                query = self.getSpendQuery()
                 self.backend.execute(query, {
                     "createddate": transaction.get('created_date', ''),
                     "sell": transaction.get('sell', 0.0),
@@ -416,6 +434,9 @@ class CryptoAccounts(object):
 
     def getWithdrawQuery(self):
         return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\", comment) values (:createddate, 'Withdrawal', :sell, :sell_curr, :fee, :fee_curr, :exchange, :group, :comment)"
+
+    def getSpendQuery(self):
+        return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\", comment) values (:createddate, 'Spend', :sell, :sell_curr, :fee, :fee_curr, :exchange, :group, :comment)"
 
     def getInterestIncomeQuery(self):
         return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", comment) values (:createddate, 'Interest Income', :buy, :buy_curr, :exchange, :group, :comment)"
