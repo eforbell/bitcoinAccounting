@@ -1,0 +1,121 @@
+{
+  "branchName": "feature/export-improvements",
+  "projectName": "Export Improvements",
+  "description": "Modernize the export_tx script to match import_csv capabilities, adding wallet filtering, date ranges, dry-run preview, and better CLI usability",
+  "principles": [
+    "Minimal scope - Focus on wallet filtering as primary improvement",
+    "Pattern consistency - Follow import_csv CLI patterns",
+    "Backward compatible - All new parameters optional",
+    "Security first - Use parameterized queries to prevent SQL injection",
+    "User-friendly - Clear help text and dry-run preview"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest + pytest-cov",
+    "cli": "argparse (stdlib)",
+    "sql": "Parameterized queries via backend.execute()"
+  },
+  "userStories": [
+    {
+      "id": "EXPORT-001",
+      "title": "Add wallet filtering to CryptoAccounts.export_transactions_csv()",
+      "acceptanceCriteria": [
+        "Modify export_transactions_csv() signature to accept wallet parameter",
+        "Add start_date and end_date parameters for date range filtering",
+        "Update SQL query to use WHERE exchange = :wallet when wallet provided",
+        "Add date range filtering with WHERE createddate >= :start_date AND createddate <= :end_date",
+        "Use parameterized queries for all filters",
+        "Maintain backward compatibility (all new parameters optional with None defaults)",
+        "Return same tuple format: (column_names, transactions)",
+        "Preserve existing coin filtering behavior"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "EXPORT-002",
+      "title": "Modernize export_tx CLI with argparse",
+      "acceptanceCriteria": [
+        "Replace sys.argv parsing with argparse",
+        "Add --wallet option for wallet/exchange filtering",
+        "Add --coin option for cryptocurrency filtering",
+        "Add --start-date option (YYYY-MM-DD format)",
+        "Add --end-date option (YYYY-MM-DD format)",
+        "Add --dry-run option for preview without exporting",
+        "Add -h/--help with formatted examples",
+        "OUTPUT_FILE becomes optional positional argument (default: ledger_export.csv)",
+        "Validate date format before passing to export method",
+        "Exit code 0 for success, 1 for user errors, 2 for export errors",
+        "Show helpful error messages for invalid dates or parameters"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "EXPORT-003",
+      "title": "Implement dry-run preview",
+      "acceptanceCriteria": [
+        "When --dry-run specified, query transactions but don't write file",
+        "Display applied filters (wallet, coin, date range)",
+        "Show first 5 transactions in formatted table",
+        "Display summary statistics: total count, date range, exchange breakdown",
+        "Exit with code 0 after preview (don't proceed to export)",
+        "Table format: Date | Type | Buy | Sell | Exchange",
+        "Use consistent column widths for readability"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "EXPORT-004",
+      "title": "Add comprehensive tests",
+      "acceptanceCriteria": [
+        "Unit tests for export_transactions_csv() with wallet filtering",
+        "Unit tests for date range filtering",
+        "Unit tests for combined filters (wallet + coin + dates)",
+        "Unit tests for empty result sets",
+        "Integration tests for export_tx CLI with --wallet option",
+        "Integration tests for --start-date and --end-date options",
+        "Integration tests for --dry-run preview",
+        "Test error cases: invalid dates, unknown wallet",
+        "Verify CSV output format matches native import format",
+        "All tests passing with zero regressions"
+      ],
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "EXPORT-005",
+      "title": "Update documentation",
+      "acceptanceCriteria": [
+        "Update README.md workflow section with new export_tx options",
+        "Add examples showing wallet filtering",
+        "Add examples showing date range filtering",
+        "Add example showing dry-run usage",
+        "Document round-trip compatibility with import_csv",
+        "Update AGENTS.md with implementation learnings"
+      ],
+      "priority": 5,
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [],
+    "medium": [
+      "Date parsing edge cases (timezone handling, invalid formats)",
+      "SQL query performance with date range filters on large ledgers"
+    ],
+    "low": [
+      "argparse migration (standard library, well-documented)",
+      "Backward compatibility (all new parameters optional)"
+    ]
+  },
+  "futureEnhancements": [
+    "Transaction type filtering (--type Trade,Deposit)",
+    "Custom column selection (--columns date,type,amount)",
+    "Alternative export formats (JSON, Excel, PDF)",
+    "Export registry pattern (similar to import registry)",
+    "Aggregated/summary exports (balances, totals)",
+    "Export to stdout for piping to other commands"
+  ]
+}
