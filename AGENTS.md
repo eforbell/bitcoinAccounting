@@ -2,6 +2,22 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Strike Parser: Real Export Format vs Assumed Format (FIAT-005a)
+
+**Issue**: Original Strike parser was built against an assumed CSV format that didn't match real exports from Strike's 'All Transactions' export.
+
+**Key Differences**:
+- Assumed: `Date, Type, Description, BTC Amount, USD Amount, Fee (USD), Fee (BTC)`
+- Real: `Date & Time (UTC), Transaction Type, Amount USD, Fee USD, Amount BTC, Fee BTC, ...` (plus 7 more columns)
+
+**Learnings**:
+1. **Date parsing**: Real Strike dates use format `'Mar 15 2024 14:30:22'` which requires parsing and conversion to standard `'YYYY-MM-DD HH:MM:SS'` format for validation
+2. **Fee signs**: Strike exports fees as negative values in some contexts — always use `abs()` when extracting fees
+3. **Lightning vs On-chain**: Lightning and on-chain BTC sends must target different wallets (e.g., `Coldcard` vs `Coldcard-Lightning`) because hardware wallets typically cannot receive both
+4. **Lightning USD sends**: Pure fiat debits (no BTC amount) from Lightning payments should stay at Strike exchange, not transfer to withdrawal target
+5. **Detection heuristic**: Column name matching must be exact — `'amount btc'` not `'btc amount'`, `'transaction type'` not `'type'`
+6. **Deposit reversals**: Negative USD deposits with `'Reversal'` in description are Withdrawal transactions, not Deposits
+
 ## Python 3.9 Compatibility
 
 **Issue**: Python 3.9 doesn't support `|` union syntax for type hints (e.g., `str | None`)

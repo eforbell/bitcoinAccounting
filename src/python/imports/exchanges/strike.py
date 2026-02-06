@@ -1,26 +1,29 @@
 """Strike transaction history CSV parser.
 
-Strike is a Bitcoin-only exchange — no asset filtering required.
+Strike is a Bitcoin and USD exchange — supports fiat deposits and USD sends.
 
-Typical Strike export columns:
-  Date, Type, Description, BTC Amount, USD Amount, Fee (USD), Fee (BTC)
+Real Strike 'All Transactions' export columns:
+  Reference, Date & Time (UTC), Transaction Type, Amount USD, Fee USD,
+  Amount BTC, Fee BTC, BTC Price, Cost Basis (USD), Destination, Description,
+  Transaction Hash, Note
 
 Transaction types mapped:
   Purchase  -> Trade  (buy BTC, sell USD)
-  Send      -> Withdrawal
-  Receive   -> Deposit
-  Payment   -> Withdrawal (Lightning payment out)
+  Deposit   -> Deposit (USD in) or Withdrawal (deposit reversal)
+  Send      -> Withdrawal (on-chain BTC, Lightning BTC, or Lightning USD)
+  Receive   -> Deposit (BTC in)
 """
 
 from __future__ import annotations
 
 import csv
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Any
 
-from imports.base import BaseImporter
+from imports.base import BaseImporter, is_fiat
 from imports.registry import register
 
 
@@ -37,6 +40,23 @@ def _parse_number(value: str) -> float:
         return 0.0
 
 
+def _parse_strike_date(date_str: str) -> str:
+    """Convert Strike date format to standard format.
+
+    Strike uses 'Mar 15 2024 14:30:22', convert to 'YYYY-MM-DD HH:MM:SS'.
+    """
+    if not date_str:
+        return ''
+    try:
+        # Parse Strike format: 'Mar 15 2024 14:30:22'
+        dt = datetime.strptime(date_str.strip(), '%b %d %Y %H:%M:%S')
+        # Return as standard format
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+    except ValueError:
+        # If parsing fails, return original
+        return date_str
+
+
 @register
 class StrikeImporter(BaseImporter):
     """Parser for Strike transaction history CSV exports."""
@@ -44,9 +64,9 @@ class StrikeImporter(BaseImporter):
     name = "Strike"
     source_type = "exchange"
     file_patterns = ["*.csv"]
-    description = "Strike transaction history export"
+    description = "Strike 'All Transactions' export"
     expected_columns = [
-        "Date", "Type", "Description", "BTC Amount", "USD Amount",
+        "Date & Time (UTC)", "Transaction Type", "Amount USD", "Amount BTC",
     ]
 
     def detect(self, file_path: str) -> bool:
@@ -58,11 +78,11 @@ class StrikeImporter(BaseImporter):
                 if header is None:
                     return False
                 header_lower = {col.lower().strip() for col in header}
-                # Strike-specific: has both "btc amount" and "usd amount"
+                # Strike real format: 'amount btc', 'amount usd', 'transaction type'
                 return (
-                    'btc amount' in header_lower and
-                    'usd amount' in header_lower and
-                    'type' in header_lower
+                    'amount btc' in header_lower and
+                    'amount usd' in header_lower and
+                    'transaction type' in header_lower
                 )
         except (OSError, csv.Error, UnicodeDecodeError):
             return False
@@ -114,50 +134,143 @@ class StrikeImporter(BaseImporter):
             original_col = col_map.get(col.lower(), col)
             return (row.get(original_col) or '').strip()
 
-        tx_type = get('type').upper()
-        date = get('date')
-        btc_amount = _parse_number(get('btc amount'))
-        usd_amount = _parse_number(get('usd amount'))
+        # Map new column names
+        tx_type = get('transaction type').upper()
+        date = _parse_strike_date(get('date & time (utc)'))
+        btc_amount = _parse_number(get('amount btc'))
+        usd_amount = _parse_number(get('amount usd'))
         description = get('description')
+        destination = get('destination')
+        tx_hash = get('transaction hash')
 
-        # Fee can be in USD or BTC depending on column availability
-        fee_usd = _parse_number(get('fee (usd)'))
-        fee_btc = _parse_number(get('fee (btc)'))
+        # Fee columns (may be negative in CSV, use abs())
+        fee_usd = abs(_parse_number(get('fee usd')))
+        fee_btc = abs(_parse_number(get('fee btc')))
 
         if not date or not tx_type:
             return None
 
         if tx_type == 'PURCHASE':
-            # Buy BTC with USD — usd_amount is cost before fees
+            # Buy BTC with USD — usd_amount is negative (cost + fee)
             return {
                 'trans_type': 'Trade',
                 'created_date': date,
                 'exchange': 'Strike',
                 'buy': btc_amount,
                 'buy_curr': 'BTC',
-                'sell': usd_amount + fee_usd,  # Total USD out of pocket
+                'sell': abs(usd_amount),  # Negative in CSV
                 'sell_curr': 'USD',
                 'fee': fee_usd,
-                'fee_curr': 'USD',
+                'fee_curr': 'USD' if fee_usd > 0 else '',
                 'group': '',
                 'comment': description,
             }
 
-        elif tx_type in ('SEND', 'PAYMENT'):
-            # Withdrawal — send BTC out
-            return {
-                'trans_type': 'Withdrawal',
-                'created_date': date,
-                'exchange': self._get_withdrawal_exchange(withdraw_to),
-                'buy': 0.0,
-                'buy_curr': '',
-                'sell': btc_amount,
-                'sell_curr': 'BTC',
-                'fee': fee_btc if fee_btc > 0 else fee_usd,
-                'fee_curr': 'BTC' if fee_btc > 0 else ('USD' if fee_usd > 0 else ''),
-                'group': '',
-                'comment': self._get_withdrawal_comment(withdraw_to, description),
-            }
+        elif tx_type == 'DEPOSIT':
+            # USD deposit or deposit reversal
+            if usd_amount < 0 and 'reversal' in description.lower():
+                # Deposit reversal — USD withdrawn from account
+                return {
+                    'trans_type': 'Withdrawal',
+                    'created_date': date,
+                    'exchange': 'Strike',
+                    'buy': 0.0,
+                    'buy_curr': '',
+                    'sell': abs(usd_amount),
+                    'sell_curr': 'USD',
+                    'fee': 0.0,
+                    'fee_curr': '',
+                    'group': '',
+                    'comment': f'Deposit reversal: {description}',
+                }
+            elif usd_amount > 0:
+                # Normal USD deposit
+                return {
+                    'trans_type': 'Deposit',
+                    'created_date': date,
+                    'exchange': 'Strike',
+                    'buy': usd_amount,
+                    'buy_curr': 'USD',
+                    'sell': 0.0,
+                    'sell_curr': '',
+                    'fee': 0.0,
+                    'fee_curr': '',
+                    'group': '',
+                    'comment': description,
+                }
+            # Skip zero or negative deposits without reversal flag
+            return None
+
+        elif tx_type == 'SEND':
+            # Determine send type based on destination and amounts
+            is_lightning = destination.startswith('lnbc')
+            is_onchain_btc = destination.startswith(('bc1', '1', '3'))
+
+            if btc_amount != 0 and is_onchain_btc:
+                # On-chain BTC send
+                comment_parts = [description] if description else []
+                if destination:
+                    comment_parts.append(f'Destination: {destination}')
+                if tx_hash:
+                    comment_parts.append(f'TxHash: {tx_hash}')
+
+                return {
+                    'trans_type': 'Withdrawal',
+                    'created_date': date,
+                    'exchange': self._get_withdrawal_exchange(withdraw_to),
+                    'buy': 0.0,
+                    'buy_curr': '',
+                    'sell': abs(btc_amount),
+                    'sell_curr': 'BTC',
+                    'fee': fee_btc if fee_btc > 0 else fee_usd,
+                    'fee_curr': 'BTC' if fee_btc > 0 else ('USD' if fee_usd > 0 else ''),
+                    'group': '',
+                    'comment': ' | '.join(comment_parts),
+                }
+
+            elif btc_amount != 0 and is_lightning:
+                # Lightning BTC send — different target than on-chain
+                target = self._get_lightning_btc_target(withdraw_to)
+                comment_parts = [description] if description else []
+                if destination:
+                    comment_parts.append(f'Lightning: {destination}')
+
+                return {
+                    'trans_type': 'Withdrawal',
+                    'created_date': date,
+                    'exchange': target,
+                    'buy': 0.0,
+                    'buy_curr': '',
+                    'sell': abs(btc_amount),
+                    'sell_curr': 'BTC',
+                    'fee': fee_btc if fee_btc > 0 else fee_usd,
+                    'fee_curr': 'BTC' if fee_btc > 0 else ('USD' if fee_usd > 0 else ''),
+                    'group': '',
+                    'comment': ' | '.join(comment_parts),
+                }
+
+            elif usd_amount != 0 and is_lightning:
+                # Lightning USD send — pure fiat debit, no BTC
+                comment_parts = [description] if description else []
+                if destination:
+                    comment_parts.append(f'Lightning USD: {destination}')
+
+                return {
+                    'trans_type': 'Withdrawal',
+                    'created_date': date,
+                    'exchange': 'Strike',  # USD stays at Strike
+                    'buy': 0.0,
+                    'buy_curr': '',
+                    'sell': abs(usd_amount),
+                    'sell_curr': 'USD',
+                    'fee': fee_usd,
+                    'fee_curr': 'USD' if fee_usd > 0 else '',
+                    'group': '',
+                    'comment': ' | '.join(comment_parts),
+                }
+
+            # Unknown send type — skip
+            return None
 
         elif tx_type == 'RECEIVE':
             # Deposit — receive BTC from outside
@@ -177,3 +290,20 @@ class StrikeImporter(BaseImporter):
 
         # Unknown type — skip
         return None
+
+    def _get_lightning_btc_target(self, withdraw_to: str | None) -> str:
+        """Get the target wallet for Lightning BTC sends.
+
+        Lightning and on-chain BTC require different wallets, so we append
+        '-Lightning' to the withdraw_to name. If no withdraw_to is specified,
+        defaults to 'Strike-Lightning'.
+
+        Args:
+            withdraw_to: User-specified on-chain withdrawal destination, or None
+
+        Returns:
+            str: Lightning wallet name (withdraw_to-Lightning or Strike-Lightning)
+        """
+        if withdraw_to:
+            return f"{withdraw_to}-Lightning"
+        return "Strike-Lightning"
