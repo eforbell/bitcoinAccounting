@@ -18,23 +18,29 @@ data is right there but gets dropped by the BTC-only filter.
 
 ## Solution
 
-Modify 5 exchange parsers to pass fiat deposits/withdrawals through alongside BTC
+Modify 6 exchange parsers to pass fiat deposits/withdrawals through alongside BTC
 transactions:
 
 - **Kraken** — Remove BTC filter from deposit/withdrawal handlers
 - **Swan** — Add "USD Deposit" handler (currently returns None)
 - **River** — Add "Cash Deposit" handler to Account Activity parser
 - **Gemini** — Add Symbol='USD' to xlsx filter
+- **Strike** — Rebuild parser for real export format; add USD Deposit, USD Send (Lightning), and deposit reversal handling
 - **Coinbase Pro** — New importer class for Coinbase Pro export format (paired match/fee rows, trade grouping by trade_id)
 
-No changes to Strike (BTC-only platform), Cash App (BTC gain/loss export only),
-or standard Coinbase (existing importer unchanged until export format confirmed).
+No changes to Cash App (BTC gain/loss export only) or standard Coinbase
+(existing importer unchanged until export format confirmed).
+
+**Note on Strike:** The original parser was built against an assumed CSV format.
+The real Strike "All Transactions" export uses different column names and includes
+fiat transaction types (USD Deposit, USD Send via Lightning) not present in the
+original fixture. The parser will be rebuilt against the real format.
 
 ## Scope
 
 ### In Scope
 - Shared FIAT_CURRENCIES constant (USD, EUR, GBP + stablecoins)
-- Fiat deposit/withdrawal parsing for 4 existing exchanges + 1 new parser
+- Fiat deposit/withdrawal parsing for 5 existing exchanges + 1 new parser
 - Trade filtering unchanged (BTC must be on one side)
 - Documentation updates
 
@@ -60,8 +66,9 @@ currency-agnostic.
 | FIAT-002 | Swan USD deposits | 3 |
 | FIAT-003 | River cash deposits | 4 |
 | FIAT-004 | Gemini xlsx USD credit/debit | 5 |
-| FIAT-005 | Coinbase Pro importer class | 6 |
-| FIAT-006 | Documentation update | 7 |
+| FIAT-005a | Strike parser rebuild: real format + fiat transactions | 6 |
+| FIAT-005b | Coinbase Pro importer class | 7 |
+| FIAT-006 | Documentation update | 8 |
 
 ## Key Design Decisions
 
@@ -76,6 +83,8 @@ currency-agnostic.
 - [ ] Swan USD deposits imported instead of skipped
 - [ ] River Cash Deposits imported from Account Activity CSV
 - [ ] Gemini xlsx USD credits/debits imported
+- [ ] Strike USD deposits, deposit reversals, and USD sends (Lightning) imported
+- [ ] Strike parser detection works with real export format
 - [ ] Coinbase Pro trades, deposits, and withdrawals imported (new parser)
 - [ ] All existing BTC import tests still pass unchanged
 - [ ] Altcoin deposits/withdrawals still filtered (only fiat + BTC pass through)
@@ -89,6 +98,6 @@ currency-agnostic.
 
 ## Timeline
 
-- **Stories**: 7
+- **Stories**: 8
 - **Complexity**: Low-Medium (filter modifications + small handlers)
 - **Dependencies**: Feature 5 complete (merged)

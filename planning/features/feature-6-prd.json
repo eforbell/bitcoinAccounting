@@ -95,8 +95,35 @@
       "passes": false
     },
     {
-      "id": "FIAT-005",
+      "id": "FIAT-005a",
+      "title": "Strike parser update: real export format and fiat transactions",
+      "acceptanceCriteria": [
+        "Update detect() heuristic for real Strike export columns: 'amount btc', 'amount usd', 'transaction type' (current detection checks 'btc amount', 'usd amount', 'type' which don't match real exports)",
+        "Update column mapping throughout parse/parse_row for new column names: 'Date & Time (UTC)' (was 'Date'), 'Transaction Type' (was 'Type'), 'Amount USD' (was 'USD Amount'), 'Amount BTC' (was 'BTC Amount'), 'Fee USD' (was 'Fee (USD)'), 'Fee BTC' (was 'Fee (BTC)')",
+        "Map new columns not in old format: 'Reference', 'BTC Price', 'Cost Basis (USD)', 'Destination', 'Transaction Hash', 'Note'",
+        "Add Deposit handler: Transaction Type='Deposit' with positive Amount USD produces Deposit(buy_curr='USD', buy=amount_usd)",
+        "Handle deposit reversals: Transaction Type='Deposit' with negative Amount USD and Description='Reversal' produces Withdrawal(sell_curr='USD', sell=abs(amount_usd))",
+        "On-chain BTC Send: Transaction Type='Send' with Amount BTC and Destination starting with bc1/1/3 produces Withdrawal(sell_curr='BTC') — uses --withdraw-to param for exchange field (self-custody transfer)",
+        "Lightning BTC Send: Transaction Type='Send' with Amount BTC and Destination starting with lnbc produces Withdrawal(sell_curr='BTC') — uses a DIFFERENT target than --withdraw-to (on-chain wallet can't receive Lightning). Convention: if --withdraw-to is 'coldcard', Lightning BTC sends use '{withdraw_to}-lightning' or 'Strike-Lightning' as the exchange field. Exact convention TBD during implementation.",
+        "Lightning USD Send: Transaction Type='Send' with Amount USD (no Amount BTC) and lnbc Destination produces Withdrawal(sell_curr='USD', sell=abs(amount_usd)) — pure fiat debit, no BTC involved. Exchange stays 'Strike'.",
+        "All Send types: capture Fee USD when present, no fee when absent",
+        "No new transaction types introduced — all sends use standard Withdrawal trans_type",
+        "Existing Purchase handler updated for new column names, behavior unchanged",
+        "Destination column preserved in comment for all Send transactions",
+        "Transaction Hash preserved in comment for on-chain Send transactions",
+        "Replace tests/fixtures/csv_samples/strike_sample.csv with real format (v2 fixture already created at strike_v2_sample.csv)",
+        "Update all existing Strike tests to use new format fixture",
+        "Add unit tests: USD deposit, deposit reversal, on-chain BTC send, Lightning BTC send (separate withdraw-to target), Lightning USD send with fee, Lightning USD send without fee",
+        "Add integration test: full import with mixed fiat and BTC transactions"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "The existing Strike parser was built against an assumed CSV format. The real Strike 'All Transactions' export uses different column names and includes fiat transaction types (Deposit, USD Send) that are currently invisible to the parser. This is both a format correction and a fiat-tracking enhancement. DESIGN DECISIONS: (1) No new trans_types — all transactions use standard Trade/Deposit/Withdrawal. Goal is USD+BTC tally and cost basis tracking, not categorizing payment methods. (2) Lightning BTC sends get a different --withdraw-to target than on-chain sends because the same hardware wallet cannot receive both on-chain and Lightning. (3) Lightning USD sends (no BTC amount) are pure USD debits from the Strike account — just Withdrawal(sell_curr='USD')."
+    },
+    {
+      "id": "FIAT-005b",
       "title": "Coinbase Pro importer class",
+      "priority": 7,
       "acceptanceCriteria": [
         "Create src/python/imports/exchanges/coinbase_pro.py with CoinbaseProImporter class",
         "Inherit from BaseImporter with @register decorator",
@@ -118,7 +145,6 @@
         "Unit tests: detection, trade pairing, fee aggregation, BTC filter, fiat deposits/withdrawals, registration",
         "Existing CoinbaseImporter (standard format) completely unchanged"
       ],
-      "priority": 6,
       "passes": false
     },
     {
@@ -127,12 +153,13 @@
       "acceptanceCriteria": [
         "Update docs/CSV_FORMAT_GUIDE.md: note fiat support per exchange",
         "Update README.md import section to mention fiat tracking",
-        "Document which exchanges include fiat rows (Kraken, Gemini, River, Swan, Coinbase Pro)",
-        "Document which exchanges don't (Strike, Cash App - BTC-only exports)",
+        "Document which exchanges include fiat rows (Kraken, Gemini, River, Swan, Coinbase Pro, Strike)",
+        "Document which exchanges don't (Cash App - BTC gain/loss export only)",
+        "Update Strike section in CSV Format Guide to reflect real export format and fiat transaction types",
         "Add Coinbase Pro section to CSV Format Guide with export instructions and column details",
         "Update AGENTS.md with learnings"
       ],
-      "priority": 7,
+      "priority": 8,
       "passes": false
     }
   ],
