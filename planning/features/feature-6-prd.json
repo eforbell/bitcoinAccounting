@@ -47,7 +47,7 @@
         "Unit tests for USD deposit, EUR deposit, USD withdrawal, altcoin still filtered"
       ],
       "priority": 2,
-      "passes": false
+      "passes": true
     },
     {
       "id": "FIAT-002",

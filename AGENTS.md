@@ -1293,3 +1293,20 @@ River ships two CSV exports that overlap in columns:
   stablecoins (USDC, USDT, GUSD, BUSD, DAI, PYUSD), BTC rejection, altcoin rejection,
   case-insensitivity, and frozenset immutability.
   - All tests pass, 31 total import base tests (23 existing + 8 new)
+
+## FIAT-001: Kraken Fiat Deposits and Withdrawals
+
+- **Selective fiat support**: Modified `_process_deposit()` and `_process_withdrawal()`
+  to allow BTC and fiat currencies through: `if asset != 'BTC' and not is_fiat(asset): return None`
+- **Trade and staking unchanged**: `_process_trade()` and `_process_staking()` remain
+  BTC-only to focus on BTC cost basis tracking.
+- **Altcoin filtering preserved**: ETH, LTC, and other altcoins still filtered out
+  from all transaction types (deposits, withdrawals, trades, staking).
+- **ZEUR normalization**: Existing `_normalize_asset()` function already handles ZEUR→EUR
+  mapping, so EUR fiat deposits work without additional changes.
+- **Stablecoin support**: USDC deposits/withdrawals now captured (is_fiat('USDC') returns True).
+- **Fixture updates**: Added 3 fiat rows to kraken_sample.csv (USD deposit, EUR deposit, USD withdrawal)
+  - Total transactions increased from 6 to 9 (3 deposits, 2 withdrawals, 2 trades, 2 staking)
+- **7 comprehensive tests**: USD deposit, EUR deposit, USD withdrawal, altcoin deposit filtered,
+  altcoin withdrawal filtered, fiat-only trades filtered, stablecoin deposit support
+  - All 38 Kraken tests passing (31 existing + 7 new), zero regressions

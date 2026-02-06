@@ -375,14 +375,15 @@ class TestKrakenImporterParsing:
         parser = KrakenImporter()
         _, transactions = parser.parse(str(FIXTURES_DIR / "kraken_sample.csv"))
 
-        # Should have: 2 trades (BTC buy, BTC sell), 1 deposit, 1 withdrawal, 2 staking
+        # Should have: 2 trades (BTC buy, BTC sell), 1 BTC deposit, 1 BTC withdrawal, 2 staking
+        # Plus: 2 fiat deposits (USD, EUR), 1 fiat withdrawal (USD)
         # ETH trade and ETH deposit should be filtered out
-        assert len(transactions) == 6
+        assert len(transactions) == 9
 
         types = [tx['trans_type'] for tx in transactions]
         assert types.count('Trade') == 2
-        assert types.count('Deposit') == 1
-        assert types.count('Withdrawal') == 1
+        assert types.count('Deposit') == 3  # 1 BTC + 2 fiat (USD, EUR)
+        assert types.count('Withdrawal') == 2  # 1 BTC + 1 fiat (USD)
         assert types.count('Interest Income') == 2
 
     def test_transactions_sorted_by_time(self):
@@ -472,6 +473,138 @@ class TestKrakenImporterRegistration:
         assert "refid" in help_text
 
 
+class TestKrakenFiatCurrencySupport:
+    """Tests for fiat deposit/withdrawal support (FIAT-001)."""
+
+    def setup_method(self):
+        clear_registry()
+        register(KrakenImporter)
+
+    def teardown_method(self):
+        clear_registry()
+
+    def test_usd_deposit(self):
+        """USD deposit parsed correctly."""
+        csv_path = _make_csv(
+            '"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"\n'
+            '"L1","UDEP001","2024-05-15 10:00:00","deposit","","currency","ZUSD","5000.00","0","10529.50"\n'
+        )
+        try:
+            parser = KrakenImporter()
+            _, transactions = parser.parse(csv_path)
+
+            assert len(transactions) == 1
+            tx = transactions[0]
+            assert tx['trans_type'] == 'Deposit'
+            assert tx['buy'] == pytest.approx(5000.0)
+            assert tx['buy_curr'] == 'USD'
+            assert tx['exchange'] == 'Kraken'
+        finally:
+            os.unlink(csv_path)
+
+    def test_eur_deposit(self):
+        """EUR deposit parsed correctly (tests ZEUR->EUR normalization)."""
+        csv_path = _make_csv(
+            '"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"\n'
+            '"L1","EDEP002","2024-06-01 11:00:00","deposit","","currency","ZEUR","3000.00","0","3000.00"\n'
+        )
+        try:
+            parser = KrakenImporter()
+            _, transactions = parser.parse(csv_path)
+
+            assert len(transactions) == 1
+            tx = transactions[0]
+            assert tx['trans_type'] == 'Deposit'
+            assert tx['buy'] == pytest.approx(3000.0)
+            assert tx['buy_curr'] == 'EUR'
+            assert tx['exchange'] == 'Kraken'
+        finally:
+            os.unlink(csv_path)
+
+    def test_usd_withdrawal(self):
+        """USD withdrawal parsed correctly."""
+        csv_path = _make_csv(
+            '"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"\n'
+            '"L1","UWITH01","2024-06-15 14:00:00","withdrawal","","currency","ZUSD","-2000.00","5.00","8524.50"\n'
+        )
+        try:
+            parser = KrakenImporter()
+            _, transactions = parser.parse(csv_path)
+
+            assert len(transactions) == 1
+            tx = transactions[0]
+            assert tx['trans_type'] == 'Withdrawal'
+            assert tx['sell'] == pytest.approx(2000.0)
+            assert tx['sell_curr'] == 'USD'
+            assert tx['fee'] == pytest.approx(5.0)
+            assert tx['fee_curr'] == 'USD'
+            assert tx['exchange'] == 'Kraken-Withdrawal'
+        finally:
+            os.unlink(csv_path)
+
+    def test_altcoin_deposit_still_filtered(self):
+        """Altcoin deposits (non-BTC, non-fiat) are still filtered out."""
+        csv_path = _make_csv(
+            '"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"\n'
+            '"L1","EDEP003","2024-07-01 10:00:00","deposit","","currency","XETH","1.50","0","2.00"\n'
+        )
+        try:
+            parser = KrakenImporter()
+            _, transactions = parser.parse(csv_path)
+
+            assert len(transactions) == 0
+        finally:
+            os.unlink(csv_path)
+
+    def test_altcoin_withdrawal_still_filtered(self):
+        """Altcoin withdrawals (non-BTC, non-fiat) are still filtered out."""
+        csv_path = _make_csv(
+            '"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"\n'
+            '"L1","EWITH01","2024-07-15 12:00:00","withdrawal","","currency","XETH","-0.50","0.01","1.49"\n'
+        )
+        try:
+            parser = KrakenImporter()
+            _, transactions = parser.parse(csv_path)
+
+            assert len(transactions) == 0
+        finally:
+            os.unlink(csv_path)
+
+    def test_trades_still_btc_only(self):
+        """Trades still require BTC on at least one side (fiat-only trades filtered)."""
+        csv_path = _make_csv(
+            '"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"\n'
+            '"L1","TRADE8","2024-07-20 10:00:00","trade","","currency","XETH","2.00","0","2.00"\n'
+            '"L2","TRADE8","2024-07-20 10:00:00","trade","","currency","ZUSD","-6000.00","12.00","4524.50"\n'
+        )
+        try:
+            parser = KrakenImporter()
+            _, transactions = parser.parse(csv_path)
+
+            # ETH/USD trade should be filtered (no BTC involved)
+            assert len(transactions) == 0
+        finally:
+            os.unlink(csv_path)
+
+    def test_stablecoin_deposit(self):
+        """Stablecoin (USDC) deposit parsed correctly."""
+        csv_path = _make_csv(
+            '"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"\n'
+            '"L1","CDEP001","2024-08-01 09:00:00","deposit","","currency","USDC","1000.00","0","1000.00"\n'
+        )
+        try:
+            parser = KrakenImporter()
+            _, transactions = parser.parse(csv_path)
+
+            assert len(transactions) == 1
+            tx = transactions[0]
+            assert tx['trans_type'] == 'Deposit'
+            assert tx['buy'] == pytest.approx(1000.0)
+            assert tx['buy_curr'] == 'USDC'
+        finally:
+            os.unlink(csv_path)
+
+
 class TestKrakenImporterIntegration:
     """Integration tests for Kraken parser with database import."""
 
@@ -497,7 +630,7 @@ class TestKrakenImporterIntegration:
         crypto = CryptoAccounts(backend=backend)
         import_result = crypto.import_transactions(transactions)
 
-        assert import_result['imported'] == 6
+        assert import_result['imported'] == 9
         assert import_result['skipped'] == 0
 
         # Verify all types imported
@@ -505,8 +638,8 @@ class TestKrakenImporterIntegration:
         type_counts = {row['trans_type']: row['cnt'] for row in rows}
 
         assert type_counts.get('Trade', 0) == 2
-        assert type_counts.get('Deposit', 0) == 1
-        assert type_counts.get('Withdrawal', 0) == 1
+        assert type_counts.get('Deposit', 0) == 3  # 1 BTC + 2 fiat (USD, EUR)
+        assert type_counts.get('Withdrawal', 0) == 2  # 1 BTC + 1 fiat (USD)
         assert type_counts.get('Interest Income', 0) == 2
 
         crypto.close()

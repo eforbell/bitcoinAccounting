@@ -1495,3 +1495,39 @@
   - Zero regressions
 
 ---
+
+## 2026-02-06 - FIAT-001: Kraken fiat deposits and withdrawals
+
+- What was implemented:
+  - Modified _process_deposit() filter to allow BTC and fiat currencies through
+  - Modified _process_withdrawal() filter to allow BTC and fiat currencies through
+  - Kept _process_trade() BTC-only filter unchanged (trades require BTC on one side)
+  - Kept _process_staking() BTC-only filter unchanged (staking rewards are BTC-only)
+  - USD deposits produce Deposit(buy_curr='USD', buy=amount)
+  - USD withdrawals produce Withdrawal(sell_curr='USD', sell=amount)
+  - EUR deposits/withdrawals work via existing _normalize_asset() (ZEUR->EUR)
+  - Altcoin deposits (ETH) still filtered out
+  - Added 3 fiat rows to kraken_sample.csv fixture (USD deposit, EUR deposit, USD withdrawal)
+  - Added 7 comprehensive unit tests for fiat currency support
+
+- Files changed:
+  - `src/python/imports/exchanges/kraken.py` (modified - added is_fiat import, updated filters)
+  - `tests/fixtures/csv_samples/kraken_sample.csv` (added 3 fiat transaction rows)
+  - `tests/test_import_kraken.py` (added TestKrakenFiatCurrencySupport class with 7 tests)
+  - `AGENTS.md` (added FIAT-001 learnings)
+  - `planning/features/feature-6-prd.json` (marked FIAT-001 passes: true)
+
+- **Learnings:**
+  - Selective filter pattern: `if asset != 'BTC' and not is_fiat(asset): return None`
+  - Trade and staking filters remain BTC-only to maintain focus on BTC cost basis
+  - Existing asset normalization (ZEUR->EUR) extends naturally to fiat support
+  - Filter logic placement: deposit/withdrawal handlers (multi-currency) vs trade/staking handlers (BTC-only)
+  - Stablecoins (USDC) automatically supported via is_fiat() without parser changes
+
+- **Test Results:**
+  - 7 new tests passing (USD/EUR deposit, USD withdrawal, altcoin filtering, stablecoin support)
+  - 38 total Kraken tests passing (31 existing + 7 new)
+  - Integration test confirms all 9 transactions imported correctly (3 deposits, 2 withdrawals, 2 trades, 2 staking)
+  - Zero regressions
+
+---
