@@ -27,6 +27,7 @@ from .migration import (
 from .postgres import PostgresBackend
 from .queries.balance import BalanceCalculator
 from .queries.basis import BasisCalculator
+from .queries.capital_gains import CapitalGainCalculator
 from .queries.income import IncomeQuery
 from .queries.ledger import LedgerWriter
 from .queries.price import PriceLookup
@@ -73,6 +74,7 @@ __all__ = [
     'get_sqlite_path',
     'BalanceCalculator',
     'BasisCalculator',
+    'CapitalGainCalculator',
     'IncomeQuery',
     'LedgerWriter',
     'PriceLookup',

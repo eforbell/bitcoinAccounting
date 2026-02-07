@@ -2,6 +2,29 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature 8: CryptoAccounts Refactoring - CapitalGainCalculator Extraction (REFACTOR-004)
+
+**Objective**: Extract FIFO capital gains calculation logic from CryptoAccounts into a dedicated CapitalGainCalculator query class.
+
+**Key Changes**:
+1. Created `db/queries/capital_gains.py` with CapitalGainCalculator class
+2. Made `_get_purchase_lots()` public as `get_purchase_lots()` method
+3. Extracted `get_sales_for_1099b()` logic to `get_1099b_data()` method
+4. Extracted `forecast_capital_gains_fifo()` logic to `forecast_sale()` method
+5. Updated CryptoAccounts to delegate to CapitalGainCalculator instance
+
+**Type Checking Gotchas**:
+1. **Variable name reuse confuses mypy**: When iterating with `for purchase in all_purchases:` where `purchase` is a tuple, and later `for purchase in purchase_queue:` where `purchase` is a dict, mypy gets confused and thinks the second `purchase` is still a tuple. Solution: use different variable names (e.g., `for lot in all_purchases:`)
+2. **Explicit type annotations for lists**: Empty lists assigned with `[]` need explicit type hints for mypy strict mode: `purchase_queue: list[dict[str, Any]] = []`
+3. **Optional return values**: When a method returns `float | None`, assign to a temporary variable to handle the None case before assigning to a `float` variable
+
+**Dependency Injection Pattern**:
+- CapitalGainCalculator requires 4 dependencies: `DatabaseBackend`, `TradeQuery`, `IncomeQuery`, `PriceLookup`
+- All dependencies injected via constructor for testability
+- Maintains single responsibility: only handles FIFO capital gains calculations
+
+**Test Results**: 12 tests passed (10 from test_1099b_export.py, 1 forecast test, 1 validation test)
+
 ## Strike Parser: Real Export Format vs Assumed Format (FIAT-005a)
 
 **Issue**: Original Strike parser was built against an assumed CSV format that didn't match real exports from Strike's 'All Transactions' export.
