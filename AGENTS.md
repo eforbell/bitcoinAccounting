@@ -2,6 +2,63 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-8: CryptoAccounts Refactoring - REFACTOR-008
+
+### Integration Testing Patterns
+
+**Story**: Add comprehensive integration tests for refactored query classes
+
+**Context**: After extracting specialized query classes (TransactionQuery, LedgerWriter, CapitalGainCalculator, WalletQuery), need integration tests to verify cross-class interactions and end-to-end workflows.
+
+**Key Learnings**:
+
+1. **get_transactions() Return Format**
+   - Returns tuple: `(column_names, transactions)`, not just list
+   - Always unpack: `headers, txs = crypto.get_transactions()`
+   - Column names use title case: 'Buy', 'Sell', 'Exchange', etc. (not lowercase)
+
+2. **Fee Handling Convention**
+   - Fees are already included in buy/sell amounts, NOT subtracted separately
+   - Example: Withdraw 0.3 BTC with 0.0001 fee → sell amount is 0.3, fee tracked separately
+   - Balance calculation: `buy - sell` (fees not deducted again)
+   - Exception: `transfer_funds()` adds fee to sell: `sell = tx_amount + fee_amount`
+
+3. **Wallet Query API**
+   - `get_wallets()` takes `active_only` boolean, NOT a coin parameter
+   - Returns list of dicts with 'wallet_id' key, not wallet name strings
+   - If wallets table exists (auto-created), it's empty by default
+   - Use `get_wallet_balance(coin, None)` to get all wallet balances as dict
+
+4. **Capital Gains Term Classification**
+   - Holding period < 365 days = 'Short' term (not 'Long')
+   - Jan 1 to Dec 1 = 334 days = Short term
+   - Jan 1 to Dec 2 = 336 days = Short term
+   - Must hold > 365 days (1 year + 1 day) for Long term
+
+5. **Integration Test Structure**
+   - **Full workflow tests**: Import → Query → Export → 1099-B generation
+   - **Cross-query tests**: Verify interactions between different query classes
+   - **Round-trip tests**: Export transactions then reimport to verify consistency
+   - **Data consistency tests**: Manual calculations match query class results
+   - **Complex scenarios**: Real-world workflows (buy → custody → sell)
+
+6. **Test Fixture Patterns**
+   - Use in-memory SQLite for fast, isolated tests
+   - Import transactions to set up data, then test query classes
+   - Verify balances match expected calculations based on all transactions
+   - Test both individual methods and integrated workflows
+
+**Files Created**:
+- `tests/test_refactored_integration.py` (648 lines, 9 comprehensive tests across 4 test classes)
+
+**Test Coverage**:
+- TestFullWorkflowIntegration: Import → query → export → 1099-B workflow + round-trip
+- TestCrossQueryClassInteractions: CapitalGainCalculator + TradeQuery/IncomeQuery interactions
+- TestDataConsistency: Transaction filtering matches balance calculations, date ranges
+- TestComplexScenarios: Complete buy-custody-sell workflow with transfers
+
+**Test Results**: All 9 tests passing (100% pass rate), 65 tests total for refactored code
+
 ## Feature 8: CryptoAccounts Refactoring - Comprehensive Test Coverage for import_transactions() (REFACTOR-007)
 
 **Objective**: Add comprehensive test coverage for the `import_transactions()` method to ensure all transaction types, aliases, and error handling work correctly.
