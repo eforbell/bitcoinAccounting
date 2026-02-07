@@ -2,6 +2,31 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature 8: CryptoAccounts Refactoring - Error Handling in import_transactions() (REFACTOR-006)
+
+**Objective**: Add robust error handling to `import_transactions()` method to prevent individual transaction failures from breaking entire import batches.
+
+**Key Changes**:
+1. Wrapped all transaction type handlers in a try/except block
+2. Added error logging with transaction type and error details
+3. Failed imports now increment the `skipped` counter
+4. Single transaction failures no longer abort the entire batch
+
+**Key Learnings**:
+1. **Error resilience pattern**: Wrapping each transaction import in try/except allows partial batch success - if transaction #5 fails, transactions #6-100 can still import
+2. **Error visibility**: Using `print()` for error logging ensures failures are visible without breaking the import flow
+3. **Backward compatibility**: Counting errors as "skipped" maintains the existing return structure `{"imported": X, "skipped": Y}` without breaking downstream code
+4. **Transaction types affected**: All 6 types protected: Interest Income/Interest/Staking, Mining, Deposit, Withdrawal, Spend, Trade
+5. **Price pair storage**: USD equivalent price pair storage (for interest income) is inside the try block, so price pair failures also get caught
+
+**Pattern**: When refactoring batch processing methods:
+- Add error handling around individual item processing
+- Log errors with enough context for debugging (item identifier, error message)
+- Allow batch to continue on individual failures
+- Maintain existing API contracts (return structure unchanged)
+
+**Test Results**: All 504 import tests passed (test_import_*.py + test_cli_scripts.py::import)
+
 ## Feature 8: CryptoAccounts Refactoring - WalletQuery Extraction (REFACTOR-005)
 
 **Objective**: Extract wallet-related operations from CryptoAccounts into a dedicated WalletQuery class.

@@ -150,11 +150,12 @@ class CryptoAccounts(object):
         Returns:
             dict with keys:
                 - imported: Number of transactions successfully imported
-                - skipped: Number of transactions with unknown trans_type
+                - skipped: Number of transactions with unknown trans_type or import errors
 
         Notes:
             - Spend: Like Withdrawal but for payments/UTXO consolidation (not custody transfers)
             - Withdrawal: Transfer to another wallet you control
+            - Errors during import are caught and logged, then counted as skipped
         """
         imported = 0
         skipped = 0
@@ -162,106 +163,112 @@ class CryptoAccounts(object):
         for transaction in transactions:
             trans_type = transaction.get('trans_type', '')
 
-            # Normalize Interest/Staking aliases to Interest Income
-            if trans_type in ('Interest Income', 'Interest', 'Staking'):
-                self.ledger_writer.interest_income(
-                    createddate=transaction.get('created_date', ''),
-                    buy=transaction.get('buy', 0.0),
-                    buy_curr=transaction.get('buy_curr', ''),
-                    exchange=transaction.get('exchange', ''),
-                    group=transaction.get('group', ''),
-                    comment=transaction.get('comment', ''),
-                    commit=False
-                )
-                # Optionally store USD equivalent as price pair for cost basis
-                if 'usd_equivalent' in transaction:
-                    usd_equiv = transaction['usd_equivalent']
-                    try:
-                        usd_equiv = float(usd_equiv)
-                    except ValueError:
-                        # Handle '$1234.56' format by stripping currency symbol
-                        usd_equiv = float(str(usd_equiv).lstrip('$').replace(',', ''))
-                    buy_amount = float(transaction.get('buy', 0.0))
-                    if buy_amount > 0:
-                        conv_price = usd_equiv / buy_amount
-                        self.backend.execute(self.getPricePairQuery(), {
-                            "to_curr": 'USD',
-                            "price": conv_price,
-                            "from_curr": transaction.get('buy_curr', ''),
-                            "date": transaction.get('created_date', ''),
-                        })
-                imported += 1
+            try:
+                # Normalize Interest/Staking aliases to Interest Income
+                if trans_type in ('Interest Income', 'Interest', 'Staking'):
+                    self.ledger_writer.interest_income(
+                        createddate=transaction.get('created_date', ''),
+                        buy=transaction.get('buy', 0.0),
+                        buy_curr=transaction.get('buy_curr', ''),
+                        exchange=transaction.get('exchange', ''),
+                        group=transaction.get('group', ''),
+                        comment=transaction.get('comment', ''),
+                        commit=False
+                    )
+                    # Optionally store USD equivalent as price pair for cost basis
+                    if 'usd_equivalent' in transaction:
+                        usd_equiv = transaction['usd_equivalent']
+                        try:
+                            usd_equiv = float(usd_equiv)
+                        except ValueError:
+                            # Handle '$1234.56' format by stripping currency symbol
+                            usd_equiv = float(str(usd_equiv).lstrip('$').replace(',', ''))
+                        buy_amount = float(transaction.get('buy', 0.0))
+                        if buy_amount > 0:
+                            conv_price = usd_equiv / buy_amount
+                            self.backend.execute(self.getPricePairQuery(), {
+                                "to_curr": 'USD',
+                                "price": conv_price,
+                                "from_curr": transaction.get('buy_curr', ''),
+                                "date": transaction.get('created_date', ''),
+                            })
+                    imported += 1
 
-            elif trans_type == "Mining":
-                self.ledger_writer.mining(
-                    createddate=transaction.get('created_date', ''),
-                    buy=transaction.get('buy', 0.0),
-                    buy_curr=transaction.get('buy_curr', ''),
-                    exchange=transaction.get('exchange', ''),
-                    group=transaction.get('group', ''),
-                    comment=transaction.get('comment', ''),
-                    transactionid=transaction.get('transactionid', ''),
-                    commit=False
-                )
-                imported += 1
+                elif trans_type == "Mining":
+                    self.ledger_writer.mining(
+                        createddate=transaction.get('created_date', ''),
+                        buy=transaction.get('buy', 0.0),
+                        buy_curr=transaction.get('buy_curr', ''),
+                        exchange=transaction.get('exchange', ''),
+                        group=transaction.get('group', ''),
+                        comment=transaction.get('comment', ''),
+                        transactionid=transaction.get('transactionid', ''),
+                        commit=False
+                    )
+                    imported += 1
 
-            elif trans_type == "Deposit":
-                self.ledger_writer.deposit(
-                    createddate=transaction.get('created_date', ''),
-                    buy=transaction.get('buy', 0.0),
-                    buy_curr=transaction.get('buy_curr', ''),
-                    exchange=transaction.get('exchange', ''),
-                    group=transaction.get('group', ''),
-                    comment=transaction.get('comment', ''),
-                    commit=False
-                )
-                imported += 1
+                elif trans_type == "Deposit":
+                    self.ledger_writer.deposit(
+                        createddate=transaction.get('created_date', ''),
+                        buy=transaction.get('buy', 0.0),
+                        buy_curr=transaction.get('buy_curr', ''),
+                        exchange=transaction.get('exchange', ''),
+                        group=transaction.get('group', ''),
+                        comment=transaction.get('comment', ''),
+                        commit=False
+                    )
+                    imported += 1
 
-            elif trans_type == "Withdrawal":
-                self.ledger_writer.withdraw(
-                    createddate=transaction.get('created_date', ''),
-                    sell=transaction.get('sell', 0.0),
-                    sell_curr=transaction.get('sell_curr', ''),
-                    fee=transaction.get('fee', 0.0),
-                    fee_curr=transaction.get('fee_curr', ''),
-                    exchange=transaction.get('exchange', ''),
-                    group=transaction.get('group', ''),
-                    comment=transaction.get('comment', ''),
-                    commit=False
-                )
-                imported += 1
+                elif trans_type == "Withdrawal":
+                    self.ledger_writer.withdraw(
+                        createddate=transaction.get('created_date', ''),
+                        sell=transaction.get('sell', 0.0),
+                        sell_curr=transaction.get('sell_curr', ''),
+                        fee=transaction.get('fee', 0.0),
+                        fee_curr=transaction.get('fee_curr', ''),
+                        exchange=transaction.get('exchange', ''),
+                        group=transaction.get('group', ''),
+                        comment=transaction.get('comment', ''),
+                        commit=False
+                    )
+                    imported += 1
 
-            elif trans_type == "Spend":
-                self.ledger_writer.spend(
-                    createddate=transaction.get('created_date', ''),
-                    sell=transaction.get('sell', 0.0),
-                    sell_curr=transaction.get('sell_curr', ''),
-                    fee=transaction.get('fee', 0.0),
-                    fee_curr=transaction.get('fee_curr', ''),
-                    exchange=transaction.get('exchange', ''),
-                    group=transaction.get('group', ''),
-                    comment=transaction.get('comment', ''),
-                    commit=False
-                )
-                imported += 1
+                elif trans_type == "Spend":
+                    self.ledger_writer.spend(
+                        createddate=transaction.get('created_date', ''),
+                        sell=transaction.get('sell', 0.0),
+                        sell_curr=transaction.get('sell_curr', ''),
+                        fee=transaction.get('fee', 0.0),
+                        fee_curr=transaction.get('fee_curr', ''),
+                        exchange=transaction.get('exchange', ''),
+                        group=transaction.get('group', ''),
+                        comment=transaction.get('comment', ''),
+                        commit=False
+                    )
+                    imported += 1
 
-            elif trans_type == "Trade":
-                self.ledger_writer.trade(
-                    createddate=transaction.get('created_date', ''),
-                    buy=transaction.get('buy', 0.0),
-                    buy_curr=transaction.get('buy_curr', ''),
-                    sell=transaction.get('sell', 0.0),
-                    sell_curr=transaction.get('sell_curr', ''),
-                    fee=transaction.get('fee', 0.0),
-                    fee_curr=transaction.get('fee_curr', ''),
-                    exchange=transaction.get('exchange', ''),
-                    group=transaction.get('group', ''),
-                    comment=transaction.get('comment', ''),
-                    commit=False
-                )
-                imported += 1
+                elif trans_type == "Trade":
+                    self.ledger_writer.trade(
+                        createddate=transaction.get('created_date', ''),
+                        buy=transaction.get('buy', 0.0),
+                        buy_curr=transaction.get('buy_curr', ''),
+                        sell=transaction.get('sell', 0.0),
+                        sell_curr=transaction.get('sell_curr', ''),
+                        fee=transaction.get('fee', 0.0),
+                        fee_curr=transaction.get('fee_curr', ''),
+                        exchange=transaction.get('exchange', ''),
+                        group=transaction.get('group', ''),
+                        comment=transaction.get('comment', ''),
+                        commit=False
+                    )
+                    imported += 1
 
-            else:
+                else:
+                    skipped += 1
+
+            except Exception as e:
+                # Log import error and count as skipped
+                print(f"Warning: Failed to import transaction (type={trans_type}): {e}")
                 skipped += 1
 
         self.backend.commit()
