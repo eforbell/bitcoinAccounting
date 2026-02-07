@@ -6,7 +6,7 @@
   "branch": "feature/cryptoaccounts-refactoring",
   "status": "in_progress",
   "stories": [
-    {"id": "REFACTOR-001", "title": "Update feature tracking", "status": "in_progress"},
+    {"id": "REFACTOR-001", "title": "Update feature tracking", "status": "completed"},
     {"id": "REFACTOR-002", "title": "Create TransactionQuery class", "status": "pending"},
     {"id": "REFACTOR-003", "title": "Create LedgerWriter class", "status": "pending"},
     {"id": "REFACTOR-004", "title": "Extract CapitalGainCalculator", "status": "pending"},

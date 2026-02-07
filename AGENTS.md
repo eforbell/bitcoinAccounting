@@ -1511,3 +1511,27 @@ export SQLITE_DB_PATH=~/.cryptoaccounting/custody_analysis.db
 import_csv --source native custody_chain.csv
 ```
 
+
+## Feature-8: CryptoAccounts Refactoring
+
+### REFACTOR-001: Remove Unused Methods (2026-02-06)
+
+**What Changed**:
+- Removed `get_bitcoin_price()` method from CryptoAccounts class
+- Made `SALE_PRICE_USD` required in forecast_gains script (was optional)
+- Eliminated CoinGecko API dependency for price fetching
+
+**Key Decision**: User chose to remove price-fetching feature entirely rather than extract it to a utils module. This simplifies the codebase and eliminates external network dependencies.
+
+**Learnings**:
+1. **Always grep before removal**: PRD stated "zero callers" but forecast_gains was actively using get_bitcoin_price(). Verify assumptions with `grep -r pattern .` before removing "unused" code
+2. **API dependency tradeoff**: Removing external API calls (CoinGecko) improves reliability but reduces user convenience (must provide prices manually)
+3. **Making parameters required**: Changed forecast_gains from optional to required price parameter. UX tradeoff: less convenient but more explicit
+4. **Test suite maintenance**: Found and fixed pre-existing test failure (test_valid_trans_types missing 'Spend'). Don't skip fixing broken tests encountered during feature work
+5. **Mixed work detection**: Found uncommitted REFACTOR-002 changes (TransactionQuery) mixed with REFACTOR-001. Used git stash to separate stories cleanly
+
+**Pattern**: When removing "unused" code, always:
+1. Grep entire codebase for references (including scripts/)
+2. Check planning docs separately (acceptable to have historical references)
+3. Verify tests still pass after removal
+4. Consider implications for user workflows (forecast_gains now requires manual prices)
