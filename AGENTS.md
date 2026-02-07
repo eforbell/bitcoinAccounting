@@ -2,6 +2,173 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-8: CryptoAccounts Refactoring - REFACTOR-008
+
+### Integration Testing Patterns
+
+**Story**: Add comprehensive integration tests for refactored query classes
+
+**Context**: After extracting specialized query classes (TransactionQuery, LedgerWriter, CapitalGainCalculator, WalletQuery), need integration tests to verify cross-class interactions and end-to-end workflows.
+
+**Key Learnings**:
+
+1. **get_transactions() Return Format**
+   - Returns tuple: `(column_names, transactions)`, not just list
+   - Always unpack: `headers, txs = crypto.get_transactions()`
+   - Column names use title case: 'Buy', 'Sell', 'Exchange', etc. (not lowercase)
+
+2. **Fee Handling Convention**
+   - Fees are already included in buy/sell amounts, NOT subtracted separately
+   - Example: Withdraw 0.3 BTC with 0.0001 fee → sell amount is 0.3, fee tracked separately
+   - Balance calculation: `buy - sell` (fees not deducted again)
+   - Exception: `transfer_funds()` adds fee to sell: `sell = tx_amount + fee_amount`
+
+3. **Wallet Query API**
+   - `get_wallets()` takes `active_only` boolean, NOT a coin parameter
+   - Returns list of dicts with 'wallet_id' key, not wallet name strings
+   - If wallets table exists (auto-created), it's empty by default
+   - Use `get_wallet_balance(coin, None)` to get all wallet balances as dict
+
+4. **Capital Gains Term Classification**
+   - Holding period < 365 days = 'Short' term (not 'Long')
+   - Jan 1 to Dec 1 = 334 days = Short term
+   - Jan 1 to Dec 2 = 336 days = Short term
+   - Must hold > 365 days (1 year + 1 day) for Long term
+
+5. **Integration Test Structure**
+   - **Full workflow tests**: Import → Query → Export → 1099-B generation
+   - **Cross-query tests**: Verify interactions between different query classes
+   - **Round-trip tests**: Export transactions then reimport to verify consistency
+   - **Data consistency tests**: Manual calculations match query class results
+   - **Complex scenarios**: Real-world workflows (buy → custody → sell)
+
+6. **Test Fixture Patterns**
+   - Use in-memory SQLite for fast, isolated tests
+   - Import transactions to set up data, then test query classes
+   - Verify balances match expected calculations based on all transactions
+   - Test both individual methods and integrated workflows
+
+**Files Created**:
+- `tests/test_refactored_integration.py` (648 lines, 9 comprehensive tests across 4 test classes)
+
+**Test Coverage**:
+- TestFullWorkflowIntegration: Import → query → export → 1099-B workflow + round-trip
+- TestCrossQueryClassInteractions: CapitalGainCalculator + TradeQuery/IncomeQuery interactions
+- TestDataConsistency: Transaction filtering matches balance calculations, date ranges
+- TestComplexScenarios: Complete buy-custody-sell workflow with transfers
+
+**Test Results**: All 9 tests passing (100% pass rate), 65 tests total for refactored code
+
+## Feature 8: CryptoAccounts Refactoring - Comprehensive Test Coverage for import_transactions() (REFACTOR-007)
+
+**Objective**: Add comprehensive test coverage for the `import_transactions()` method to ensure all transaction types, aliases, and error handling work correctly.
+
+**Key Changes**:
+1. Created `tests/test_import_transactions.py` with 17 tests across 6 test classes
+2. Tests cover all 6 transaction types: Deposit, Withdrawal, Spend, Trade, Mining, Interest Income
+3. Tests verify transaction type alias normalization (Interest → Interest Income, Staking → Interest Income)
+4. Tests verify USD equivalent price pair storage for interest income (including dollar sign parsing)
+5. Tests verify error handling prevents batch failures when individual transactions fail
+6. Tests verify unknown transaction types are counted as skipped
+
+**Key Learnings**:
+1. **Fee handling convention**: Fees are included in buy/sell amounts, not subtracted separately
+   - Withdrawal of 0.5 BTC with 0.0001 fee: pass `sell=0.5001` (total including fee)
+   - This matches `transfer_funds()` pattern: `sell=tx_amount+fee_amount`
+   - Fee field is for tracking/reporting, not balance calculation
+2. **Test data accuracy**: Always verify actual system behavior before writing test assertions - incorrect assumptions about fee handling caused initial test failures
+3. **Error handling testing**: Use None values for required fields to trigger database errors, testing that error handling prevents batch failures
+4. **Price pair storage**: USD equivalent for interest income goes into `pair_price` table with calculated conversion rate (usd_equivalent / buy_amount)
+5. **Batch import resilience**: Error handling added in REFACTOR-006 ensures one bad transaction doesn't break an entire batch import
+
+**Test Coverage**:
+- TestImportTransactionsBasic (6 tests): One test per transaction type
+- TestImportTransactionsAliases (2 tests): Interest and Staking alias normalization
+- TestImportTransactionsUSDEquivalent (4 tests): Price pair storage, dollar sign parsing, zero amount edge case
+- TestImportTransactionsSkipped (2 tests): Unknown types, mixed batches
+- TestImportTransactionsErrorHandling (1 test): Batch resilience with None values
+- TestImportTransactionsBatch (2 tests): Multi-type batch, empty batch
+
+**Test Results**: All 17 tests passing (100% pass rate)
+
+## Feature 8: CryptoAccounts Refactoring - Error Handling in import_transactions() (REFACTOR-006)
+
+**Objective**: Add robust error handling to `import_transactions()` method to prevent individual transaction failures from breaking entire import batches.
+
+**Key Changes**:
+1. Wrapped all transaction type handlers in a try/except block
+2. Added error logging with transaction type and error details
+3. Failed imports now increment the `skipped` counter
+4. Single transaction failures no longer abort the entire batch
+
+**Key Learnings**:
+1. **Error resilience pattern**: Wrapping each transaction import in try/except allows partial batch success - if transaction #5 fails, transactions #6-100 can still import
+2. **Error visibility**: Using `print()` for error logging ensures failures are visible without breaking the import flow
+3. **Backward compatibility**: Counting errors as "skipped" maintains the existing return structure `{"imported": X, "skipped": Y}` without breaking downstream code
+4. **Transaction types affected**: All 6 types protected: Interest Income/Interest/Staking, Mining, Deposit, Withdrawal, Spend, Trade
+5. **Price pair storage**: USD equivalent price pair storage (for interest income) is inside the try block, so price pair failures also get caught
+
+**Pattern**: When refactoring batch processing methods:
+- Add error handling around individual item processing
+- Log errors with enough context for debugging (item identifier, error message)
+- Allow batch to continue on individual failures
+- Maintain existing API contracts (return structure unchanged)
+
+**Test Results**: All 504 import tests passed (test_import_*.py + test_cli_scripts.py::import)
+
+## Feature 8: CryptoAccounts Refactoring - WalletQuery Extraction (REFACTOR-005)
+
+**Objective**: Extract wallet-related operations from CryptoAccounts into a dedicated WalletQuery class.
+
+**Key Changes**:
+1. Created `db/queries/wallet.py` with WalletQuery class
+2. Moved `get_balance_by_account()` logic to WalletQuery
+3. Moved `get_wallets()` logic to WalletQuery
+4. Moved `get_wallet_balance()` logic to WalletQuery as `get_balance_by_wallet()`
+5. Updated CryptoAccounts to delegate all three methods to WalletQuery
+6. Added WalletQuery to both `db/__init__.py` and `db/queries/__init__.py` exports
+
+**Key Learnings**:
+1. **Dual export requirement**: New query classes must be exported in BOTH:
+   - `db/queries/__init__.py` (for internal package structure)
+   - `db/__init__.py` (for top-level imports like `from db import WalletQuery`)
+2. **Method renaming during extraction**: PRD specified renaming `get_wallet_balance()` to `get_balance_by_wallet()` in the query class, while CryptoAccounts keeps the original wrapper name for backward compatibility
+3. **Backend-specific queries**: `get_wallets()` checks for table existence differently in SQLite vs PostgreSQL:
+   - SQLite: `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='wallets'`
+   - PostgreSQL: `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='wallets'`
+4. **Polymorphic return types**: `get_balance_by_wallet()` returns `float` when wallet is specified, or `dict[str, float]` when wallet=None, requiring union type hint: `float | dict[str, float]`
+
+**Pattern**: Follow established query class structure:
+- Constructor with `backend: DatabaseBackend` parameter
+- Type hints with `from __future__ import annotations`
+- TYPE_CHECKING imports for circular dependency avoidance
+- Full docstrings on all public methods
+
+**Test Results**: All 28 tests passed in test_cli_scripts.py (including 2 wallet-specific tests)
+
+## Feature 8: CryptoAccounts Refactoring - CapitalGainCalculator Extraction (REFACTOR-004)
+
+**Objective**: Extract FIFO capital gains calculation logic from CryptoAccounts into a dedicated CapitalGainCalculator query class.
+
+**Key Changes**:
+1. Created `db/queries/capital_gains.py` with CapitalGainCalculator class
+2. Made `_get_purchase_lots()` public as `get_purchase_lots()` method
+3. Extracted `get_sales_for_1099b()` logic to `get_1099b_data()` method
+4. Extracted `forecast_capital_gains_fifo()` logic to `forecast_sale()` method
+5. Updated CryptoAccounts to delegate to CapitalGainCalculator instance
+
+**Type Checking Gotchas**:
+1. **Variable name reuse confuses mypy**: When iterating with `for purchase in all_purchases:` where `purchase` is a tuple, and later `for purchase in purchase_queue:` where `purchase` is a dict, mypy gets confused and thinks the second `purchase` is still a tuple. Solution: use different variable names (e.g., `for lot in all_purchases:`)
+2. **Explicit type annotations for lists**: Empty lists assigned with `[]` need explicit type hints for mypy strict mode: `purchase_queue: list[dict[str, Any]] = []`
+3. **Optional return values**: When a method returns `float | None`, assign to a temporary variable to handle the None case before assigning to a `float` variable
+
+**Dependency Injection Pattern**:
+- CapitalGainCalculator requires 4 dependencies: `DatabaseBackend`, `TradeQuery`, `IncomeQuery`, `PriceLookup`
+- All dependencies injected via constructor for testability
+- Maintains single responsibility: only handles FIFO capital gains calculations
+
+**Test Results**: 12 tests passed (10 from test_1099b_export.py, 1 forecast test, 1 validation test)
+
 ## Strike Parser: Real Export Format vs Assumed Format (FIAT-005a)
 
 **Issue**: Original Strike parser was built against an assumed CSV format that didn't match real exports from Strike's 'All Transactions' export.
@@ -1511,3 +1678,118 @@ export SQLITE_DB_PATH=~/.cryptoaccounting/custody_analysis.db
 import_csv --source native custody_chain.csv
 ```
 
+
+## Feature-8: CryptoAccounts Refactoring
+
+### REFACTOR-001: Remove Unused Methods (2026-02-06)
+
+**What Changed**:
+- Removed `get_bitcoin_price()` method from CryptoAccounts class
+- Made `SALE_PRICE_USD` required in forecast_gains script (was optional)
+- Eliminated CoinGecko API dependency for price fetching
+
+**Key Decision**: User chose to remove price-fetching feature entirely rather than extract it to a utils module. This simplifies the codebase and eliminates external network dependencies.
+
+**Learnings**:
+1. **Always grep before removal**: PRD stated "zero callers" but forecast_gains was actively using get_bitcoin_price(). Verify assumptions with `grep -r pattern .` before removing "unused" code
+2. **API dependency tradeoff**: Removing external API calls (CoinGecko) improves reliability but reduces user convenience (must provide prices manually)
+3. **Making parameters required**: Changed forecast_gains from optional to required price parameter. UX tradeoff: less convenient but more explicit
+4. **Test suite maintenance**: Found and fixed pre-existing test failure (test_valid_trans_types missing 'Spend'). Don't skip fixing broken tests encountered during feature work
+5. **Mixed work detection**: Found uncommitted REFACTOR-002 changes (TransactionQuery) mixed with REFACTOR-001. Used git stash to separate stories cleanly
+
+**Pattern**: When removing "unused" code, always:
+1. Grep entire codebase for references (including scripts/)
+2. Check planning docs separately (acceptable to have historical references)
+3. Verify tests still pass after removal
+4. Consider implications for user workflows (forecast_gains now requires manual prices)
+
+### REFACTOR-002: Create TransactionQuery Class (2026-02-06)
+
+**What Changed**:
+- Created `TransactionQuery` class in `src/python/db/queries/transaction.py` (100 lines)
+- Extracted `get_transactions()` filtering logic from CryptoAccounts (56 lines removed)
+- Added dependency injection pattern: `TransactionQuery(backend)`
+- CryptoAccounts delegates to `self.transaction_query.get_transactions()`
+
+**Architecture Pattern**:
+```python
+# Before: Monolithic method in CryptoAccounts
+def get_transactions(self, coin, wallet, start_date, end_date):
+    # 56 lines of SQL building, WHERE clause logic, date parsing...
+    return colnames, transactions
+
+# After: Delegated to specialized query class
+def get_transactions(self, coin, wallet, start_date, end_date):
+    return self.transaction_query.get_transactions(coin, wallet, start_date, end_date)
+```
+
+**Learnings**:
+1. **Query Object Pattern**: Encapsulate complex queries in dedicated classes with single responsibility
+2. **Dependency Injection**: Pass `backend` to constructor, not hardcoded access to self.backend
+3. **Delegation preserves API**: Public method signatures unchanged, internal implementation refactored
+4. **Module exports hierarchy**: Must export in BOTH `db/queries/__init__.py` AND `db/__init__.py` for top-level imports
+5. **Git stash for separation**: Used `git stash` to separate mixed REFACTOR-001/002 work into clean commits
+6. **export_transactions_csv auto-benefits**: Since it calls get_transactions(), delegation automatically updates it
+
+**Export Pattern Observed**:
+- `db/queries/__init__.py`: Import from submodule, export in `__all__`
+- `db/__init__.py`: Re-import from queries, re-export in `__all__`
+- This allows `from db import TransactionQuery` (not `from db.queries import TransactionQuery`)
+
+**Test Coverage**: All 10 TestExportTxScript tests pass, verifying:
+- Transaction export
+- Wallet filtering (single and multiple)
+- Date range filtering
+- Combined filters
+- Empty result sets
+- CSV file creation
+- Fee currency inclusion
+
+### REFACTOR-003: Create LedgerWriter Class (2026-02-06)
+
+**What Changed**:
+- Created `LedgerWriter` class in `src/python/db/queries/ledger.py` (266 lines)
+- Implemented 6 transaction recording methods: `deposit()`, `withdraw()`, `spend()`, `trade()`, `mining()`, `interest_income()`
+- Each method encapsulates: INSERT query + backend.execute() + optional commit()
+- Removed 6 getXQuery methods from CryptoAccounts (18 lines removed)
+- Updated convenience methods and import_transactions to use LedgerWriter
+
+**Design Pattern - Optional Commit**:
+```python
+def deposit(self, createddate, buy, buy_curr, exchange, group="", comment="", commit=True):
+    # INSERT query
+    self.backend.execute(query, params)
+    if commit:
+        self.backend.commit()
+```
+
+**Why optional commit?**
+- **Individual operations** (deposit(), withdraw()): auto-commit (commit=True default)
+- **Batch operations** (import_transactions): defer commit (commit=False), commit once at end
+- Preserves transaction atomicity for multi-insert operations
+- Avoids performance overhead of committing each row in import loops
+
+**Learnings**:
+1. **Batch vs Individual commits**: Add `commit` parameter to support both use cases
+2. **Query Object Pattern continues**: LedgerWriter follows same pattern as TransactionQuery
+3. **Method naming consistency**: Use transaction type names (deposit, withdraw) not query getters (getDepositQuery)
+4. **Parameter normalization**: Handle None values in transfer_funds (group could be None, default to "")
+5. **getPricePairQuery kept**: Still needed for USD equivalent price pair storage in import_transactions
+
+**Refactoring Impact**:
+- CryptoAccounts.py: -88 net lines (207 lines refactored)
+- Removed 6 getXQuery methods (getDeposit, getWithdraw, getSpend, getTrade, getMining, getInterestIncome)
+- Convenience methods simplified from 3-4 lines to 1 line delegation
+- import_transactions now uses descriptive method calls instead of raw SQL queries
+
+**Pattern: Method Delegation**:
+```python
+# Before: 4 lines
+def deposit(self, ...):
+    self.backend.execute(self.getDepositQuery(), {...})
+    self.backend.commit()
+
+# After: 1 line delegation
+def deposit(self, ...):
+    self.ledger_writer.deposit(...)
+```

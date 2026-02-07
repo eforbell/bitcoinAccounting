@@ -1,0 +1,214 @@
+{
+  "branchName": "feature/cryptoaccounts-refactoring",
+  "projectName": "CryptoAccounts Refactoring",
+  "description": "Refactor cryptoAccounts.py from a 918-line monolithic class into a well-organized, testable architecture by extracting specialized query classes and removing legacy code",
+  "principles": [
+    "Single Responsibility - Each query class has one focused purpose",
+    "Dependency Injection - All query classes use constructor injection",
+    "Backward Compatibility - All public method signatures preserved",
+    "Test Coverage - Add tests before refactoring risky code",
+    "Incremental Changes - One story per commit with verification"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest + pytest-cov",
+    "database": "SQLite + PostgreSQL (via DatabaseBackend abstraction)",
+    "pattern": "Query Object Pattern with dependency injection"
+  },
+  "userStories": [
+    {
+      "id": "REFACTOR-001",
+      "title": "Remove unused methods and update feature tracking",
+      "acceptanceCriteria": [
+        "Remove get_bitcoin_price() method (lines 87-107) - zero callers",
+        "Mark feature-7 as completed in current-feature.json with mergedDate 2026-02-06",
+        "Add feature-8 to current-feature.json as current feature",
+        "Verify no references to get_bitcoin_price in codebase (grep search)",
+        "All existing tests pass after removal"
+      ],
+      "priority": 1,
+      "estimatedLines": -20,
+      "testStrategy": "Run full test suite to verify no breakage",
+      "passes": true
+    },
+    {
+      "id": "REFACTOR-002",
+      "title": "Create TransactionQuery class for transaction filtering",
+      "acceptanceCriteria": [
+        "Create src/python/db/queries/transaction.py with TransactionQuery class",
+        "Move get_transactions() logic (lines 109-176) to TransactionQuery.get_transactions()",
+        "Update CryptoAccounts.__init__ to create self.transaction_query instance",
+        "Update CryptoAccounts.get_transactions() to delegate to query class",
+        "Update export_transactions_csv() to use self.transaction_query",
+        "Add TransactionQuery to db/queries/__init__.py exports",
+        "All 10 export tests pass (TestExportTxScript)"
+      ],
+      "priority": 2,
+      "estimatedLines": "+80 (new file), -50 (cryptoAccounts.py)",
+      "testStrategy": "pytest tests/test_cli_scripts.py::TestExportTxScript -v",
+      "passes": true
+    },
+    {
+      "id": "REFACTOR-003",
+      "title": "Create LedgerWriter class for transaction recording",
+      "acceptanceCriteria": [
+        "Create src/python/db/queries/ledger.py with LedgerWriter class",
+        "Implement methods: deposit(), withdraw(), spend(), trade(), mining(), interest_income()",
+        "Each method encapsulates INSERT query + backend.execute() + backend.commit()",
+        "Remove getDepositQuery(), getWithdrawQuery(), getSpendQuery(), getTradeQuery(), getMiningQuery(), getInterestIncomeQuery() from cryptoAccounts.py",
+        "Update CryptoAccounts convenience methods (deposit, withdraw, etc.) to use LedgerWriter",
+        "Add LedgerWriter to db/queries/__init__.py exports",
+        "All balance and transfer tests pass"
+      ],
+      "priority": 3,
+      "estimatedLines": "+120 (new file), -80 (cryptoAccounts.py)",
+      "testStrategy": "pytest tests/test_cli_scripts.py::TestBalanceScript tests/test_cli_scripts.py::TestTransferScript -v",
+      "passes": true
+    },
+    {
+      "id": "REFACTOR-004",
+      "title": "Extract CapitalGainCalculator for FIFO tax calculations",
+      "acceptanceCriteria": [
+        "Create src/python/db/queries/capital_gains.py with CapitalGainCalculator class",
+        "Move _get_purchase_lots() as public method (lines 453-501)",
+        "Extract shared _fifo_match_sales() logic from both tax methods",
+        "Move get_sales_for_1099b() logic (lines 503-694) to get_1099b_data()",
+        "Move forecast_capital_gains_fifo() logic (lines 696-836) to forecast_sale()",
+        "Update CryptoAccounts to delegate both tax methods to CapitalGainCalculator",
+        "Add CapitalGainCalculator to db/queries/__init__.py exports",
+        "All 13+ 1099-B tests pass, forecast gains test passes"
+      ],
+      "priority": 4,
+      "estimatedLines": "+400 (new file), -330 (cryptoAccounts.py)",
+      "testStrategy": "pytest tests/test_1099b_export.py tests/test_cli_scripts.py::TestForecastGainsScript -v",
+      "passes": true
+    },
+    {
+      "id": "REFACTOR-005",
+      "title": "Create WalletQuery class for wallet operations",
+      "acceptanceCriteria": [
+        "Create src/python/db/queries/wallet.py with WalletQuery class",
+        "Move get_wallets() logic (lines 838-887)",
+        "Move get_wallet_balance() logic (lines 889-914) as get_balance_by_wallet()",
+        "Move get_balance_by_account() logic (lines 51-74)",
+        "Update CryptoAccounts to delegate all three methods to WalletQuery",
+        "Add WalletQuery to db/queries/__init__.py exports",
+        "Wallet balance tests pass"
+      ],
+      "priority": 5,
+      "estimatedLines": "+100 (new file), -100 (cryptoAccounts.py)",
+      "testStrategy": "pytest tests/test_cli_scripts.py::TestWalletBalancesScript -v",
+      "passes": true
+    },
+    {
+      "id": "REFACTOR-006",
+      "title": "Refactor import_transactions() to use LedgerWriter",
+      "acceptanceCriteria": [
+        "Update import_transactions() to use self.ledger_writer methods instead of getXQuery()",
+        "Maintain existing transaction type normalization (Interest/Staking → Interest Income)",
+        "Maintain USD equivalent price pair storage for interest income",
+        "Add try/except error handling around each transaction import",
+        "Return dict with imported/skipped counts as before",
+        "All import tests pass (test_import_*.py, test_spend_transaction_import_export)"
+      ],
+      "priority": 6,
+      "estimatedLines": "~0 (refactor existing 130 lines)",
+      "testStrategy": "pytest tests/test_import_*.py tests/test_cli_scripts.py -k import -v",
+      "passes": true
+    },
+    {
+      "id": "REFACTOR-007",
+      "title": "Add comprehensive test coverage for import_transactions()",
+      "acceptanceCriteria": [
+        "Create tests/test_import_transactions.py",
+        "Test importing each transaction type individually (Deposit, Withdrawal, Spend, Trade, Mining, Interest Income)",
+        "Test USD equivalent price pair storage for interest income",
+        "Test skipped count increments for unknown transaction types",
+        "Test transaction type alias normalization (Interest → Interest Income, Staking → Interest Income)",
+        "Achieve 80%+ coverage on import_transactions method",
+        "All new tests pass"
+      ],
+      "priority": 7,
+      "estimatedLines": "+150 (new test file)",
+      "testStrategy": "pytest tests/test_import_transactions.py -v --cov=src/python/cryptoAccounts",
+      "passes": true
+    },
+    {
+      "id": "REFACTOR-008",
+      "title": "Add integration tests for refactored code",
+      "acceptanceCriteria": [
+        "Create tests/test_refactored_integration.py",
+        "Test full workflow: import transactions → query → export → generate 1099-B",
+        "Test cross-query-class interactions (e.g., CapitalGainCalculator using TradeQuery and IncomeQuery)",
+        "Test round-trip: export with TransactionQuery → reimport with import_transactions",
+        "Verify data consistency across query classes",
+        "All integration tests pass"
+      ],
+      "priority": 8,
+      "estimatedLines": "+100 (new test file)",
+      "testStrategy": "pytest tests/test_refactored_integration.py -v",
+      "passes": true
+    },
+    {
+      "id": "REFACTOR-009",
+      "title": "Update module exports for new query classes",
+      "acceptanceCriteria": [
+        "Add TransactionQuery to db/queries/__init__.py __all__ list",
+        "Add LedgerWriter to db/queries/__init__.py __all__ list",
+        "Add CapitalGainCalculator to db/queries/__init__.py __all__ list",
+        "Add WalletQuery to db/queries/__init__.py __all__ list",
+        "Add proper import statements for each new class",
+        "Verify classes can be imported via 'from db import ClassName'"
+      ],
+      "priority": 9,
+      "estimatedLines": "+10",
+      "testStrategy": "python -c 'from db import TransactionQuery, LedgerWriter, CapitalGainCalculator, WalletQuery'",
+      "passes": true
+    },
+    {
+      "id": "REFACTOR-010",
+      "title": "Update documentation with refactoring learnings",
+      "acceptanceCriteria": [
+        "Add 'Feature-8: CryptoAccounts Refactoring' section to AGENTS.md",
+        "Document query class pattern (dependency injection, single responsibility)",
+        "Document before/after comparison (918 lines → ~300 lines)",
+        "Document rationale for extraction decisions",
+        "Document testing approach and coverage improvements",
+        "Create planning/features/feature-8-prd.json",
+        "Create planning/features/feature-8-summary.md"
+      ],
+      "priority": 10,
+      "estimatedLines": "+100 (documentation)",
+      "testStrategy": "Manual review of documentation",
+      "passes": true
+    }
+  ],
+  "riskAssessment": {
+    "high": [],
+    "medium": [
+      "import_transactions has limited test coverage (only 1 basic test)",
+      "LedgerWriter changes transaction recording flow - needs careful testing",
+      "Private helper _get_purchase_lots needs extraction to public method"
+    ],
+    "low": [
+      "Extracting well-tested methods (get_transactions has 12+ tests)",
+      "Following established query class pattern",
+      "Delegation maintains backward compatibility"
+    ]
+  },
+  "futureEnhancements": [
+    "Add additional cost basis methods (LIFO, Specific ID) to CapitalGainCalculator",
+    "Create TransactionImporter class to handle complex import normalization",
+    "Add PriceWriter class for pair_price table operations",
+    "Implement context manager (__enter__/__exit__) for CryptoAccounts",
+    "Add async query methods for better performance with large datasets"
+  ],
+  "metrics": {
+    "currentLines": 918,
+    "targetLines": 300,
+    "reduction": "67%",
+    "newQueryClasses": 4,
+    "testsAdded": "~250 lines",
+    "coverageTarget": "85%"
+  }
+}

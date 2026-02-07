@@ -5,13 +5,12 @@ Simulates a sale without recording any transactions. Shows which lots would be
 sold, cost basis, proceeds, and tax implications (short vs long-term).
 
 Usage:
-    forecast_gains <COIN> <QUANTITY> [SALE_PRICE_USD] [--wallet=WALLET_ID]
-    
+    forecast_gains <COIN> <QUANTITY> <SALE_PRICE_USD> [--wallet=WALLET_ID]
+
 Examples:
-    forecast_gains BTC 0.5              # Use current market price, all wallets
-    forecast_gains BTC 0.5 95000        # Specify sale price
+    forecast_gains BTC 0.5 95000        # Forecast selling 0.5 BTC @ $95k
     forecast_gains ALGO 1000 0.25       # Forecast selling 1000 ALGO @ $0.25
-    forecast_gains BTC 0.1 --wallet=CC  # Per-wallet forecast
+    forecast_gains BTC 0.1 92000 --wallet=CC  # Per-wallet forecast
 """
 
 import sys
@@ -21,8 +20,8 @@ from cryptoAccounts import CryptoAccounts
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: forecast_gains <COIN> <QUANTITY> [SALE_PRICE_USD] [--wallet=WALLET_ID]")
+    if len(sys.argv) < 4:
+        print("Usage: forecast_gains <COIN> <QUANTITY> <SALE_PRICE_USD> [--wallet=WALLET_ID]")
         print("Example: forecast_gains BTC 0.5 95000 --wallet=CC")
         sys.exit(1)
     
@@ -46,23 +45,24 @@ def main():
     if quantity <= 0:
         print(f"ERROR: Quantity must be positive, got {quantity}", file=sys.stderr)
         sys.exit(1)
-    
-    # Get sale price (optional)
-    if len(args) > 2:
-        try:
-            sale_price_usd = float(args[2])
-        except ValueError:
-            print(f"ERROR: Invalid sale price '{args[2]}'. Must be a number.", file=sys.stderr)
-            sys.exit(1)
-        
-        if sale_price_usd <= 0:
-            print(f"ERROR: Sale price must be positive, got {sale_price_usd}", file=sys.stderr)
-            sys.exit(1)
-        
-        price_source = f"specified (${sale_price_usd:,.2f})"
-    else:
-        sale_price_usd = None
-        price_source = "current market"
+
+    # Get sale price (required)
+    if len(args) < 3:
+        print(f"ERROR: SALE_PRICE_USD is required.", file=sys.stderr)
+        print("Usage: forecast_gains <COIN> <QUANTITY> <SALE_PRICE_USD> [--wallet=WALLET_ID]")
+        sys.exit(1)
+
+    try:
+        sale_price_usd = float(args[2])
+    except ValueError:
+        print(f"ERROR: Invalid sale price '{args[2]}'. Must be a number.", file=sys.stderr)
+        sys.exit(1)
+
+    if sale_price_usd <= 0:
+        print(f"ERROR: Sale price must be positive, got {sale_price_usd}", file=sys.stderr)
+        sys.exit(1)
+
+    price_source = "specified"
     
     crypto = CryptoAccounts()
     
@@ -82,16 +82,7 @@ def main():
             print(f"  Current balance: {current_balance:.8f} {coin}")
             print(f"  Shortfall: {(quantity - current_balance):.8f} {coin}")
             print(f"{'!' * 70}\n")
-        
-        # Get current market price if not specified
-        if sale_price_usd is None:
-            if coin == 'BTC':
-                sale_price_usd = crypto.get_bitcoin_price()
-                price_source = "current market (CoinGecko)"
-            else:
-                print(f"ERROR: Market price lookup not available for {coin}. Please specify sale price.", file=sys.stderr)
-                sys.exit(1)
-        
+
         proceeds_total = quantity * sale_price_usd
         if wallet:
             print(f"Wallet: {wallet}")
