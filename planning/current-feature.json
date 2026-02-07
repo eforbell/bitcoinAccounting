@@ -1,16 +1,21 @@
 {
-  "currentFeature": "feature-7",
-  "featureName": "Export Improvements",
-  "prdPath": "planning/features/feature-7-prd.json",
-  "summaryPath": "planning/features/feature-7-summary.md",
-  "branch": "feature/export-improvements",
+  "currentFeature": "feature-8",
+  "featureName": "CryptoAccounts Refactoring",
+  "prdPath": "planning/features/feature-8-prd.json",
+  "summaryPath": "planning/features/feature-8-summary.md",
+  "branch": "feature/cryptoaccounts-refactoring",
   "status": "in_progress",
   "stories": [
-    {"id": "EXPORT-001", "title": "Add wallet filtering to CryptoAccounts.export_transactions_csv()", "status": "pending"},
-    {"id": "EXPORT-002", "title": "Modernize export_tx CLI with argparse", "status": "pending"},
-    {"id": "EXPORT-003", "title": "Implement dry-run preview", "status": "pending"},
-    {"id": "EXPORT-004", "title": "Add comprehensive tests", "status": "pending"},
-    {"id": "EXPORT-005", "title": "Update documentation", "status": "pending"}
+    {"id": "REFACTOR-001", "title": "Update feature tracking", "status": "in_progress"},
+    {"id": "REFACTOR-002", "title": "Create TransactionQuery class", "status": "pending"},
+    {"id": "REFACTOR-003", "title": "Create LedgerWriter class", "status": "pending"},
+    {"id": "REFACTOR-004", "title": "Extract CapitalGainCalculator", "status": "pending"},
+    {"id": "REFACTOR-005", "title": "Create WalletQuery class", "status": "pending"},
+    {"id": "REFACTOR-006", "title": "Refactor import_transactions()", "status": "pending"},
+    {"id": "REFACTOR-007", "title": "Add test coverage for import_transactions", "status": "pending"},
+    {"id": "REFACTOR-008", "title": "Add integration tests", "status": "pending"},
+    {"id": "REFACTOR-009", "title": "Update module exports", "status": "pending"},
+    {"id": "REFACTOR-010", "title": "Update documentation", "status": "pending"}
   ],
   "completedFeatures": [
     {
@@ -60,6 +65,14 @@
       "mergedDate": "2026-02-06",
       "stories": 7,
       "notes": "Added FIAT_CURRENCIES constant and is_fiat() helper, updated all exchange parsers (Kraken, Swan, River, Gemini, Coinbase Pro) to handle fiat deposits/withdrawals"
+    },
+    {
+      "featureId": "feature-7",
+      "featureName": "Export Improvements",
+      "branch": "feature/export-improvements",
+      "mergedDate": "2026-02-06",
+      "stories": 6,
+      "notes": "Modernized export_tx with argparse, added wallet/date filtering, --wallets for multiple wallets, dry-run preview, Spend transaction type support, PostgreSQL compatibility"
     }
   ],
   "futureEnhancements": [
