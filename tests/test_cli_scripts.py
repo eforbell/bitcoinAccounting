@@ -561,6 +561,242 @@ class TestExportTxScript:
 
         crypto.close()
 
+    def test_spend_transaction_import_export(self) -> None:
+        """Verify Spend transactions can be imported and exported."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Import a Spend transaction (like UTXO consolidation or payment)
+        spend_tx = {
+            'trans_type': 'Spend',
+            'created_date': '2025-01-31 21:16:36',
+            'sell': 0.00000914,
+            'sell_curr': 'BTC',
+            'fee': 0.00000914,
+            'fee_curr': 'BTC',
+            'exchange': 'Vault',
+            'group': '',
+            'comment': 'UTXO consolidation',
+        }
+
+        result = crypto.import_transactions([spend_tx])
+        assert result['imported'] == 1
+        assert result['skipped'] == 0
+
+        # Export and verify
+        headers, transactions = crypto.get_transactions('BTC')
+        assert len(transactions) == 1
+        assert transactions[0]['Type'] == 'Spend'
+        assert float(transactions[0]['Sell']) == 0.00000914
+        assert float(transactions[0]['Fee']) == 0.00000914
+        assert transactions[0]['Exchange'] == 'Vault'
+
+        crypto.close()
+
+    def test_export_with_wallet_filter(self) -> None:
+        """Verify export can filter by wallet/exchange."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Add transactions to different wallets
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Coldcard', deposit_date=datetime(2025, 1, 2), buy=0.5, buy_curr='BTC')
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 3), buy=0.3, buy_curr='BTC')
+        crypto.deposit(exchange='Vault', deposit_date=datetime(2025, 1, 4), buy=0.2, buy_curr='BTC')
+
+        # Filter by Strike wallet
+        headers, transactions = crypto.get_transactions(wallet='Strike')
+
+        assert len(transactions) == 2
+        assert all(tx['Exchange'] == 'Strike' for tx in transactions)
+        assert transactions[0]['Buy'] == 1.0
+        assert transactions[1]['Buy'] == 0.3
+
+        crypto.close()
+
+    def test_export_with_date_range_filter(self) -> None:
+        """Verify export can filter by date range."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Add transactions across different dates
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2024, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2024, 6, 15), buy=0.5, buy_curr='BTC')
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2024, 12, 31), buy=0.3, buy_curr='BTC')
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 15), buy=0.2, buy_curr='BTC')
+
+        # Filter to 2024 only
+        headers, transactions = crypto.get_transactions(
+            start_date='2024-01-01',
+            end_date='2024-12-31'
+        )
+
+        assert len(transactions) == 3
+        for tx in transactions:
+            tx_date = str(tx['Date'])[:10]
+            assert tx_date >= '2024-01-01'
+            assert tx_date <= '2024-12-31'
+
+        crypto.close()
+
+    def test_export_with_combined_filters(self) -> None:
+        """Verify export can combine wallet, coin, and date filters."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Add diverse transactions
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2024, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2024, 6, 15), buy=100.0, buy_curr='USD')
+        crypto.deposit(exchange='Coldcard', deposit_date=datetime(2024, 3, 1), buy=0.5, buy_curr='BTC')
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 1), buy=0.3, buy_curr='BTC')
+
+        # Filter: Strike + BTC + 2024
+        headers, transactions = crypto.get_transactions(
+            coin='BTC',
+            wallet='Strike',
+            start_date='2024-01-01',
+            end_date='2024-12-31'
+        )
+
+        assert len(transactions) == 1
+        assert transactions[0]['Exchange'] == 'Strike'
+        assert transactions[0]['Buy Cur.'] == 'BTC'
+        assert transactions[0]['Buy'] == 1.0
+
+        crypto.close()
+
+    def test_export_with_empty_result_set(self) -> None:
+        """Verify export handles empty result sets gracefully."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Add some transactions
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2024, 1, 1), buy=1.0, buy_curr='BTC')
+
+        # Filter for non-existent wallet
+        headers, transactions = crypto.get_transactions(wallet='NonExistent')
+
+        assert len(transactions) == 0
+        assert headers == []
+
+        # Filter for future dates
+        headers, transactions = crypto.get_transactions(
+            start_date='2030-01-01',
+            end_date='2030-12-31'
+        )
+
+        assert len(transactions) == 0
+
+        crypto.close()
+
+    def test_export_csv_file_creation(self) -> None:
+        """Verify export_transactions_csv creates valid CSV file."""
+        import tempfile
+        import csv
+
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Add test transactions
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Coldcard', deposit_date=datetime(2025, 1, 2), buy=0.5, buy_curr='BTC')
+
+        # Export to temporary file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as f:
+            temp_path = f.name
+
+        try:
+            crypto.export_transactions_csv(temp_path, wallet='Strike')
+
+            # Read and verify CSV
+            with open(temp_path, 'r') as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+
+            assert len(rows) == 1
+            assert rows[0]['Exchange'] == 'Strike'
+            assert rows[0]['Buy'] == '1.0'
+            assert rows[0]['Buy Cur.'] == 'BTC'
+
+        finally:
+            # Clean up
+            import os
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        crypto.close()
+
+    def test_export_with_coin_filter_includes_fees(self) -> None:
+        """Verify coin filter includes transactions where coin appears in fee_curr."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Add trade with BTC fee
+        crypto.execute_trade(
+            exchange='Strike',
+            trade_date=datetime(2025, 1, 1),
+            buy=100.0,
+            buy_curr='USD',
+            sell=0.001,
+            sell_curr='ETH',
+            fee=0.0001,
+            fee_curr='BTC'
+        )
+
+        # Filter by BTC (should include transaction with BTC fee)
+        headers, transactions = crypto.get_transactions(coin='BTC')
+
+        assert len(transactions) == 1
+        assert transactions[0]['Fee Cur.'] == 'BTC'
+
+        crypto.close()
+
+    def test_export_with_multiple_wallets(self) -> None:
+        """Verify export can filter by multiple wallets using list."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Add transactions to different wallets
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Coldcard', deposit_date=datetime(2025, 1, 2), buy=0.5, buy_curr='BTC')
+        crypto.deposit(exchange='Vault', deposit_date=datetime(2025, 1, 3), buy=0.3, buy_curr='BTC')
+        crypto.deposit(exchange='River', deposit_date=datetime(2025, 1, 4), buy=0.2, buy_curr='BTC')
+
+        # Filter by multiple wallets
+        headers, transactions = crypto.get_transactions(wallet=['Strike', 'Vault'])
+
+        assert len(transactions) == 2
+        exchanges = {tx['Exchange'] for tx in transactions}
+        assert exchanges == {'Strike', 'Vault'}
+        assert transactions[0]['Buy'] == 1.0
+        assert transactions[1]['Buy'] == 0.3
+
+        crypto.close()
+
+    def test_export_with_multiple_wallets_and_coin(self) -> None:
+        """Verify multiple wallets can be combined with other filters."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend)
+
+        # Add diverse transactions
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2025, 1, 2), buy=100.0, buy_curr='USD')
+        crypto.deposit(exchange='Coldcard', deposit_date=datetime(2025, 1, 3), buy=0.5, buy_curr='BTC')
+        crypto.deposit(exchange='Vault', deposit_date=datetime(2025, 1, 4), buy=0.3, buy_curr='BTC')
+
+        # Filter: (Strike OR Vault) AND BTC
+        headers, transactions = crypto.get_transactions(
+            coin='BTC',
+            wallet=['Strike', 'Vault']
+        )
+
+        assert len(transactions) == 2
+        assert all(tx['Buy Cur.'] == 'BTC' for tx in transactions)
+        exchanges = {tx['Exchange'] for tx in transactions}
+        assert exchanges == {'Strike', 'Vault'}
+
+        crypto.close()
+
 
 class TestGainsTrackerScript:
     """Tests for 'gains_tracker' script functionality."""

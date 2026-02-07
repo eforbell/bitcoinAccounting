@@ -1415,3 +1415,99 @@ River ships two CSV exports that overlap in columns:
 
 **Test Coverage**: 30 tests (4 detection, 6 parse_number, 14 trade parsing + BTC filter, 8 deposits/withdrawals, 3 registration, 2 integration)
 
+
+## EXPORT-001 to EXPORT-005: Export Improvements (2026-02-06)
+
+**Context**: The `export_tx` script used basic positional arguments and lacked filtering capabilities. Needed to modernize it to match `import_csv` usability with wallet filtering, date ranges, and dry-run preview.
+
+**Implementation Strategy**:
+1. Extend `get_transactions()` method with optional filter parameters (coin, wallet, start_date, end_date)
+2. Build dynamic SQL WHERE clause with parameterized queries for security
+3. Replace sys.argv parsing with argparse for better CLI UX
+4. Add dry-run preview showing filters, sample transactions, and summary statistics
+5. Comprehensive test coverage for all filter combinations
+
+**Key Patterns**:
+- Dynamic SQL building: `where_clauses.append()` + `" AND ".join(where_clauses)` prevents empty WHERE clause
+- Parameterized queries: Always use `:param` syntax with params dict to prevent SQL injection
+- Date inclusivity: `l.createddate < date(:end_date, '+1 day')` to include entire end date (not just midnight)
+- Dry-run format: Show filters → sample data → summary stats → instruction to run without --dry-run
+- Test structure: Separate tests for each filter type + combined filters + edge cases (empty results)
+
+**Date Filter Implementation Detail**:
+```python
+# WRONG: Excludes transactions on end_date after midnight
+where_clauses.append("l.createddate <= :end_date")
+
+# WRONG: SQLite-specific syntax (fails on PostgreSQL)
+where_clauses.append("l.createddate < date(:end_date, '+1 day')")
+
+# CORRECT: Database-agnostic - do date math in Python, not SQL
+from datetime import datetime, timedelta
+if isinstance(end_date, str):
+    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+else:
+    end_date_obj = end_date
+next_day = end_date_obj + timedelta(days=1)
+where_clauses.append("l.createddate < :end_date_exclusive")
+params['end_date_exclusive'] = next_day.strftime('%Y-%m-%d')
+```
+
+**Learnings**:
+1. **Date comparison gotcha**: String date comparisons (`<=` with 'YYYY-MM-DD') exclude same-day transactions with timestamps. Solution: add 1 day in Python and use `<` comparison.
+2. **Cross-database compatibility**: SQLite's `date(:param, '+1 day')` syntax fails in PostgreSQL with "function date(unknown, unknown) does not exist". Always do date arithmetic in Python, not SQL, to support both backends.
+3. **Backward compatibility**: All new parameters must have `None` defaults to preserve existing behavior for scripts/code calling old signature.
+3. **Argparse epilog**: Use `formatter_class=argparse.RawDescriptionHelpFormatter` to preserve example formatting in help text.
+4. **Filter display**: Always show what filters are active in dry-run output (including "All wallets"/"All currencies" when None) for clarity.
+5. **CSV export testing**: Use `tempfile.NamedTemporaryFile` with `delete=False` + try/finally cleanup for file-based tests.
+6. **ORDER BY consistency**: Add both `createddate ASC` and `id ASC` for deterministic ordering (multiple transactions can have same timestamp).
+
+**Test Coverage**: 9 tests in TestExportTxScript:
+- Basic transaction export (pre-existing)
+- Wallet filter only
+- Date range filter only
+- Combined filters (wallet + coin + dates)
+- Empty result sets
+- CSV file creation with filters
+- Fee currency inclusion in coin filter
+- Multiple wallets filter (list)
+- Multiple wallets combined with coin filter
+
+**CLI Examples**:
+```bash
+# Preview before exporting
+export_tx --wallet Strike --dry-run
+
+# Export with filters
+export_tx output.csv --wallet Strike --coin BTC --start-date 2024-01-01
+
+# Export multiple wallets (wallet ecosystem)
+export_tx custody.csv --wallets Strike,River,Coldcard
+
+# Round-trip test: export → reimport
+export_tx wallet_export.csv --wallet Strike
+import_csv --source native wallet_export.csv --dry-run
+```
+
+**EXPORT-006 Enhancement: Multiple Wallet Support (2026-02-06)**
+
+Added `--wallets` parameter to support exporting multiple wallets in one command.
+
+**Implementation**:
+- `get_transactions()` now accepts `wallet` as string or list
+- SQL uses OR conditions: `(l.exchange = :wallet0 OR l.exchange = :wallet1 ...)`
+- CLI accepts comma-separated wallets: `--wallets Strike,Coldcard,Vault`
+- Mutually exclusive with `--wallet` (validation error if both used)
+
+**Use Case**: Export related wallet ecosystem for analysis database or sharing with accountant:
+```bash
+# Export from main database
+export DB_BACKEND=sqlite
+export SQLITE_DB_PATH=~/.cryptoaccounting/main.db
+export_tx custody_chain.csv --wallets Strike,River,Coldcard
+
+# Import to analysis database
+export SQLITE_DB_PATH=~/.cryptoaccounting/custody_analysis.db
+import_csv --source native custody_chain.csv
+```
+

@@ -20,6 +20,7 @@ VALID_TRANS_TYPES = frozenset({
     'Trade',
     'Deposit',
     'Withdrawal',
+    'Spend',  # Payment or UTXO consolidation (debit without custody transfer)
     'Interest Income',
     'Mining',
     'Staking',  # Alias for Interest Income
@@ -30,7 +31,7 @@ VALID_TRANS_TYPES = frozenset({
 BUY_TYPES = frozenset({'Trade', 'Deposit', 'Interest Income', 'Mining', 'Staking', 'Interest'})
 
 # Transaction types that require sell fields
-SELL_TYPES = frozenset({'Trade', 'Withdrawal'})
+SELL_TYPES = frozenset({'Trade', 'Withdrawal', 'Spend'})
 
 
 @dataclass

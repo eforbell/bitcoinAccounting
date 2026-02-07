@@ -1,18 +1,16 @@
 {
-  "currentFeature": "feature-6",
-  "featureName": "Fiat Currency Tracking",
-  "prdPath": "planning/features/feature-6-prd.json",
-  "summaryPath": "planning/features/feature-6-summary.md",
-  "branch": "feature/fiat-currency-tracking",
+  "currentFeature": "feature-7",
+  "featureName": "Export Improvements",
+  "prdPath": "planning/features/feature-7-prd.json",
+  "summaryPath": "planning/features/feature-7-summary.md",
+  "branch": "feature/export-improvements",
   "status": "in_progress",
   "stories": [
-    {"id": "FIAT-000", "title": "Add FIAT_CURRENCIES constant and is_fiat() helper", "status": "pending"},
-    {"id": "FIAT-001", "title": "Kraken fiat deposits and withdrawals", "status": "pending"},
-    {"id": "FIAT-002", "title": "Swan USD deposits", "status": "pending"},
-    {"id": "FIAT-003", "title": "River cash deposits", "status": "pending"},
-    {"id": "FIAT-004", "title": "Gemini xlsx USD credit/debit", "status": "pending"},
-    {"id": "FIAT-005", "title": "Coinbase Pro importer class", "status": "pending"},
-    {"id": "FIAT-006", "title": "Documentation update", "status": "pending"}
+    {"id": "EXPORT-001", "title": "Add wallet filtering to CryptoAccounts.export_transactions_csv()", "status": "pending"},
+    {"id": "EXPORT-002", "title": "Modernize export_tx CLI with argparse", "status": "pending"},
+    {"id": "EXPORT-003", "title": "Implement dry-run preview", "status": "pending"},
+    {"id": "EXPORT-004", "title": "Add comprehensive tests", "status": "pending"},
+    {"id": "EXPORT-005", "title": "Update documentation", "status": "pending"}
   ],
   "completedFeatures": [
     {
@@ -54,6 +52,14 @@
       "mergedDate": null,
       "stories": 7,
       "notes": "Wallet import parsers (Ledger Live, Trezor Suite, Sparrow, Coldcard) integrated into CLI import system with --wallet-name support"
+    },
+    {
+      "featureId": "feature-6",
+      "featureName": "Fiat Currency Tracking",
+      "branch": "feature/fiat-currency-tracking",
+      "mergedDate": "2026-02-06",
+      "stories": 7,
+      "notes": "Added FIAT_CURRENCIES constant and is_fiat() helper, updated all exchange parsers (Kraken, Swan, River, Gemini, Coinbase Pro) to handle fiat deposits/withdrawals"
     }
   ],
   "futureEnhancements": [

@@ -106,24 +106,70 @@ class CryptoAccounts(object):
         except requests.exceptions.RequestException as e:
             return f"Error fetching price: {e}"
             
-    def get_transactions(self, coin = None):
-        """Get all transactions, optionally filtered by coin.
+    def get_transactions(self, coin=None, wallet=None, start_date=None, end_date=None):
+        """Get all transactions, optionally filtered by coin, wallet, and date range.
 
         Args:
             coin: Optional currency code to filter by (e.g., 'BTC', 'ETH')
+            wallet: Optional wallet/exchange name(s) to filter by. Can be:
+                   - Single string: 'Strike'
+                   - List of strings: ['Strike', 'Coldcard']
+            start_date: Optional start date (YYYY-MM-DD format or date object)
+            end_date: Optional end date (YYYY-MM-DD format or date object)
 
         Returns:
             tuple: (column_names, transactions)
                 - column_names: List of column names
                 - transactions: List of transaction dictionaries
         """
+        from datetime import datetime, timedelta
+
         baseQuery = '''select l.trans_type "Type", l.buy "Buy", l.buy_curr "Buy Cur.", l.sell "Sell", l.sell_curr "Sell Cur.", l.fee "Fee", l.fee_curr "Fee Cur.", l.exchange "Exchange", l."group" "Group", l."comment" "Comment", l.createddate "Date" from ledger l'''
+
+        # Build WHERE clause with filters
+        where_clauses = []
+        params = {}
+
         if coin is not None:
-            query = baseQuery + " where l.buy_curr = :coin or l.sell_curr = :coin order by createddate"
-            rows = self.backend.execute(query, {"coin": coin})
+            where_clauses.append("(l.buy_curr = :coin OR l.sell_curr = :coin OR l.fee_curr = :coin)")
+            params['coin'] = coin
+
+        if wallet is not None:
+            # Support both single wallet string and list of wallets
+            if isinstance(wallet, str):
+                where_clauses.append("l.exchange = :wallet")
+                params['wallet'] = wallet
+            elif isinstance(wallet, (list, tuple)):
+                # Build OR conditions for multiple wallets
+                wallet_conditions = []
+                for i, w in enumerate(wallet):
+                    wallet_conditions.append(f"l.exchange = :wallet{i}")
+                    params[f'wallet{i}'] = w
+                where_clauses.append(f"({' OR '.join(wallet_conditions)})")
+            else:
+                raise ValueError(f"wallet must be string or list, not {type(wallet)}")
+
+        if start_date is not None:
+            where_clauses.append("l.createddate >= :start_date")
+            params['start_date'] = start_date
+
+        if end_date is not None:
+            # Include the entire end date by adding 1 day in Python (database-agnostic)
+            if isinstance(end_date, str):
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            else:
+                end_date_obj = end_date
+            next_day = end_date_obj + timedelta(days=1)
+            where_clauses.append("l.createddate < :end_date_exclusive")
+            params['end_date_exclusive'] = next_day.strftime('%Y-%m-%d')
+
+        # Build final query
+        if where_clauses:
+            query = baseQuery + " WHERE " + " AND ".join(where_clauses) + " ORDER BY createddate ASC, l.id ASC"
         else:
-            query = baseQuery + " order by createddate"
-            rows = self.backend.execute(query)
+            query = baseQuery + " ORDER BY createddate ASC, l.id ASC"
+
+        rows = self.backend.execute(query, params) if params else self.backend.execute(query)
 
         transactions = [dict(row) for row in rows]
         colnames = list(transactions[0].keys()) if transactions else []
@@ -152,8 +198,17 @@ class CryptoAccounts(object):
             total_cost = "{:.2f}".format(trade['total_cost']) if trade['total_cost'] is not None else "N/A"
             exchange = trade.get('exchange', '(Unknown)')
             print(f"{date}\t{quantity}\t{unit_cost}\t{total_cost}\t{exchange}", sep="\t")
-    def export_transactions_csv(self, out_file, coin = None):
-        colnames, transactions = self.get_transactions(coin)
+    def export_transactions_csv(self, out_file, coin=None, wallet=None, start_date=None, end_date=None):
+        """Export transactions to CSV file with optional filtering.
+
+        Args:
+            out_file: Output CSV file path
+            coin: Optional currency code to filter by (e.g., 'BTC', 'ETH')
+            wallet: Optional wallet/exchange name to filter by (e.g., 'Strike', 'Coldcard')
+            start_date: Optional start date (YYYY-MM-DD format)
+            end_date: Optional end date (YYYY-MM-DD format)
+        """
+        colnames, transactions = self.get_transactions(coin=coin, wallet=wallet, start_date=start_date, end_date=end_date)
         with open(out_file, 'w', newline='') as csv_out:
             trans_writer = csv.DictWriter(csv_out, fieldnames=colnames)
             trans_writer.writeheader()
@@ -165,7 +220,7 @@ class CryptoAccounts(object):
 
         Args:
             transactions: List of transaction dicts. Each must have:
-                - trans_type: One of Trade, Deposit, Withdrawal, Interest Income,
+                - trans_type: One of Trade, Deposit, Withdrawal, Spend, Interest Income,
                               Mining, Interest, or Staking (last two normalize to Interest Income)
                 - created_date: Transaction date string
                 - exchange: Exchange/wallet name
@@ -175,6 +230,10 @@ class CryptoAccounts(object):
             dict with keys:
                 - imported: Number of transactions successfully imported
                 - skipped: Number of transactions with unknown trans_type
+
+        Notes:
+            - Spend: Like Withdrawal but for payments/UTXO consolidation (not custody transfers)
+            - Withdrawal: Transfer to another wallet you control
         """
         imported = 0
         skipped = 0
@@ -239,6 +298,20 @@ class CryptoAccounts(object):
 
             elif trans_type == "Withdrawal":
                 query = self.getWithdrawQuery()
+                self.backend.execute(query, {
+                    "createddate": transaction.get('created_date', ''),
+                    "sell": transaction.get('sell', 0.0),
+                    "sell_curr": transaction.get('sell_curr', ''),
+                    "fee": transaction.get('fee', 0.0),
+                    "fee_curr": transaction.get('fee_curr', ''),
+                    "exchange": transaction.get('exchange', ''),
+                    "group": transaction.get('group', ''),
+                    "comment": transaction.get('comment', ''),
+                })
+                imported += 1
+
+            elif trans_type == "Spend":
+                query = self.getSpendQuery()
                 self.backend.execute(query, {
                     "createddate": transaction.get('created_date', ''),
                     "sell": transaction.get('sell', 0.0),
@@ -361,6 +434,9 @@ class CryptoAccounts(object):
 
     def getWithdrawQuery(self):
         return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\", comment) values (:createddate, 'Withdrawal', :sell, :sell_curr, :fee, :fee_curr, :exchange, :group, :comment)"
+
+    def getSpendQuery(self):
+        return "insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, \"group\", comment) values (:createddate, 'Spend', :sell, :sell_curr, :fee, :fee_curr, :exchange, :group, :comment)"
 
     def getInterestIncomeQuery(self):
         return "insert into ledger (createddate, trans_type, buy, buy_curr, exchange, \"group\", comment) values (:createddate, 'Interest Income', :buy, :buy_curr, :exchange, :group, :comment)"
