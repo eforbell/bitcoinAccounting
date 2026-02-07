@@ -30,6 +30,7 @@ from .queries.basis import BasisCalculator
 from .queries.income import IncomeQuery
 from .queries.price import PriceLookup
 from .queries.trades import TradeQuery
+from .queries.transaction import TransactionQuery
 from .schema import create_tables, get_sqlite_path
 from .sqlite import SqliteBackend
 
@@ -74,6 +75,7 @@ __all__ = [
     'IncomeQuery',
     'PriceLookup',
     'TradeQuery',
+    'TransactionQuery',
     'MigrationResult',
     'convert_timestamp_to_iso8601',
     'migrate_postgres_to_sqlite',

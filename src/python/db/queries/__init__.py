@@ -5,5 +5,6 @@ from .basis import BasisCalculator
 from .income import IncomeQuery
 from .price import PriceLookup
 from .trades import TradeQuery
+from .transaction import TransactionQuery
 
-__all__ = ['BalanceCalculator', 'BasisCalculator', 'IncomeQuery', 'PriceLookup', 'TradeQuery']
+__all__ = ['BalanceCalculator', 'BasisCalculator', 'IncomeQuery', 'PriceLookup', 'TradeQuery', 'TransactionQuery']

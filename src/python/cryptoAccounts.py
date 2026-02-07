@@ -22,12 +22,13 @@ class CryptoAccounts(object):
         self.backend = backend
 
         # Create query helper instances
-        from db import PriceLookup, BalanceCalculator, TradeQuery, BasisCalculator, IncomeQuery
+        from db import PriceLookup, BalanceCalculator, TradeQuery, BasisCalculator, IncomeQuery, TransactionQuery
         self.price_lookup = PriceLookup(backend)
         self.balance_calc = BalanceCalculator(backend)
         self.trade_query = TradeQuery(backend, self.price_lookup)
         self.basis_calc = BasisCalculator(self.trade_query)
         self.income_query = IncomeQuery(backend, self.price_lookup)
+        self.transaction_query = TransactionQuery(backend)
 
     def close(self):
         self.backend.close()
@@ -100,58 +101,7 @@ class CryptoAccounts(object):
                 - column_names: List of column names
                 - transactions: List of transaction dictionaries
         """
-        from datetime import datetime, timedelta
-
-        baseQuery = '''select l.trans_type "Type", l.buy "Buy", l.buy_curr "Buy Cur.", l.sell "Sell", l.sell_curr "Sell Cur.", l.fee "Fee", l.fee_curr "Fee Cur.", l.exchange "Exchange", l."group" "Group", l."comment" "Comment", l.createddate "Date" from ledger l'''
-
-        # Build WHERE clause with filters
-        where_clauses = []
-        params = {}
-
-        if coin is not None:
-            where_clauses.append("(l.buy_curr = :coin OR l.sell_curr = :coin OR l.fee_curr = :coin)")
-            params['coin'] = coin
-
-        if wallet is not None:
-            # Support both single wallet string and list of wallets
-            if isinstance(wallet, str):
-                where_clauses.append("l.exchange = :wallet")
-                params['wallet'] = wallet
-            elif isinstance(wallet, (list, tuple)):
-                # Build OR conditions for multiple wallets
-                wallet_conditions = []
-                for i, w in enumerate(wallet):
-                    wallet_conditions.append(f"l.exchange = :wallet{i}")
-                    params[f'wallet{i}'] = w
-                where_clauses.append(f"({' OR '.join(wallet_conditions)})")
-            else:
-                raise ValueError(f"wallet must be string or list, not {type(wallet)}")
-
-        if start_date is not None:
-            where_clauses.append("l.createddate >= :start_date")
-            params['start_date'] = start_date
-
-        if end_date is not None:
-            # Include the entire end date by adding 1 day in Python (database-agnostic)
-            if isinstance(end_date, str):
-                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
-            else:
-                end_date_obj = end_date
-            next_day = end_date_obj + timedelta(days=1)
-            where_clauses.append("l.createddate < :end_date_exclusive")
-            params['end_date_exclusive'] = next_day.strftime('%Y-%m-%d')
-
-        # Build final query
-        if where_clauses:
-            query = baseQuery + " WHERE " + " AND ".join(where_clauses) + " ORDER BY createddate ASC, l.id ASC"
-        else:
-            query = baseQuery + " ORDER BY createddate ASC, l.id ASC"
-
-        rows = self.backend.execute(query, params) if params else self.backend.execute(query)
-
-        transactions = [dict(row) for row in rows]
-        colnames = list(transactions[0].keys()) if transactions else []
-        return colnames, transactions
+        return self.transaction_query.get_transactions(coin, wallet, start_date, end_date)
     def print_trades(self, coin = 'BTC'):
         """Print trade history with cost basis for a coin.
 
