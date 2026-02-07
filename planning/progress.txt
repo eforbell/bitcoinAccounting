@@ -642,3 +642,32 @@
   - Delegation maintains 100% backward compatibility
 
 ---
+## 2026-02-07 - REFACTOR-006: Add error handling to import_transactions()
+
+- What was implemented:
+  - Added try/except error handling around all transaction type handlers in import_transactions()
+  - Failed imports now increment the `skipped` counter instead of aborting the entire batch
+  - Added error logging with `print()` to show transaction type and error details
+  - Updated docstring to document error handling behavior
+  - Modified return dict documentation: skipped now includes both unknown transaction types and import errors
+
+- Files changed:
+  - `src/python/cryptoAccounts.py` (refactored — wrapped all handlers in try/except, +6 lines net)
+  - `AGENTS.md` (added REFACTOR-006 learnings section)
+  - `planning/features/feature-8-prd.json` (marked REFACTOR-006 passes: true)
+  - `planning/current-feature.json` (marked REFACTOR-006 as completed)
+
+- **Learnings:**
+  - **Error resilience pattern**: Wrapping each transaction in try/except allows partial batch success — if transaction #5 fails, transactions #6-100 can still import successfully
+  - **Error visibility**: Using `print()` for error logging ensures failures are visible to users without breaking the import flow or requiring complex logging setup
+  - **Backward compatibility**: Counting errors as "skipped" maintains the existing return structure `{"imported": X, "skipped": Y}` without breaking downstream code that checks this structure
+  - **Transaction types protected**: All 6 transaction types now have error handling: Interest Income/Interest/Staking, Mining, Deposit, Withdrawal, Spend, Trade
+  - **Price pair storage protected**: USD equivalent price pair storage (for interest income) is inside the try block, so price pair failures also get caught and logged
+  - **Import UX improvement**: Users can now import large CSV batches without a single malformed transaction breaking the entire import
+
+- **Test Results:**
+  - 504 import tests passing (test_import_*.py + test_cli_scripts.py -k import)
+  - Zero regressions from adding error handling
+  - All transaction types continue to import correctly
+
+---

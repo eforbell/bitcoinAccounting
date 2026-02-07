@@ -113,7 +113,8 @@
       ],
       "priority": 6,
       "estimatedLines": "~0 (refactor existing 130 lines)",
-      "testStrategy": "pytest tests/test_import_*.py tests/test_cli_scripts.py -k import -v"
+      "testStrategy": "pytest tests/test_import_*.py tests/test_cli_scripts.py -k import -v",
+      "passes": true
     },
     {
       "id": "REFACTOR-007",
