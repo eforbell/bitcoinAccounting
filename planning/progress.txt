@@ -1,3 +1,37 @@
+## 2026-02-07 - REFACTOR-005: Create WalletQuery class
+
+- What was implemented:
+  - Created `src/python/db/queries/wallet.py` with WalletQuery class
+  - Moved `get_balance_by_account()` logic from CryptoAccounts to WalletQuery
+  - Moved `get_wallets()` logic with backend-specific table detection
+  - Moved `get_wallet_balance()` logic to WalletQuery as `get_balance_by_wallet()`
+  - Updated CryptoAccounts to delegate all three methods to WalletQuery instance
+  - Added WalletQuery to both `db/__init__.py` and `db/queries/__init__.py` exports
+
+- Files changed:
+  - `src/python/db/queries/wallet.py` (new file — 137 lines)
+  - `src/python/cryptoAccounts.py` (reduced by ~75 lines via delegation)
+  - `src/python/db/__init__.py` (added WalletQuery import and export)
+  - `src/python/db/queries/__init__.py` (added WalletQuery export)
+  - `AGENTS.md` (added REFACTOR-005 learnings section)
+  - `planning/features/feature-8-prd.json` (marked REFACTOR-005 passes: true)
+  - `planning/current-feature.json` (marked REFACTOR-005 as completed)
+
+- **Learnings:**
+  - **Dual export requirement**: New query classes must be exported in BOTH `db/queries/__init__.py` (package structure) AND `db/__init__.py` (top-level imports). Missing either causes ImportError.
+  - **Method renaming pattern**: PRD specified extracting `get_wallet_balance()` as `get_balance_by_wallet()` in query class, while CryptoAccounts maintains original name as wrapper for backward compatibility
+  - **Backend-specific SQL**: Table existence checks differ by backend — SQLite uses `sqlite_master`, PostgreSQL uses `information_schema.tables`
+  - **Polymorphic return types**: Methods that return different types based on parameters (like `float | dict[str, float]`) require union type hints for mypy strict mode
+  - **Pattern consistency**: Following established query class pattern (DatabaseBackend injection, TYPE_CHECKING imports, full docstrings) makes refactoring straightforward
+
+- **Test Results:**
+  - 28 tests passing in test_cli_scripts.py (including 2 wallet-specific tests: test_get_wallets, test_get_wallet_balance)
+  - Zero regressions across all CLI functionality
+  - Delegation maintains 100% backward compatibility
+
+---
+
+
 ## 2026-02-07 - REFACTOR-004: Extract CapitalGainCalculator
 
 - What was implemented:
