@@ -2,6 +2,38 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature 8: CryptoAccounts Refactoring - Comprehensive Test Coverage for import_transactions() (REFACTOR-007)
+
+**Objective**: Add comprehensive test coverage for the `import_transactions()` method to ensure all transaction types, aliases, and error handling work correctly.
+
+**Key Changes**:
+1. Created `tests/test_import_transactions.py` with 17 tests across 6 test classes
+2. Tests cover all 6 transaction types: Deposit, Withdrawal, Spend, Trade, Mining, Interest Income
+3. Tests verify transaction type alias normalization (Interest → Interest Income, Staking → Interest Income)
+4. Tests verify USD equivalent price pair storage for interest income (including dollar sign parsing)
+5. Tests verify error handling prevents batch failures when individual transactions fail
+6. Tests verify unknown transaction types are counted as skipped
+
+**Key Learnings**:
+1. **Fee handling convention**: Fees are included in buy/sell amounts, not subtracted separately
+   - Withdrawal of 0.5 BTC with 0.0001 fee: pass `sell=0.5001` (total including fee)
+   - This matches `transfer_funds()` pattern: `sell=tx_amount+fee_amount`
+   - Fee field is for tracking/reporting, not balance calculation
+2. **Test data accuracy**: Always verify actual system behavior before writing test assertions - incorrect assumptions about fee handling caused initial test failures
+3. **Error handling testing**: Use None values for required fields to trigger database errors, testing that error handling prevents batch failures
+4. **Price pair storage**: USD equivalent for interest income goes into `pair_price` table with calculated conversion rate (usd_equivalent / buy_amount)
+5. **Batch import resilience**: Error handling added in REFACTOR-006 ensures one bad transaction doesn't break an entire batch import
+
+**Test Coverage**:
+- TestImportTransactionsBasic (6 tests): One test per transaction type
+- TestImportTransactionsAliases (2 tests): Interest and Staking alias normalization
+- TestImportTransactionsUSDEquivalent (4 tests): Price pair storage, dollar sign parsing, zero amount edge case
+- TestImportTransactionsSkipped (2 tests): Unknown types, mixed batches
+- TestImportTransactionsErrorHandling (1 test): Batch resilience with None values
+- TestImportTransactionsBatch (2 tests): Multi-type batch, empty batch
+
+**Test Results**: All 17 tests passing (100% pass rate)
+
 ## Feature 8: CryptoAccounts Refactoring - Error Handling in import_transactions() (REFACTOR-006)
 
 **Objective**: Add robust error handling to `import_transactions()` method to prevent individual transaction failures from breaking entire import batches.
