@@ -671,3 +671,44 @@
   - All transaction types continue to import correctly
 
 ---
+
+## 2026-02-07 - REFACTOR-007: Add comprehensive test coverage for import_transactions()
+
+- What was implemented:
+  - Created tests/test_import_transactions.py with 17 comprehensive tests across 6 test classes
+  - Tested all 6 transaction types individually: Deposit, Withdrawal, Spend, Trade, Mining, Interest Income
+  - Tested transaction type alias normalization (Interest → Interest Income, Staking → Interest Income)
+  - Tested USD equivalent price pair storage with multiple formats ($1,234.56 parsing)
+  - Tested unknown transaction type handling (increments skipped counter)
+  - Tested error handling prevents batch failures when individual transactions fail
+  - Tested batch import with multiple transaction types and empty batch edge case
+
+- Files changed:
+  - `tests/test_import_transactions.py` (new — 616 lines, 17 tests)
+  - `AGENTS.md` (added REFACTOR-007 learnings section)
+  - `planning/features/feature-8-prd.json` (marked REFACTOR-007 passes: true)
+  - `planning/current-feature.json` (marked REFACTOR-007 as completed)
+
+- **Learnings:**
+  - **Fee handling convention**: Fees are included in buy/sell amounts, not subtracted separately
+    - Withdrawal of 0.5 BTC with 0.0001 fee requires passing `sell=0.5001` (total including fee)
+    - This matches the `transfer_funds()` implementation: `sell = tx_amount + fee_amount`
+    - Fee field is for tracking and reporting purposes, not for balance calculation
+  - **Test data accuracy matters**: Initial test failures revealed incorrect assumptions about fee handling - always verify actual system behavior before writing assertions
+  - **Error handling testing**: Use None values for required fields to trigger database constraint errors, testing that REFACTOR-006 error handling prevents batch failures
+  - **Price pair storage mechanics**: USD equivalent for interest income is stored in `pair_price` table with calculated conversion rate: `price = usd_equivalent / buy_amount`
+  - **Dollar sign parsing**: USD equivalent handling includes stripping `$` prefix and `,` separators (e.g., `$1,000.50` → `1000.50`)
+  - **Zero amount edge case**: When buy_amount is 0, price pair storage is skipped to avoid division by zero
+  - **Batch import resilience**: Error handling added in REFACTOR-006 ensures one malformed transaction doesn't break an entire import batch
+
+- **Test Results:**
+  - 17 new tests passing (100% pass rate)
+  - TestImportTransactionsBasic: 6 tests (one per transaction type)
+  - TestImportTransactionsAliases: 2 tests (Interest, Staking normalization)
+  - TestImportTransactionsUSDEquivalent: 4 tests (storage, parsing, aliases, edge cases)
+  - TestImportTransactionsSkipped: 2 tests (unknown types, mixed batches)
+  - TestImportTransactionsErrorHandling: 1 test (batch resilience)
+  - TestImportTransactionsBatch: 2 tests (multi-type batch, empty batch)
+  - Zero regressions across codebase
+
+---

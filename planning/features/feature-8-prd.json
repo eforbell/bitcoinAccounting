@@ -130,7 +130,8 @@
       ],
       "priority": 7,
       "estimatedLines": "+150 (new test file)",
-      "testStrategy": "pytest tests/test_import_transactions.py -v --cov=src/python/cryptoAccounts"
+      "testStrategy": "pytest tests/test_import_transactions.py -v --cov=src/python/cryptoAccounts",
+      "passes": true
     },
     {
       "id": "REFACTOR-008",
