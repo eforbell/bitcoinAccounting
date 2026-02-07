@@ -1776,3 +1776,43 @@
   - forecast_gains script tested manually (requires price parameter)
 
 ---
+
+## 2026-02-06 - REFACTOR-002
+
+- What was implemented:
+  - Created TransactionQuery class in src/python/db/queries/transaction.py (100 lines)
+  - Extracted get_transactions() filtering logic from CryptoAccounts class
+  - Implements Query Object pattern with dependency injection (backend passed to constructor)
+  - Supports filtering by: coin, wallet (single or list), start_date, end_date
+  - WHERE clause builder with dynamic parameter binding
+  - Date range logic: end_date includes full day (adds +1 day, uses <)
+  - Multiple wallet support: builds OR conditions for list of wallets
+  - CryptoAccounts.__init__ creates self.transaction_query instance
+  - CryptoAccounts.get_transactions() delegates to query class (1-line delegation)
+  - export_transactions_csv() automatically benefits via delegation
+  - Added TransactionQuery imports to db/__init__.py and db/queries/__init__.py
+
+- Files changed:
+  - `src/python/db/queries/transaction.py` (new — 100 lines)
+  - `src/python/cryptoAccounts.py` (refactored — removed 56 lines of query logic)
+  - `src/python/db/__init__.py` (added TransactionQuery import/export)
+  - `src/python/db/queries/__init__.py` (added TransactionQuery export)
+  - `planning/features/feature-8-prd.json` (marked REFACTOR-002 passes: true)
+  - `planning/current-feature.json` (marked REFACTOR-002 completed)
+
+- **Learnings:**
+  - Query Object Pattern works well: extract complex queries to dedicated classes
+  - Dependency injection: TransactionQuery(backend) — no hardcoded self.backend access
+  - Delegation pattern preserves backward compatibility: public API unchanged
+  - Module export hierarchy matters: must export in BOTH db/queries/__init__ AND db/__init__
+  - Git stash useful for separating mixed work: stashed REFACTOR-001+002, committed separately
+  - export_transactions_csv automatically benefited since it calls get_transactions()
+  - Multiple wallet filtering: build OR conditions dynamically from list
+  - Date range inclusive: end_date + 1 day with < operator (database-agnostic)
+
+- **Test Results:**
+  - 10 export tests passing (TestExportTxScript — 100% pass rate)
+  - 714 total tests passing (100% pass rate)
+  - Zero regressions from extraction
+
+---

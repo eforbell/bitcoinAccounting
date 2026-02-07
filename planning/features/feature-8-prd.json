@@ -45,7 +45,8 @@
       ],
       "priority": 2,
       "estimatedLines": "+80 (new file), -50 (cryptoAccounts.py)",
-      "testStrategy": "pytest tests/test_cli_scripts.py::TestExportTxScript -v"
+      "testStrategy": "pytest tests/test_cli_scripts.py::TestExportTxScript -v",
+      "passes": true
     },
     {
       "id": "REFACTOR-003",

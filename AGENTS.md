@@ -1535,3 +1535,45 @@ import_csv --source native custody_chain.csv
 2. Check planning docs separately (acceptable to have historical references)
 3. Verify tests still pass after removal
 4. Consider implications for user workflows (forecast_gains now requires manual prices)
+
+### REFACTOR-002: Create TransactionQuery Class (2026-02-06)
+
+**What Changed**:
+- Created `TransactionQuery` class in `src/python/db/queries/transaction.py` (100 lines)
+- Extracted `get_transactions()` filtering logic from CryptoAccounts (56 lines removed)
+- Added dependency injection pattern: `TransactionQuery(backend)`
+- CryptoAccounts delegates to `self.transaction_query.get_transactions()`
+
+**Architecture Pattern**:
+```python
+# Before: Monolithic method in CryptoAccounts
+def get_transactions(self, coin, wallet, start_date, end_date):
+    # 56 lines of SQL building, WHERE clause logic, date parsing...
+    return colnames, transactions
+
+# After: Delegated to specialized query class
+def get_transactions(self, coin, wallet, start_date, end_date):
+    return self.transaction_query.get_transactions(coin, wallet, start_date, end_date)
+```
+
+**Learnings**:
+1. **Query Object Pattern**: Encapsulate complex queries in dedicated classes with single responsibility
+2. **Dependency Injection**: Pass `backend` to constructor, not hardcoded access to self.backend
+3. **Delegation preserves API**: Public method signatures unchanged, internal implementation refactored
+4. **Module exports hierarchy**: Must export in BOTH `db/queries/__init__.py` AND `db/__init__.py` for top-level imports
+5. **Git stash for separation**: Used `git stash` to separate mixed REFACTOR-001/002 work into clean commits
+6. **export_transactions_csv auto-benefits**: Since it calls get_transactions(), delegation automatically updates it
+
+**Export Pattern Observed**:
+- `db/queries/__init__.py`: Import from submodule, export in `__all__`
+- `db/__init__.py`: Re-import from queries, re-export in `__all__`
+- This allows `from db import TransactionQuery` (not `from db.queries import TransactionQuery`)
+
+**Test Coverage**: All 10 TestExportTxScript tests pass, verifying:
+- Transaction export
+- Wallet filtering (single and multiple)
+- Date range filtering
+- Combined filters
+- Empty result sets
+- CSV file creation
+- Fee currency inclusion
