@@ -28,6 +28,7 @@ from .postgres import PostgresBackend
 from .queries.balance import BalanceCalculator
 from .queries.basis import BasisCalculator
 from .queries.income import IncomeQuery
+from .queries.ledger import LedgerWriter
 from .queries.price import PriceLookup
 from .queries.trades import TradeQuery
 from .queries.transaction import TransactionQuery
@@ -73,6 +74,7 @@ __all__ = [
     'BalanceCalculator',
     'BasisCalculator',
     'IncomeQuery',
+    'LedgerWriter',
     'PriceLookup',
     'TradeQuery',
     'TransactionQuery',
