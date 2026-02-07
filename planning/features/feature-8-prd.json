@@ -80,7 +80,8 @@
       ],
       "priority": 4,
       "estimatedLines": "+400 (new file), -330 (cryptoAccounts.py)",
-      "testStrategy": "pytest tests/test_1099b_export.py tests/test_cli_scripts.py::TestForecastGainsScript -v"
+      "testStrategy": "pytest tests/test_1099b_export.py tests/test_cli_scripts.py::TestForecastGainsScript -v",
+      "passes": true
     },
     {
       "id": "REFACTOR-005",

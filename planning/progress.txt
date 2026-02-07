@@ -1,3 +1,36 @@
+## 2026-02-07 - REFACTOR-004: Extract CapitalGainCalculator
+
+- What was implemented:
+  - Created `src/python/db/queries/capital_gains.py` with CapitalGainCalculator class
+  - Extracted FIFO capital gains calculation logic from CryptoAccounts
+  - Made `_get_purchase_lots()` public as `get_purchase_lots()` method
+  - Extracted `get_sales_for_1099b()` logic to `get_1099b_data()` method
+  - Extracted `forecast_capital_gains_fifo()` logic to `forecast_sale()` method
+  - Updated CryptoAccounts to delegate both tax methods to CapitalGainCalculator
+  - Added CapitalGainCalculator to both db/__init__.py and db/queries/__init__.py exports
+
+- Files changed:
+  - `src/python/db/queries/capital_gains.py` (new file — 422 lines)
+  - `src/python/cryptoAccounts.py` (reduced by ~340 lines via delegation)
+  - `src/python/db/__init__.py` (added CapitalGainCalculator import and export)
+  - `src/python/db/queries/__init__.py` (added CapitalGainCalculator export)
+  - `AGENTS.md` (added REFACTOR-004 learnings)
+  - `planning/features/feature-8-prd.json` (marked REFACTOR-004 passes: true)
+
+- **Learnings:**
+  - **Variable name reuse confuses mypy**: When iterating with `for purchase in all_purchases:` (tuple) and later `for purchase in purchase_queue:` (dict), mypy infers the wrong type for the second loop. Solution: use different variable names (e.g., `for lot in all_purchases:`)
+  - **Explicit type annotations for lists**: Empty lists need explicit type hints for mypy strict mode: `purchase_queue: list[dict[str, Any]] = []`
+  - **Optional return value handling**: When a method returns `float | None`, assign to temp variable, check for None, then assign to `float` variable
+  - **Dependency injection pattern**: CapitalGainCalculator requires 4 dependencies (DatabaseBackend, TradeQuery, IncomeQuery, PriceLookup) all injected via constructor
+  - **Complex logic extraction**: ~400 lines of FIFO matching logic successfully extracted while maintaining backward compatibility through delegation
+
+- **Test Results:**
+  - 12 tests passing: 10 from test_1099b_export.py + 1 forecast test + 1 validation test
+  - mypy --strict passes with zero errors
+  - Zero regressions
+
+---
+
 ## 2026-02-05 - WAL-007: Documentation update
 
 - What was implemented:
