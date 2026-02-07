@@ -1577,3 +1577,52 @@ def get_transactions(self, coin, wallet, start_date, end_date):
 - Empty result sets
 - CSV file creation
 - Fee currency inclusion
+
+### REFACTOR-003: Create LedgerWriter Class (2026-02-06)
+
+**What Changed**:
+- Created `LedgerWriter` class in `src/python/db/queries/ledger.py` (266 lines)
+- Implemented 6 transaction recording methods: `deposit()`, `withdraw()`, `spend()`, `trade()`, `mining()`, `interest_income()`
+- Each method encapsulates: INSERT query + backend.execute() + optional commit()
+- Removed 6 getXQuery methods from CryptoAccounts (18 lines removed)
+- Updated convenience methods and import_transactions to use LedgerWriter
+
+**Design Pattern - Optional Commit**:
+```python
+def deposit(self, createddate, buy, buy_curr, exchange, group="", comment="", commit=True):
+    # INSERT query
+    self.backend.execute(query, params)
+    if commit:
+        self.backend.commit()
+```
+
+**Why optional commit?**
+- **Individual operations** (deposit(), withdraw()): auto-commit (commit=True default)
+- **Batch operations** (import_transactions): defer commit (commit=False), commit once at end
+- Preserves transaction atomicity for multi-insert operations
+- Avoids performance overhead of committing each row in import loops
+
+**Learnings**:
+1. **Batch vs Individual commits**: Add `commit` parameter to support both use cases
+2. **Query Object Pattern continues**: LedgerWriter follows same pattern as TransactionQuery
+3. **Method naming consistency**: Use transaction type names (deposit, withdraw) not query getters (getDepositQuery)
+4. **Parameter normalization**: Handle None values in transfer_funds (group could be None, default to "")
+5. **getPricePairQuery kept**: Still needed for USD equivalent price pair storage in import_transactions
+
+**Refactoring Impact**:
+- CryptoAccounts.py: -88 net lines (207 lines refactored)
+- Removed 6 getXQuery methods (getDeposit, getWithdraw, getSpend, getTrade, getMining, getInterestIncome)
+- Convenience methods simplified from 3-4 lines to 1 line delegation
+- import_transactions now uses descriptive method calls instead of raw SQL queries
+
+**Pattern: Method Delegation**:
+```python
+# Before: 4 lines
+def deposit(self, ...):
+    self.backend.execute(self.getDepositQuery(), {...})
+    self.backend.commit()
+
+# After: 1 line delegation
+def deposit(self, ...):
+    self.ledger_writer.deposit(...)
+```

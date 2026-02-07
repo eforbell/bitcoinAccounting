@@ -1816,3 +1816,48 @@
   - Zero regressions from extraction
 
 ---
+
+## 2026-02-06 - REFACTOR-003
+
+- What was implemented:
+  - Created LedgerWriter class in src/python/db/queries/ledger.py (266 lines)
+  - Implemented 6 transaction recording methods with INSERT queries:
+    - deposit(createddate, buy, buy_curr, exchange, group, comment, commit=True)
+    - withdraw(createddate, sell, sell_curr, fee, fee_curr, exchange, group, comment, commit=True)
+    - spend(createddate, sell, sell_curr, fee, fee_curr, exchange, group, comment, commit=True)
+    - trade(createddate, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, group, comment, commit=True)
+    - mining(createddate, buy, buy_curr, exchange, group, comment, transactionid, commit=True)
+    - interest_income(createddate, buy, buy_curr, exchange, group, comment, commit=True)
+  - Each method: builds INSERT query → backend.execute() → optional commit()
+  - Optional commit parameter: default True for individual ops, False for batch imports
+  - Removed 6 getXQuery methods from CryptoAccounts (getDeposit, getWithdraw, getSpend, getTrade, getMining, getInterestIncome)
+  - Updated convenience methods (deposit, withdraw, interest, execute_trade) to delegate to LedgerWriter
+  - Updated import_transactions to use LedgerWriter with commit=False, single commit at end
+  - Updated transfer_funds to use LedgerWriter for withdraw+deposit pair
+  - Added LedgerWriter imports to db/__init__.py and db/queries/__init__.py
+  - Kept getPricePairQuery (still needed for USD equivalent price storage)
+
+- Files changed:
+  - `src/python/db/queries/ledger.py` (new — 266 lines)
+  - `src/python/cryptoAccounts.py` (refactored — net -88 lines, 207 lines changed)
+  - `src/python/db/__init__.py` (added LedgerWriter import/export)
+  - `src/python/db/queries/__init__.py` (added LedgerWriter export)
+  - `planning/features/feature-8-prd.json` (marked REFACTOR-003 passes: true)
+  - `planning/current-feature.json` (marked REFACTOR-003 completed)
+
+- **Learnings:**
+  - Optional commit pattern: commit=True default, commit=False for batch operations
+  - Batch commit preserves transaction atomicity (all-or-nothing for imports)
+  - Individual commits better for single operations (auto-cleanup, simpler API)
+  - Query Object Pattern: LedgerWriter joins TransactionQuery as specialized writer class
+  - Method naming: use transaction type names (deposit) not query getters (getDepositQuery)
+  - Parameter normalization: transfer_funds had None for group, needs "" default
+  - Delegation pattern: convenience methods simplified from 3-4 lines to 1 line
+  - getPricePairQuery kept: still needed for USD equivalent price pair storage
+
+- **Test Results:**
+  - 3 balance/transfer tests passing (TestBalanceScript, TestTransferScript — 100% pass rate)
+  - 714 total tests passing (100% pass rate)
+  - Zero regressions from extraction
+
+---
