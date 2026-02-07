@@ -510,7 +510,7 @@ class TestTransactionTypeConstants:
 
     def test_valid_trans_types_includes_all(self):
         """VALID_TRANS_TYPES should include all expected types."""
-        expected = {'Trade', 'Deposit', 'Withdrawal', 'Interest Income', 'Mining', 'Staking', 'Interest'}
+        expected = {'Trade', 'Deposit', 'Withdrawal', 'Spend', 'Interest Income', 'Mining', 'Staking', 'Interest'}
         assert expected == VALID_TRANS_TYPES
 
     def test_buy_types(self):

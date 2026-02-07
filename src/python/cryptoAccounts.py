@@ -84,28 +84,6 @@ class CryptoAccounts(object):
         """
         return self.basis_calc.get_avg_purchase_price(coin, 'USD')
 
-    def get_bitcoin_price(self):
-        import requests
-
-        try:
-            # API endpoint for Coingecko to get Bitcoin price in USD
-            url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-            
-            # Make the API request
-            response = requests.get(url)
-            response.raise_for_status()  # Raise an exception for bad status codes
-            
-            # Parse the JSON response
-            data = response.json()
-            
-            # Extract Bitcoin price
-            btc_price = data['bitcoin']['usd']
-            
-            return btc_price
-        
-        except requests.exceptions.RequestException as e:
-            return f"Error fetching price: {e}"
-            
     def get_transactions(self, coin=None, wallet=None, start_date=None, end_date=None):
         """Get all transactions, optionally filtered by coin, wallet, and date range.
 

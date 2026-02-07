@@ -28,7 +28,8 @@
       ],
       "priority": 1,
       "estimatedLines": -20,
-      "testStrategy": "Run full test suite to verify no breakage"
+      "testStrategy": "Run full test suite to verify no breakage",
+      "passes": true
     },
     {
       "id": "REFACTOR-002",
