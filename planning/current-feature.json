@@ -14,8 +14,8 @@
     {"id": "REFACTOR-006", "title": "Refactor import_transactions()", "status": "completed"},
     {"id": "REFACTOR-007", "title": "Add test coverage for import_transactions", "status": "completed"},
     {"id": "REFACTOR-008", "title": "Add integration tests", "status": "completed"},
-    {"id": "REFACTOR-009", "title": "Update module exports", "status": "pending"},
-    {"id": "REFACTOR-010", "title": "Update documentation", "status": "pending"}
+    {"id": "REFACTOR-009", "title": "Update module exports", "status": "completed"},
+    {"id": "REFACTOR-010", "title": "Update documentation", "status": "completed"}
   ],
   "completedFeatures": [
     {

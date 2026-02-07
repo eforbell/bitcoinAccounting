@@ -162,7 +162,8 @@
       ],
       "priority": 9,
       "estimatedLines": "+10",
-      "testStrategy": "python -c 'from db import TransactionQuery, LedgerWriter, CapitalGainCalculator, WalletQuery'"
+      "testStrategy": "python -c 'from db import TransactionQuery, LedgerWriter, CapitalGainCalculator, WalletQuery'",
+      "passes": true
     },
     {
       "id": "REFACTOR-010",
@@ -178,7 +179,8 @@
       ],
       "priority": 10,
       "estimatedLines": "+100 (documentation)",
-      "testStrategy": "Manual review of documentation"
+      "testStrategy": "Manual review of documentation",
+      "passes": true
     }
   ],
   "riskAssessment": {
