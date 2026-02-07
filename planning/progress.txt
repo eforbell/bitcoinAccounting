@@ -1,4 +1,51 @@
 
+## 2026-02-07 - REFACTOR-008: Add integration tests for refactored code
+
+- What was implemented:
+  - Created tests/test_refactored_integration.py with 9 comprehensive integration tests
+  - Tested full workflow: import transactions → query → export → generate 1099-B
+  - Tested cross-query-class interactions (CapitalGainCalculator using TradeQuery and IncomeQuery)
+  - Tested round-trip: export with TransactionQuery → reimport with import_transactions
+  - Verified data consistency across query classes (filtered transactions match balances)
+  - Tested complex scenarios: complete buy → custody → sell workflow with transfers
+
+- Files changed:
+  - `tests/test_refactored_integration.py` (new — 648 lines, 9 tests across 4 test classes)
+  - `AGENTS.md` (updated — added REFACTOR-008 integration testing patterns)
+  - `planning/features/feature-8-prd.json` (marked REFACTOR-008 passes: true)
+
+- **Learnings:**
+  - **get_transactions() return format**: Returns `(column_names, transactions)` tuple, not just list. Always unpack: `headers, txs = crypto.get_transactions()`
+  - **Column names use title case**: 'Buy', 'Sell', 'Exchange', 'Type', etc. (not lowercase like 'buy', 'sell')
+  - **Fee handling convention**: Fees are already included in buy/sell amounts, NOT subtracted separately from balance
+    - Example: Withdraw 0.3 BTC with 0.0001 fee → sell amount is 0.3, fee tracked in fee column
+    - Balance = buy - sell (fees not deducted again)
+    - Exception: transfer_funds() adds fee to sell: `sell = tx_amount + fee_amount`
+  - **Wallet query API**:
+    - get_wallets() takes active_only boolean, NOT coin parameter
+    - Returns list of dicts with 'wallet_id' key, not wallet name strings
+    - If wallets table exists (auto-created), returns metadata from table (may be empty)
+    - Use get_wallet_balance(coin, None) to get all wallet balances as dict
+  - **Capital gains term classification**: Holding period < 365 days = 'Short' term (Jan 1 to Dec 1 = 334 days = Short)
+  - **Integration test patterns**:
+    - Full workflow tests: Import → Query → Export → 1099-B generation
+    - Cross-query tests: Verify interactions between different query classes
+    - Round-trip tests: Export transactions then reimport to verify consistency
+    - Data consistency tests: Manual calculations match query class results
+    - Complex scenarios: Real-world workflows (buy → custody → sell)
+  - **Test fixture patterns**: Use in-memory SQLite for fast isolated tests, import transactions to set up data
+
+- **Test Results:**
+  - 9 new integration tests passing (100% pass rate)
+  - 65 total tests for refactored code (all passing)
+  - TestFullWorkflowIntegration: 2 tests (import-query-export-1099b, round-trip)
+  - TestCrossQueryClassInteractions: 3 tests (capital gains, ledger writer, wallet query)
+  - TestDataConsistency: 3 tests (filters, date ranges, multiple wallets)
+  - TestComplexScenarios: 1 test (complete buy-custody-sell workflow)
+  - Zero regressions across entire test suite
+
+---
+
 ## 2026-02-05 - WAL-001: Create wallets package structure
 
 - What was implemented:
