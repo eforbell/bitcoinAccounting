@@ -8,5 +8,6 @@ from .ledger import LedgerWriter
 from .price import PriceLookup
 from .trades import TradeQuery
 from .transaction import TransactionQuery
+from .wallet import WalletQuery
 
-__all__ = ['BalanceCalculator', 'BasisCalculator', 'CapitalGainCalculator', 'IncomeQuery', 'LedgerWriter', 'PriceLookup', 'TradeQuery', 'TransactionQuery']
+__all__ = ['BalanceCalculator', 'BasisCalculator', 'CapitalGainCalculator', 'IncomeQuery', 'LedgerWriter', 'PriceLookup', 'TradeQuery', 'TransactionQuery', 'WalletQuery']

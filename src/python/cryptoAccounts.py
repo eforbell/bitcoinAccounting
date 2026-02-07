@@ -22,7 +22,7 @@ class CryptoAccounts(object):
         self.backend = backend
 
         # Create query helper instances
-        from db import PriceLookup, BalanceCalculator, TradeQuery, BasisCalculator, IncomeQuery, TransactionQuery, LedgerWriter, CapitalGainCalculator
+        from db import PriceLookup, BalanceCalculator, TradeQuery, BasisCalculator, IncomeQuery, TransactionQuery, LedgerWriter, CapitalGainCalculator, WalletQuery
         self.price_lookup = PriceLookup(backend)
         self.balance_calc = BalanceCalculator(backend)
         self.trade_query = TradeQuery(backend, self.price_lookup)
@@ -31,6 +31,7 @@ class CryptoAccounts(object):
         self.transaction_query = TransactionQuery(backend)
         self.ledger_writer = LedgerWriter(backend)
         self.capital_gains_calc = CapitalGainCalculator(backend, self.trade_query, self.income_query, self.price_lookup)
+        self.wallet_query = WalletQuery(backend)
 
     def close(self):
         self.backend.close()
@@ -64,17 +65,7 @@ class CryptoAccounts(object):
         Returns:
             float: Account balance
         """
-        query = """
-            SELECT
-                COALESCE(SUM(CASE WHEN buy_curr = :coin AND trans_type != 'Stake' THEN buy ELSE 0 END), 0) -
-                COALESCE(SUM(CASE WHEN sell_curr = :coin THEN sell ELSE 0 END), 0)
-            FROM ledger
-            WHERE exchange = :account
-        """
-        result = self.backend.execute_scalar(query, {"coin": coin, "account": account})
-        balance = float(result) if result is not None else 0.0
-        # Return 0 for very small amounts (dust)
-        return balance if abs(balance) > 0.0000000000001 else 0.0
+        return self.wallet_query.get_balance_by_account(coin, account)
 
     def get_basis(self, coin = 'BTC'):
         """Get the average purchase price (cost basis) for a coin.
@@ -408,50 +399,7 @@ class CryptoAccounts(object):
         Args:
             active_only: If True, only return active wallets. Default False returns all.
         """
-        # Check if wallets table exists (backend-specific)
-        from db import SqliteBackend
-        if isinstance(self.backend, SqliteBackend):
-            # SQLite: check sqlite_master
-            check_query = """
-                SELECT COUNT(*) FROM sqlite_master
-                WHERE type='table' AND name='wallets'
-            """
-        else:
-            # PostgreSQL: check information_schema
-            check_query = """
-                SELECT COUNT(*)
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                AND table_name = 'wallets'
-            """
-
-        table_exists = self.backend.execute_scalar(check_query) > 0
-
-        if table_exists:
-            # Get wallet metadata from wallets table
-            active_filter = "WHERE active = 1" if active_only else ""  # Use 1 for boolean (works in both backends)
-            query = f"""
-                SELECT wallet_id, wallet_type, custody, description, active
-                FROM wallets
-                {active_filter}
-                ORDER BY wallet_id
-            """
-            rows = self.backend.execute(query)
-            return [{'wallet_id': row['wallet_id'], 'type': row['wallet_type'], 'custody': row['custody'],
-                    'description': row['description'], 'active': row['active']}
-                   for row in rows]
-        else:
-            # Fallback: get distinct exchange values from ledger
-            query = """
-                SELECT DISTINCT exchange
-                FROM ledger
-                WHERE exchange IS NOT NULL
-                ORDER BY exchange
-            """
-            rows = self.backend.execute(query)
-            return [{'wallet_id': row['exchange'], 'type': 'unknown', 'custody': 'unknown',
-                    'description': None, 'active': True}
-                   for row in rows]
+        return self.wallet_query.get_wallets(active_only)
     
     def get_wallet_balance(self, coin='BTC', wallet=None):
         """
@@ -461,24 +409,7 @@ class CryptoAccounts(object):
             If wallet specified: float (balance)
             If wallet=None: dict {wallet_id: balance}
         """
-        if wallet:
-            # Balance for specific wallet - use get_balance_by_account
-            return self.get_balance_by_account(coin, wallet)
-        else:
-            # Balance for all wallets
-            # Note: Fees are already included in buy/sell amounts, not subtracted separately
-            query = """
-                SELECT
-                    exchange,
-                    COALESCE(SUM(CASE WHEN buy_curr = :coin THEN buy ELSE 0 END), 0) -
-                    COALESCE(SUM(CASE WHEN sell_curr = :coin THEN sell ELSE 0 END), 0) as balance
-                FROM ledger
-                WHERE exchange IS NOT NULL
-                GROUP BY exchange
-                ORDER BY exchange
-            """
-            rows = self.backend.execute(query, {"coin": coin})
-            return {row['exchange']: float(row['balance']) for row in rows}
+        return self.wallet_query.get_balance_by_wallet(coin, wallet)
 
 
 

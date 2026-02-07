@@ -2,6 +2,36 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature 8: CryptoAccounts Refactoring - WalletQuery Extraction (REFACTOR-005)
+
+**Objective**: Extract wallet-related operations from CryptoAccounts into a dedicated WalletQuery class.
+
+**Key Changes**:
+1. Created `db/queries/wallet.py` with WalletQuery class
+2. Moved `get_balance_by_account()` logic to WalletQuery
+3. Moved `get_wallets()` logic to WalletQuery
+4. Moved `get_wallet_balance()` logic to WalletQuery as `get_balance_by_wallet()`
+5. Updated CryptoAccounts to delegate all three methods to WalletQuery
+6. Added WalletQuery to both `db/__init__.py` and `db/queries/__init__.py` exports
+
+**Key Learnings**:
+1. **Dual export requirement**: New query classes must be exported in BOTH:
+   - `db/queries/__init__.py` (for internal package structure)
+   - `db/__init__.py` (for top-level imports like `from db import WalletQuery`)
+2. **Method renaming during extraction**: PRD specified renaming `get_wallet_balance()` to `get_balance_by_wallet()` in the query class, while CryptoAccounts keeps the original wrapper name for backward compatibility
+3. **Backend-specific queries**: `get_wallets()` checks for table existence differently in SQLite vs PostgreSQL:
+   - SQLite: `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='wallets'`
+   - PostgreSQL: `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='wallets'`
+4. **Polymorphic return types**: `get_balance_by_wallet()` returns `float` when wallet is specified, or `dict[str, float]` when wallet=None, requiring union type hint: `float | dict[str, float]`
+
+**Pattern**: Follow established query class structure:
+- Constructor with `backend: DatabaseBackend` parameter
+- Type hints with `from __future__ import annotations`
+- TYPE_CHECKING imports for circular dependency avoidance
+- Full docstrings on all public methods
+
+**Test Results**: All 28 tests passed in test_cli_scripts.py (including 2 wallet-specific tests)
+
 ## Feature 8: CryptoAccounts Refactoring - CapitalGainCalculator Extraction (REFACTOR-004)
 
 **Objective**: Extract FIFO capital gains calculation logic from CryptoAccounts into a dedicated CapitalGainCalculator query class.
