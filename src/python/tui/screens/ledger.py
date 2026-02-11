@@ -37,7 +37,8 @@ class LedgerScreen(Screen[None]):
     LedgerScreen .filter-panel {
         layout: horizontal;
         height: auto;
-        padding: 1 2;
+        max-height: 8;
+        padding: 0 2;
         background: #16213e;
         border: solid #444444;
     }
@@ -52,12 +53,22 @@ class LedgerScreen(Screen[None]):
     LedgerScreen .filter-label {
         color: #888888;
         text-style: bold;
-        margin-bottom: 1;
+        height: 1;
+    }
+
+    LedgerScreen Input {
+        height: 1;
+        margin: 0 0 1 0;
+    }
+
+    LedgerScreen Select {
+        height: 1;
+        margin: 0 0 1 0;
     }
 
     LedgerScreen .status-bar {
         layout: horizontal;
-        height: auto;
+        height: 3;
         padding: 1 2;
         background: #0f3460;
     }
@@ -68,18 +79,19 @@ class LedgerScreen(Screen[None]):
 
     LedgerScreen DataTable {
         height: 1fr;
-        min-height: 10;
+        min-height: 15;
     }
 
     LedgerScreen Button {
+        height: 3;
         margin: 0 1;
     }
     """
 
     def __init__(self) -> None:
         super().__init__()
-        self.all_transactions: list[tuple[Any, ...]] = []
-        self.filtered_transactions: list[tuple[Any, ...]] = []
+        self.all_transactions: list[dict[str, Any]] = []
+        self.filtered_transactions: list[dict[str, Any]] = []
         self.column_names: list[str] = []
         self.current_coin = "BTC"
         self.current_wallet: str | None = None
@@ -162,10 +174,11 @@ class LedgerScreen(Screen[None]):
             wallets = app.crypto.wallet_query.get_wallets(active_only=False)  # type: ignore[attr-defined]
 
             # Build wallet options
+            # Note: get_wallets() returns dicts with 'wallet_id' key, not 'wallet_name'
             wallet_options = [("All Wallets", None)]
             for wallet in wallets:
-                wallet_name = wallet.get("wallet_name", "Unknown")
-                wallet_options.append((wallet_name, wallet_name))
+                wallet_id = wallet.get("wallet_id", "Unknown")
+                wallet_options.append((wallet_id, wallet_id))
 
             # Update wallet selector from main thread
             def update_wallet_select() -> None:
@@ -224,9 +237,8 @@ class LedgerScreen(Screen[None]):
 
             # Apply sorting if set
             if self.sort_column and self.sort_column in self.column_names:
-                col_idx = self.column_names.index(self.sort_column)
                 self.filtered_transactions.sort(
-                    key=lambda row: row[col_idx] if row[col_idx] is not None else "",
+                    key=lambda row: row.get(self.sort_column, "") or "",
                     reverse=self.sort_reverse,
                 )
 
@@ -260,9 +272,11 @@ class LedgerScreen(Screen[None]):
             table.add_column(col_name, key=col_name)
 
         # Add rows
-        for row_data in self.filtered_transactions:
-            # Convert None to empty string for display
-            display_row = [str(val) if val is not None else "" for val in row_data]
+        # Note: get_transactions() returns list of dicts, not tuples
+        for row_dict in self.filtered_transactions:
+            # Extract values in the same order as column_names
+            display_row = [str(row_dict.get(col, "")) if row_dict.get(col) is not None else ""
+                          for col in self.column_names]
             table.add_row(*display_row)
 
     def _update_status(self) -> None:
@@ -301,9 +315,8 @@ class LedgerScreen(Screen[None]):
 
         # Re-sort and update display
         if self.sort_column and self.sort_column in self.column_names:
-            col_idx = self.column_names.index(self.sort_column)
             self.filtered_transactions.sort(
-                key=lambda row: row[col_idx] if row[col_idx] is not None else "",
+                key=lambda row: row.get(self.sort_column, "") or "",
                 reverse=self.sort_reverse,
             )
 
