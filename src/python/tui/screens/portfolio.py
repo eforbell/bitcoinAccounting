@@ -17,8 +17,6 @@ from textual.widgets import (
     Select,
     Static,
     Switch,
-    TabbedContent,
-    TabPane,
 )
 
 if TYPE_CHECKING:
@@ -226,21 +224,10 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
         controls.mount(Label("Show inactive wallets:"))
         controls.mount(Switch(value=self._show_inactive, id="show-inactive-switch"))
 
-        # Build tabbed content with both tabs
-        tabs = TabbedContent()
-        container.mount(tabs)
-
-        # Balances tab - mount tab first, then add widgets
-        balances_tab = TabPane("Balances", id="balances-tab")
-        tabs.mount(balances_tab)
+        # Show balances view (simplified - no tabs for now to avoid TabbedContent complexity)
+        # TODO: Add back Wallet Detail tab using proper Textual compose patterns
         for widget in self._build_balances_tab():
-            balances_tab.mount(widget)
-
-        # Wallet Detail tab - mount tab first, then add widgets
-        wallet_tab = TabPane("Wallet Detail", id="wallet-detail-tab")
-        tabs.mount(wallet_tab)
-        for widget in self._build_wallet_detail_tab():
-            wallet_tab.mount(widget)
+            container.mount(widget)
 
     def _build_balances_tab(self) -> ComposeResult:
         """Build the Balances tab content."""
