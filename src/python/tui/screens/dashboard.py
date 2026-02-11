@@ -8,7 +8,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Header, Label, Static
+from textual.widgets import Button, DataTable, Footer, Header, Label, Static
 
 if TYPE_CHECKING:
     from tui.app import CryptoApp
@@ -176,6 +176,17 @@ class DashboardScreen(Screen[None]):
         height: auto;
         margin-bottom: 1;
     }
+    #quick-actions {
+        width: 100%;
+        height: auto;
+        margin-top: 1;
+        margin-bottom: 1;
+    }
+    #quick-actions Button {
+        width: 1fr;
+        margin: 0 1;
+        min-width: 15;
+    }
     #loading-message {
         color: #f7931a;
         text-align: center;
@@ -208,6 +219,22 @@ class DashboardScreen(Screen[None]):
         self.app.sub_title = "Dashboard"
         self._show_loading()
         self.load_dashboard_data()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle quick action button clicks."""
+        button_id = event.button.id
+        if button_id == "btn-portfolio":
+            self.app.action_menu_portfolio()  # type: ignore[attr-defined]
+        elif button_id == "btn-ledger":
+            self.app.action_menu_ledger()  # type: ignore[attr-defined]
+        elif button_id == "btn-record":
+            self.app.action_menu_record()  # type: ignore[attr-defined]
+        elif button_id == "btn-import":
+            self.app.action_menu_import()  # type: ignore[attr-defined]
+        elif button_id == "btn-tax":
+            self.app.action_menu_tax()  # type: ignore[attr-defined]
+        elif button_id == "btn-viz":
+            self.app.action_menu_viz()  # type: ignore[attr-defined]
 
     def _show_loading(self) -> None:
         """Display loading state."""
@@ -286,6 +313,16 @@ Press [bold]?[/bold] for help anytime."""
                 "wallets-card"
             )
         )
+
+        # Quick action buttons
+        actions_row = Horizontal(id="quick-actions")
+        container.mount(actions_row)
+        actions_row.mount(Button("Portfolio [P]", id="btn-portfolio", variant="primary"))
+        actions_row.mount(Button("Ledger [L]", id="btn-ledger"))
+        actions_row.mount(Button("Record Tx [R]", id="btn-record"))
+        actions_row.mount(Button("Import [I]", id="btn-import"))
+        actions_row.mount(Button("Tax/Report [T]", id="btn-tax"))
+        actions_row.mount(Button("Visualize [V]", id="btn-viz"))
 
         # Custody breakdown - mount first, then update
         custody_widget = CustodyBreakdown()

@@ -84,7 +84,7 @@ class MenuButton(Static):
     DEFAULT_CSS = """
     MenuButton {
         width: 1fr;
-        height: 5;
+        height: 7;
         content-align: center middle;
         text-align: center;
         border: solid #444444;
@@ -100,8 +100,8 @@ class MenuButton(Static):
     }
     """
 
-    def __init__(self, label: str, key: str, action: str) -> None:
-        super().__init__(f"{label}\n[dim]\\[{key}][/dim]")
+    def __init__(self, label: str, description: str, key: str, action: str) -> None:
+        super().__init__(f"[bold]{label}[/bold]\n[dim]{description}[/dim]\n[dim]\\[{key}][/dim]")
         self._action = action
 
     def on_click(self) -> None:
