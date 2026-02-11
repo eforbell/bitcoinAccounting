@@ -36,7 +36,7 @@ class LedgerScreen(Screen[None]):
 
     LedgerScreen .filter-panel {
         layout: horizontal;
-        height: auto;
+        height: 7;
         padding: 1 2;
         background: #16213e;
         border: solid #444444;
@@ -93,7 +93,7 @@ class LedgerScreen(Screen[None]):
         self.all_transactions: list[dict[str, Any]] = []
         self.filtered_transactions: list[dict[str, Any]] = []
         self.column_names: list[str] = []
-        self.current_coin = "BTC"
+        self.current_coin: str | None = "BTC"  # Default to BTC, can be None (All), "BTC", or "USD"
         self.current_wallet: str | None = None
         self.start_date: str | None = None
         self.end_date: str | None = None
@@ -110,7 +110,7 @@ class LedgerScreen(Screen[None]):
                 with Vertical(classes="filter-group"):
                     yield Label("Coin:", classes="filter-label")
                     yield Select(
-                        options=[("BTC", "BTC")],
+                        options=[("All", None), ("BTC", "BTC"), ("USD", "USD")],
                         value="BTC",
                         id="coin-select",
                         allow_blank=False,
@@ -220,7 +220,9 @@ class LedgerScreen(Screen[None]):
             self.app.call_from_thread(show_loading)
 
             # Get transactions with filters
-            kwargs: dict[str, Any] = {"coin": self.current_coin}
+            kwargs: dict[str, Any] = {}
+            if self.current_coin:  # Only filter by coin if specified (None = All)
+                kwargs["coin"] = self.current_coin
             if self.current_wallet:
                 kwargs["wallet"] = self.current_wallet
             if self.start_date:
@@ -336,7 +338,8 @@ class LedgerScreen(Screen[None]):
         start_input = self.query_one("#start-date-input", Input)
         end_input = self.query_one("#end-date-input", Input)
 
-        self.current_coin = str(coin_select.value) if coin_select.value else "BTC"
+        # coin_select.value can be None (All), "BTC", or "USD"
+        self.current_coin = str(coin_select.value) if coin_select.value else None
         self.current_wallet = str(wallet_select.value) if wallet_select.value else None
         self.start_date = start_input.value.strip() if start_input.value else None
         self.end_date = end_input.value.strip() if end_input.value else None
