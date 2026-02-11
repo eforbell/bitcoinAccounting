@@ -59,7 +59,7 @@ class CustodyBar(Static):
             self.update_custody(self._custody_data, self._total)
 
     def update_custody(self, custody_data: dict[str, float], total: float) -> None:
-        """Update custody bar display."""
+        """Update custody breakdown display."""
         bar_label = self.query_one("#custody-bar-visual", Label)
 
         if total == 0:
@@ -72,29 +72,16 @@ class CustodyBar(Static):
         multisig_pct = (custody_data.get("multisig", 0.0) / total) * 100
         unknown_pct = (custody_data.get("unknown", 0.0) / total) * 100
 
-        # Build text-based bar (50 chars wide)
-        bar_width = 50
-        self_chars = int(round(self_pct / 100 * bar_width))
-        custodial_chars = int(round(custodial_pct / 100 * bar_width))
-        multisig_chars = int(round(multisig_pct / 100 * bar_width))
-        unknown_chars = bar_width - self_chars - custodial_chars - multisig_chars
-
-        bar = (
-            "█" * self_chars +
-            "▓" * custodial_chars +
-            "▒" * multisig_chars +
-            "░" * unknown_chars
-        )
-
-        legend = (
-            f"[green]█[/green] Self-custodied: {self_pct:.1f}%  "
-            f"[yellow]▓[/yellow] Custodial: {custodial_pct:.1f}%  "
-            f"[cyan]▒[/cyan] Multisig: {multisig_pct:.1f}%"
-        )
+        # Build text summary (no visual bar - just percentages)
+        parts = [
+            f"Self-custodied: {self_pct:.1f}%",
+            f"Custodial: {custodial_pct:.1f}%",
+            f"Multisig: {multisig_pct:.1f}%"
+        ]
         if unknown_pct > 0:
-            legend += f"  [dim]░[/dim] Unknown: {unknown_pct:.1f}%"
+            parts.append(f"Unknown: {unknown_pct:.1f}%")
 
-        bar_label.update(f"{bar}\n{legend}")
+        bar_label.update("  |  ".join(parts))
 
 
 class PortfolioScreen(Screen[None]):
