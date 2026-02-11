@@ -387,13 +387,16 @@ Press [bold]?[/bold] for help anytime."""
                 else:
                     custody_totals["unknown"] += wallet_balance
 
-            # Get recent transactions
+            # Get recent transactions (ordered oldest-first by default)
             headers, transactions = crypto.get_transactions(coin='BTC')  # type: ignore[no-untyped-call]
 
             # Check if database is empty
             if balance == 0 and len(transactions) == 0:
                 self.app.call_from_thread(self._show_empty)
                 return
+
+            # Reverse to get most recent first (for dashboard display)
+            recent_transactions = list(reversed(transactions))
 
             # Store data and update UI
             self._data = {
@@ -403,7 +406,7 @@ Press [bold]?[/bold] for help anytime."""
                 "total_wallets": total_wallets,
                 "custody": custody_totals,
                 "tx_headers": headers,
-                "transactions": transactions,
+                "transactions": recent_transactions,
             }
 
             self.app.call_from_thread(self._show_success)
