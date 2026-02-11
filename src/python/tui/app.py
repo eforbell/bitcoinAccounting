@@ -196,8 +196,6 @@ class CryptoApp(App[None]):
     def on_mount(self) -> None:
         try:
             self.crypto = CryptoAccounts()
-            # Flag to signal dashboard needs refresh after transaction recorded
-            self._dashboard_needs_refresh = False
             # Push dashboard as default screen (TUI-002)
             self.push_screen(DashboardScreen())
         except Exception as e:
@@ -230,13 +228,17 @@ class CryptoApp(App[None]):
         # TUI-006: Trade history and exchange liquidity screens
         self.push_screen(TradesScreen())
 
-    def action_menu_record(self) -> None:
-        # TUI-007: Record transaction screen with callback to refresh dashboard
-        def on_record_complete(result: None) -> None:
-            """Set flag to signal dashboard needs refresh."""
-            self._dashboard_needs_refresh = True
+    def refresh_dashboard_in_stack(self) -> None:
+        """Find dashboard in screen stack and refresh it."""
+        # Search the screen stack for any DashboardScreen instances
+        for screen in self.screen_stack:
+            if isinstance(screen, DashboardScreen):
+                screen.refresh_dashboard()
+                break
 
-        self.push_screen(RecordTransactionScreen(), callback=on_record_complete)
+    def action_menu_record(self) -> None:
+        # TUI-007: Record transaction screen
+        self.push_screen(RecordTransactionScreen())
 
     def action_menu_import(self) -> None:
         self.notify("Import wizard coming in TUI-008", severity="information")

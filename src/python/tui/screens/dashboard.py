@@ -225,21 +225,10 @@ class DashboardScreen(Screen[None]):
 
     def on_screen_resume(self) -> None:
         """Reload dashboard data when screen is resumed (returning from another screen)."""
-        # Skip reload if we're still loading from initial mount
-        if self._state == "loading":
-            return
-
-        # Skip if we're empty (no need to reload empty state)
-        if self._state == "empty":
-            return
-
-        # Check if app has flagged that dashboard needs refresh
-        from tui.app import CryptoApp
-        app = self.app
-        if isinstance(app, CryptoApp) and getattr(app, '_dashboard_needs_refresh', False):
-            # Clear flag and refresh
-            app._dashboard_needs_refresh = False
-            self.refresh_dashboard()
+        # Note: Dashboard refresh is now handled by app.refresh_dashboard_in_stack()
+        # which is called directly from record transaction screen after recording.
+        # This method is kept for potential future use.
+        pass
 
     def refresh_dashboard(self) -> None:
         """Explicitly refresh dashboard data (called by app callbacks)."""

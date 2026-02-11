@@ -601,8 +601,14 @@ class RecordTransactionScreen(Screen[None]):
                     timeout=5
                 )
             )
-            # Pop screen - callback in app.py will refresh dashboard
-            self.app.call_from_thread(self.app.pop_screen)
+            # Refresh dashboard and pop screen
+            from tui.app import CryptoApp
+            def refresh_and_pop() -> None:
+                if isinstance(self.app, CryptoApp):
+                    self.app.refresh_dashboard_in_stack()  # type: ignore[attr-defined]
+                self.app.pop_screen()
+
+            self.app.call_from_thread(refresh_and_pop)
 
         except Exception as e:
             self.app.call_from_thread(lambda: self.app.notify(f"Error: {str(e)}", severity="error", timeout=5))
@@ -681,8 +687,14 @@ class RecordTransactionScreen(Screen[None]):
                     timeout=5
                 )
             )
-            # Pop screen - callback in app.py will refresh dashboard
-            self.app.call_from_thread(self.app.pop_screen)
+            # Refresh dashboard and pop screen
+            from tui.app import CryptoApp
+            def refresh_and_pop() -> None:
+                if isinstance(self.app, CryptoApp):
+                    self.app.refresh_dashboard_in_stack()  # type: ignore[attr-defined]
+                self.app.pop_screen()
+
+            self.app.call_from_thread(refresh_and_pop)
 
         except Exception as e:
             self.app.call_from_thread(lambda: self.app.notify(f"Error: {str(e)}", severity="error", timeout=5))
@@ -739,8 +751,14 @@ class RecordTransactionScreen(Screen[None]):
                     timeout=5
                 )
             )
-            # Pop screen - callback in app.py will refresh dashboard
-            self.app.call_from_thread(self.app.pop_screen)
+            # Refresh dashboard and pop screen
+            from tui.app import CryptoApp
+            def refresh_and_pop() -> None:
+                if isinstance(self.app, CryptoApp):
+                    self.app.refresh_dashboard_in_stack()  # type: ignore[attr-defined]
+                self.app.pop_screen()
+
+            self.app.call_from_thread(refresh_and_pop)
 
         except Exception as e:
             self.app.call_from_thread(lambda: self.app.notify(f"Error: {str(e)}", severity="error", timeout=5))
@@ -793,8 +811,14 @@ class RecordTransactionScreen(Screen[None]):
                     timeout=5
                 )
             )
-            # Pop screen - callback in app.py will refresh dashboard
-            self.app.call_from_thread(self.app.pop_screen)
+            # Refresh dashboard and pop screen
+            from tui.app import CryptoApp
+            def refresh_and_pop() -> None:
+                if isinstance(self.app, CryptoApp):
+                    self.app.refresh_dashboard_in_stack()  # type: ignore[attr-defined]
+                self.app.pop_screen()
+
+            self.app.call_from_thread(refresh_and_pop)
 
         except Exception as e:
             self.app.call_from_thread(lambda: self.app.notify(f"Error: {str(e)}", severity="error", timeout=5))
