@@ -37,8 +37,7 @@ class LedgerScreen(Screen[None]):
     LedgerScreen .filter-panel {
         layout: horizontal;
         height: auto;
-        max-height: 10;
-        padding: 0 2;
+        padding: 1 2;
         background: #16213e;
         border: solid #444444;
     }
