@@ -589,5 +589,7 @@ async def test_record_transaction():
 7. **`priority=True`** on widget bindings to override app bindings when focused
 8. **Rich markup** in Labels for inline styling (`[bold #f7931a]text[/]`)
 11. **Label.content** to read text (NOT `.renderable` which was removed in Textual v7.5+)
+12. **Centering widgets**: Use `from textual.containers import Center` and wrap content in `with Center():`. Do NOT try `margin: 0 auto` (Textual doesn't support auto margins) or rely on `align: center` alone (children must be smaller than parent). `Center` is the purpose-built container for this.
+13. **Static vs Widget**: `Static` is for text display only. Use `Widget` as base class for anything that needs layout/align behavior with children.
 9. **`notify()`** for user feedback (success/warning/error)
 10. **Bitcoin orange `#f7931a`** as accent color throughout
