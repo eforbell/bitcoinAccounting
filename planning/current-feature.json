@@ -11,7 +11,7 @@
     {"id": "TUI-002", "title": "Dashboard screen with portfolio summary", "status": "completed"},
     {"id": "TUI-003", "title": "Textual CSS theme and styling", "status": "completed"},
     {"id": "TUI-004", "title": "Portfolio screen with balances and wallet breakdown", "status": "completed"},
-    {"id": "TUI-005", "title": "Transaction ledger screen with filtering", "status": "pending"},
+    {"id": "TUI-005", "title": "Transaction ledger screen with filtering", "status": "completed"},
     {"id": "TUI-006", "title": "Trade history and exchange liquidity screens", "status": "pending"},
     {"id": "TUI-007", "title": "Record transaction screen (buy/sell/transfer/interest)", "status": "pending"},
     {"id": "TUI-008", "title": "Import wizard screen with file picker and preview", "status": "pending"},

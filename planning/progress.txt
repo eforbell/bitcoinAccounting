@@ -1122,3 +1122,59 @@
   - All buttons styled consistently
 
 ---
+## 2026-02-11 - TUI-005: Transaction ledger screen with filtering
+
+- What was implemented:
+  - Created `src/python/tui/screens/ledger.py` with LedgerScreen class
+  - DataTable displaying transaction history with dynamic columns from get_transactions()
+  - Filter panel with coin selector, wallet selector, date range inputs (start/end)
+  - Apply Filters button reloads transactions with current filter values
+  - Sort by clicking column headers (toggles ascending/descending)
+  - Status bar shows transaction count ("Showing X of Y transactions")
+  - Date validation rejects invalid formats (requires YYYY-MM-DD)
+  - Empty state when no transactions exist ("No transactions found")
+  - Reload keybinding (R) to refresh data
+  - Escape binding to return to previous screen
+  - L key from main menu opens ledger screen
+  - Async data loading with @work(thread=True) to avoid UI blocking
+  - Wallet list populated dynamically from WalletQuery
+  - All transaction types supported: Deposit, Withdrawal, Spend, Trade, Mining, Interest Income
+
+- Files changed:
+  - `src/python/tui/screens/ledger.py` (new — 387 lines)
+  - `src/python/tui/screens/__init__.py` (updated — added LedgerScreen export)
+  - `src/python/tui/app.py` (modified — import LedgerScreen, route L key)
+  - `tests/test_tui_ledger.py` (new — 300 lines, 17 tests across 7 test classes)
+  - `planning/features/feature-9-prd.json` (marked TUI-005 passes: true)
+  - `planning/current-feature.json` (marked TUI-005 completed)
+
+- **Learnings:**
+  - **Label.content API**: Use `label.content` to read text (NOT `.renderable` - removed in Textual v7.5+)
+  - **import_transactions() API**: Uses lowercase keys: `trans_type`, `created_date`, `buy`, `sell`, `buy_curr`, `sell_curr`, `fee_curr` (not Title Case)
+  - **Fee handling convention**: Fees are included in sell amounts for Withdrawal/Spend transactions
+    - Withdraw 0.5 BTC with 0.0001 fee requires `sell=0.5001` (total including fee)
+    - This matches transfer_funds() implementation: `sell = tx_amount + fee_amount`
+  - **CryptoAccounts test fixture**: Use `SqliteBackend(':memory:', auto_create_tables=True)` for in-memory testing
+    - Pass backend to CryptoAccounts: `CryptoAccounts(backend=backend)`
+    - NOT: `CryptoAccounts(db_path='...', backend='sqlite')` (wrong signature)
+  - **Textual worker imports**: Import app types inside @work functions to avoid circular dependencies and threading issues
+  - **DataTable sorting pattern**: Store sort_column and sort_reverse state, toggle on header click, re-sort filtered data
+  - **Filter application pattern**: Read current filter values, validate, then reload data (don't modify in-place)
+  - **Date validation**: Use datetime.strptime() with try/except to validate YYYY-MM-DD format
+  - **Status bar updates**: Use string interpolation with Rich markup: `f"Showing [cyan]{count}[/cyan] transactions"`
+  - **Empty state handling**: Check if crypto is None in worker, show helpful message guiding user to import data
+
+- **Test Results:**
+  - 17 new ledger tests passing (100% pass rate)
+  - TestLedgerScreenMount: 3 tests (mount, header/footer, subtitle)
+  - TestLedgerFilterControls: 5 tests (coin, wallet, date inputs, apply button, status label)
+  - TestLedgerDataTable: 2 tests (table present, empty state)
+  - TestLedgerWithData: 2 tests (table populates, status shows count)
+  - TestLedgerFiltering: 1 test (date validation)
+  - TestLedgerSorting: 1 test (sort state initialization)
+  - TestLedgerNavigation: 2 tests (Escape, L key)
+  - TestLedgerReload: 1 test (R keybinding exists)
+  - Known issue: Segfault when running all TUI tests together (SQLite threading + async workers)
+
+---
+

@@ -1880,3 +1880,34 @@ def deposit(self, ...):
 def deposit(self, ...):
     self.ledger_writer.deposit(...)
 ```
+
+## TUI-005: Transaction Ledger Screen
+
+**Textual Label API change (Textual v7.5+)**:
+- Use `label.content` to read text, NOT `.renderable` (removed in v7.5+)
+- Pattern: `status_text = label.content` (works in v7.5+)
+- Applies to all Label widgets throughout TUI
+
+**import_transactions() API format**:
+- Uses lowercase dictionary keys: `trans_type`, `created_date`, `buy`, `sell`, `buy_curr`, `sell_curr`, `fee_curr`
+- NOT Title Case: Don't use `Type`, `Date`, `Buy Currency` etc.
+- Fee convention: Fees included in sell amounts for Withdrawal/Spend
+  - Example: Withdraw 0.5 BTC with 0.0001 fee requires `sell=0.5001`
+
+**CryptoAccounts test fixture pattern**:
+```python
+backend = SqliteBackend(':memory:', auto_create_tables=True)
+crypto = CryptoAccounts(backend=backend)
+# NOT: CryptoAccounts(db_path='...', backend='sqlite')
+```
+
+**Filter and sort patterns**:
+- Store filter state in screen instance variables
+- Reload data when filters change (don't modify in-place)
+- Sort pattern: Store `sort_column` and `sort_reverse`, toggle on header click
+- Date validation: Use `datetime.strptime()` with try/except for YYYY-MM-DD format
+
+**Empty state UX**:
+- Always show helpful guidance when no data exists
+- Example: "No transactions found. Import data to get started."
+- Check if `crypto is None` in workers before accessing

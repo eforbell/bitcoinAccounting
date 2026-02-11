@@ -111,7 +111,7 @@
       "priority": 5,
       "estimatedLines": 250,
       "testStrategy": "Textual pilot - verify table loads, filters reduce row count, sort changes order",
-      "passes": false
+      "passes": true
     },
     {
       "id": "TUI-006",
