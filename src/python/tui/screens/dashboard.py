@@ -224,6 +224,10 @@ class DashboardScreen(Screen[None]):
 
     def on_screen_resume(self) -> None:
         """Reload dashboard data when screen is resumed (returning from another screen)."""
+        # Skip reload if we're still loading from initial mount
+        if self._state == "loading":
+            return
+
         # Refresh dashboard to show newly recorded transactions
         self._show_loading()
         self.load_dashboard_data()
