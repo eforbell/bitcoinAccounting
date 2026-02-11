@@ -21,18 +21,22 @@ class StatCard(Static):
     DEFAULT_CSS = """
     StatCard {
         width: 1fr;
-        height: 5;
+        height: auto;
+        min-height: 4;
         border: solid #444444;
         background: #16213e;
-        padding: 1;
+        padding: 0 1;
+        layout: vertical;
     }
     StatCard .stat-label {
         color: #888888;
         text-style: bold;
+        padding-top: 1;
     }
     StatCard .stat-value {
         color: #f7931a;
         text-style: bold;
+        padding-bottom: 1;
     }
     """
 
@@ -59,6 +63,7 @@ class CustodyBreakdown(Static):
     CustodyBreakdown {
         width: 100%;
         height: auto;
+        max-height: 12;
         border: solid #444444;
         background: #16213e;
         padding: 1;
@@ -70,7 +75,6 @@ class CustodyBreakdown(Static):
     }
     CustodyBreakdown .custody-item {
         color: #aaaaaa;
-        margin-top: 1;
     }
     """
 
@@ -112,6 +116,7 @@ class RecentTransactions(Static):
     RecentTransactions {
         width: 100%;
         height: auto;
+        max-height: 15;
         border: solid #444444;
         background: #16213e;
         padding: 1;
@@ -120,10 +125,10 @@ class RecentTransactions(Static):
     RecentTransactions .section-title {
         color: #f7931a;
         text-style: bold;
-        margin-bottom: 1;
     }
     RecentTransactions DataTable {
         height: auto;
+        max-height: 12;
     }
     """
 
