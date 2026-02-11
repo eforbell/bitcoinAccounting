@@ -196,6 +196,8 @@ class CryptoApp(App[None]):
     def on_mount(self) -> None:
         try:
             self.crypto = CryptoAccounts()
+            # Flag to signal dashboard needs refresh after transaction recorded
+            self._dashboard_needs_refresh = False
             # Push dashboard as default screen (TUI-002)
             self.push_screen(DashboardScreen())
         except Exception as e:
@@ -231,10 +233,8 @@ class CryptoApp(App[None]):
     def action_menu_record(self) -> None:
         # TUI-007: Record transaction screen with callback to refresh dashboard
         def on_record_complete(result: None) -> None:
-            """Refresh dashboard when returning from record transaction screen."""
-            # Check if the current screen is a dashboard and refresh it
-            if isinstance(self.screen, DashboardScreen):
-                self.screen.refresh_dashboard()
+            """Set flag to signal dashboard needs refresh."""
+            self._dashboard_needs_refresh = True
 
         self.push_screen(RecordTransactionScreen(), callback=on_record_complete)
 

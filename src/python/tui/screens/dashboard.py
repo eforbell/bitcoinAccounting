@@ -233,8 +233,13 @@ class DashboardScreen(Screen[None]):
         if self._state == "empty":
             return
 
-        # NOTE: Dashboard refresh is now handled via callback pattern in app.py
-        # This method is kept for future use but doesn't auto-reload anymore
+        # Check if app has flagged that dashboard needs refresh
+        from tui.app import CryptoApp
+        app = self.app
+        if isinstance(app, CryptoApp) and getattr(app, '_dashboard_needs_refresh', False):
+            # Clear flag and refresh
+            app._dashboard_needs_refresh = False
+            self.refresh_dashboard()
 
     def refresh_dashboard(self) -> None:
         """Explicitly refresh dashboard data (called by app callbacks)."""
