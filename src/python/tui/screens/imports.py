@@ -137,6 +137,7 @@ class ImportWizardScreen(Screen[None]):
         self.parser: Any = None  # BaseImporter instance
         self.parsed_transactions: list[dict[str, Any]] = []
         self.wallet_names: list[str] = []
+        self.dry_run_enabled = True  # Store dry-run state (default True for safety)
 
     def compose(self) -> ComposeResult:
         """Compose the import wizard UI."""
@@ -496,7 +497,12 @@ class ImportWizardScreen(Screen[None]):
 
     def prepare_preview(self) -> None:
         """Validate configuration and prepare preview."""
+        # Store dry-run state before leaving step 2
+        dry_run_checkbox = self.query_one("#checkbox-dry-run", Checkbox)
+        self.dry_run_enabled = dry_run_checkbox.value
+
         # Validate wallet-name for wallet imports
+        wallet_name = None
         if self.parser and self.parser.source_type == 'wallet':
             wallet_select = self.query_one("#select-wallet-name", Select)
             custom_input = self.query_one("#input-wallet-name-custom", Input)
@@ -513,7 +519,7 @@ class ImportWizardScreen(Screen[None]):
         withdraw_to = str(withdraw_select.value) if withdraw_select.value != Select.BLANK else None
 
         # Re-parse with configuration
-        self.reparse_with_config(wallet_name if self.parser.source_type == 'wallet' else None, withdraw_to)
+        self.reparse_with_config(wallet_name if self.parser and self.parser.source_type == 'wallet' else None, withdraw_to)
 
     @work(thread=True)
     def reparse_with_config(self, wallet_name: str | None, withdraw_to: str | None) -> None:
@@ -552,9 +558,8 @@ class ImportWizardScreen(Screen[None]):
                 )
                 return
 
-            # Check dry-run
-            dry_run_checkbox = self.query_one("#checkbox-dry-run", Checkbox)
-            is_dry_run = dry_run_checkbox.value
+            # Use stored dry-run state (captured in prepare_preview from step 2)
+            is_dry_run = self.dry_run_enabled
 
             if is_dry_run:
                 # Just show preview results
