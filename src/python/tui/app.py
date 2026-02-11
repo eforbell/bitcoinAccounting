@@ -10,6 +10,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
 from cryptoAccounts import CryptoAccounts
+from tui.screens import DashboardScreen
 
 
 class HelpScreen(ModalScreen[None]):
@@ -102,7 +103,7 @@ class MenuButton(Static):
         self._action = action
 
     def on_click(self) -> None:
-        self.app.action_from_menu(self._action)
+        self.app.action_from_menu(self._action)  # type: ignore[attr-defined]
 
 
 class MainMenu(Widget):
@@ -200,12 +201,14 @@ class CryptoApp(App[None]):
     def on_mount(self) -> None:
         try:
             self.crypto = CryptoAccounts()
+            # Push dashboard as default screen (TUI-002)
+            self.push_screen(DashboardScreen())
         except Exception as e:
             self.notify(f"Database connection failed: {e}", severity="error")
 
     def on_unmount(self) -> None:
         if self.crypto is not None:
-            self.crypto.close()
+            self.crypto.close()  # type: ignore[no-untyped-call]
 
     def action_show_help(self) -> None:
         self.push_screen(HelpScreen())
@@ -219,7 +222,9 @@ class CryptoApp(App[None]):
     # -- Menu actions (stubs for TUI-001, implemented in later stories) --
 
     def action_menu_portfolio(self) -> None:
-        self.notify("Portfolio screen coming in TUI-004", severity="information")
+        # TUI-002: Dashboard screen (portfolio summary)
+        # TUI-004: Full portfolio screen will be added later
+        self.push_screen(DashboardScreen())
 
     def action_menu_ledger(self) -> None:
         self.notify("Ledger screen coming in TUI-005", severity="information")

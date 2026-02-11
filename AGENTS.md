@@ -2,6 +2,31 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-9: Interactive TUI Application - TUI-002
+
+### Textual Async Data Loading Pattern
+- `@work` decorator is imported from `textual` module (NOT `textual.worker`)
+- Worker functions run in thread pool - need runtime imports inside @work functions
+- Pattern: `from tui.app import CryptoApp` inside @work function to avoid NameError
+- Use `self.app.call_from_thread(method, args)` to update UI from worker thread
+- Test with `await pilot.pause(0.2)` to give worker threads time to complete
+
+### Widget Mounting Pattern
+- Container.mount() returns AwaitMount, cannot use `with` statement
+- Pattern: Create widget → mount children to it → mount to parent
+- Example: `stats_row = Horizontal(); stats_row.mount(child); container.mount(stats_row)`
+
+### Dashboard State Machine
+- Four states: empty, loading, success, error
+- Private methods: _show_loading(), _show_empty(), _show_error(), _show_success()
+- Each state method: remove_children() then mount appropriate widgets
+- Empty state shows onboarding message with helpful instructions
+
+### Type Annotations for Textual
+- tuple needs type params: `list[tuple[Any, ...]]` not `list[tuple]`
+- Legacy untyped methods: `# type: ignore[no-untyped-call]`
+- Dynamic app methods: `# type: ignore[attr-defined]`
+
 ## Feature-9: Interactive TUI Application - TUI-001
 
 ### Textual App Setup Pattern

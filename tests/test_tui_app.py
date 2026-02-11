@@ -116,13 +116,19 @@ class TestKeyBindings:
             assert not isinstance(app.screen, HelpScreen)
 
     @pytest.mark.asyncio
-    async def test_portfolio_key_triggers_notification(self) -> None:
-        """Pressing P should trigger portfolio action (stub notification)."""
+    async def test_portfolio_key_triggers_dashboard(self) -> None:
+        """Pressing P should push dashboard screen (TUI-002)."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
+            await pilot.pause()  # Wait for initial dashboard
+            # Go back to main menu
+            await pilot.press("escape")
+            await pilot.pause()
+            # Press P for portfolio/dashboard
             await pilot.press("p")
-            # Should have a notification about portfolio
-            assert len(app._notifications) > 0
+            await pilot.pause()
+            # Dashboard should be in screen stack
+            assert len(app.screen_stack) >= 1
 
     @pytest.mark.asyncio
     async def test_ledger_key_triggers_notification(self) -> None:

@@ -812,3 +812,67 @@
   - Zero regressions across codebase
 
 ---
+
+## 2026-02-11 - TUI-002: Dashboard screen with portfolio summary
+
+- What was implemented:
+  - Created `src/python/tui/screens/dashboard.py` with DashboardScreen class
+  - Three custom widgets: StatCard, CustodyBreakdown, RecentTransactions
+  - StatCard displays individual metrics (balance, basis, wallet count)
+  - CustodyBreakdown calculates and displays self-custodied vs custodial percentages
+  - RecentTransactions shows last 5 transactions in DataTable
+  - Dashboard is default screen on app launch (pushed in app.on_mount)
+  - Async data loading with @work decorator (runs in thread pool)
+  - State machine: empty/loading/success/error states
+  - Empty state shows onboarding message with helpful instructions
+  - Updated `action_menu_portfolio()` to push DashboardScreen
+  - Updated screens/__init__.py to export DashboardScreen
+
+- Files changed:
+  - `src/python/tui/screens/dashboard.py` (new — 370 lines)
+  - `src/python/tui/screens/__init__.py` (updated — added DashboardScreen export)
+  - `src/python/tui/app.py` (modified — push dashboard on mount, portfolio action)
+  - `tests/test_tui_dashboard.py` (new — 19 tests across 8 test classes)
+  - `tests/test_tui_app.py` (modified — 1 test updated for new P key behavior)
+  - `AGENTS.md` (updated — TUI-002 learnings)
+  - `planning/features/feature-9-prd.json` (marked TUI-002 passes: true)
+  - `planning/current-feature.json` (marked TUI-002 completed)
+
+- **Learnings:**
+  - **@work import location**: `from textual import work` (NOT from textual.worker)
+  - **Worker thread imports**: Need runtime imports inside @work functions due to threading
+    - Example: `from tui.app import CryptoApp` inside load_dashboard_data()
+    - Avoids NameError: "CryptoApp is not defined" in thread context
+  - **UI updates from threads**: Use `self.app.call_from_thread(method, args)` pattern
+  - **Container.mount() behavior**: Returns AwaitMount, not a context manager
+    - WRONG: `with container.mount(Horizontal()): yield widget`
+    - RIGHT: `row = Horizontal(); row.mount(widget); container.mount(row)`
+  - **State machine for data panels**: empty/loading/success/error pattern
+    - _show_loading() → show spinner/message
+    - _show_empty() → onboarding instructions
+    - _show_success() → render data
+    - _show_error(msg) → display error
+  - **Custody calculation**: Normalize custody types from wallets table
+    - "self-custodied", "self", "cold", "hardware", "hot" → "self-custodied"
+    - "custodial", "exchange", "third-party" → "custodial"
+    - "multisig", "multi-sig", "collaborative" → "multisig"
+  - **Testing async workers**: Use `await pilot.pause(0.2)` to give threads time
+  - **Type annotations**: 
+    - `list[tuple[Any, ...]]` for variable-length tuples
+    - `# type: ignore[no-untyped-call]` for legacy CryptoAccounts methods
+    - `# type: ignore[attr-defined]` for dynamic app methods
+
+- **Test Results:**
+  - 19 new dashboard tests passing (100% pass rate)
+  - 41 total TUI tests passing (22 existing + 19 new)
+  - Zero regressions from adding dashboard screen
+  - Test classes:
+    - TestDashboardScreenMount: 3 tests (mount, header/footer, subtitle)
+    - TestDashboardEmptyState: 2 tests (onboarding, instructions)
+    - TestDashboardWithData: 2 tests (with transactions, stat cards)
+    - TestCustodyBreakdownWidget: 3 tests (mount, display, empty data)
+    - TestRecentTransactionsWidget: 4 tests (mount, table, data, limit to 5)
+    - TestStatCardWidget: 3 tests (mount, display, update value)
+    - TestDashboardNavigation: 2 tests (escape, P key)
+
+---

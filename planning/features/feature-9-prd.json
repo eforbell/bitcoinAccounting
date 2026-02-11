@@ -55,7 +55,7 @@
       "priority": 2,
       "estimatedLines": 250,
       "testStrategy": "Textual pilot test with in-memory database, verify widgets populate correctly",
-      "passes": false
+      "passes": true
     },
     {
       "id": "TUI-003",
