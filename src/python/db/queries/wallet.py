@@ -91,21 +91,81 @@ class WalletQuery:
                 ORDER BY wallet_id
             """
             rows = self.backend.execute(query)
-            return [{'wallet_id': row['wallet_id'], 'type': row['wallet_type'], 'custody': row['custody'],
-                    'description': row['description'], 'active': row['active']}
-                   for row in rows]
-        else:
-            # Fallback: get distinct exchange values from ledger
-            query = """
-                SELECT DISTINCT exchange
-                FROM ledger
-                WHERE exchange IS NOT NULL
-                ORDER BY exchange
-            """
-            rows = self.backend.execute(query)
-            return [{'wallet_id': row['exchange'], 'type': 'unknown', 'custody': 'unknown',
-                    'description': None, 'active': True}
-                   for row in rows]
+            wallets = [{'wallet_id': row['wallet_id'], 'type': row['wallet_type'], 'custody': row['custody'],
+                        'description': row['description'], 'active': row['active']}
+                       for row in rows]
+
+            # If table exists but is empty, fall back to ledger
+            if wallets:
+                return wallets
+            # Fall through to ledger fallback below
+
+        # Fallback: get distinct exchange values from ledger
+        # (used when table doesn't exist OR table is empty)
+        query = """
+            SELECT DISTINCT exchange
+            FROM ledger
+            WHERE exchange IS NOT NULL
+            ORDER BY exchange
+        """
+        rows = self.backend.execute(query)
+        return [{'wallet_id': row['exchange'],
+                 'type': 'unknown',
+                 'custody': self.infer_custody_type(row['exchange']),
+                 'description': None,
+                 'active': True}
+               for row in rows]
+
+    def infer_custody_type(self, wallet_id: str) -> str:
+        """Infer custody type from wallet name using heuristics.
+
+        Args:
+            wallet_id: Wallet/exchange name
+
+        Returns:
+            str: 'custodial', 'self-custodied', 'multisig', or 'unknown'
+        """
+        name_lower = wallet_id.lower()
+
+        # Known exchanges and custodial services
+        custodial_keywords = [
+            'coinbase', 'kraken', 'binance', 'gemini', 'bitstamp', 'bitfinex',
+            'swan', 'strike', 'cashapp', 'cash app', 'river', 'blockfi',
+            'celsius', 'nexo', 'ftx', 'kucoin', 'bittrex', 'poloniex',
+            'okx', 'huobi', 'bitflyer', 'liquid', 'exchange', 'custodial'
+        ]
+
+        # Known multisig services
+        multisig_keywords = [
+            'unchained', 'casa', 'caravan', 'electrum', 'multisig', 'multi-sig',
+            'collaborative'
+        ]
+
+        # Known self-custody wallets (hardware, software)
+        self_custody_keywords = [
+            'ledger', 'trezor', 'coldcard', 'bitbox', 'keepkey', 'blockstream',
+            'jade', 'specter', 'sparrow', 'blue wallet', 'bluewallet', 'samourai',
+            'wasabi', 'green', 'muun', 'phoenix', 'breez', 'blixt',
+            'vault', 'cold', 'hardware', 'personal', 'private', 'my wallet',
+            'self', 'hot wallet', 'mobile'
+        ]
+
+        # Check for matches
+        for keyword in custodial_keywords:
+            if keyword in name_lower:
+                return 'custodial'
+
+        for keyword in multisig_keywords:
+            if keyword in name_lower:
+                return 'multisig'
+
+        for keyword in self_custody_keywords:
+            if keyword in name_lower:
+                return 'self-custodied'
+
+        # Default: assume self-custodied for unknown wallets
+        # (conservative assumption - better to assume user controls keys)
+        return 'self-custodied'
 
     def get_balance_by_wallet(self, coin: str = 'BTC', wallet: str | None = None) -> float | dict[str, float]:
         """Get balance for a specific wallet, or all wallets if wallet=None.
