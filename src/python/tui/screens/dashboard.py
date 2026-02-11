@@ -229,6 +229,8 @@ class DashboardScreen(Screen[None]):
             self.app.action_menu_portfolio()  # type: ignore[attr-defined]
         elif button_id == "btn-ledger":
             self.app.action_menu_ledger()  # type: ignore[attr-defined]
+        elif button_id == "btn-trades":
+            self.app.action_menu_trades()  # type: ignore[attr-defined]
         elif button_id == "btn-record":
             self.app.action_menu_record()  # type: ignore[attr-defined]
         elif button_id == "btn-import":
@@ -321,6 +323,7 @@ Press [bold]?[/bold] for help anytime."""
         container.mount(actions_row)
         actions_row.mount(Button("Portfolio [P]", id="btn-portfolio"))
         actions_row.mount(Button("Ledger [L]", id="btn-ledger"))
+        actions_row.mount(Button("Trades [X]", id="btn-trades"))
         actions_row.mount(Button("Record Tx [R]", id="btn-record"))
         actions_row.mount(Button("Import [I]", id="btn-import"))
         actions_row.mount(Button("Tax/Report [T]", id="btn-tax"))

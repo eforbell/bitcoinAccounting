@@ -127,7 +127,7 @@
       "priority": 6,
       "estimatedLines": 250,
       "testStrategy": "Textual pilot - verify trades display, liquidity calculations match CLI output",
-      "passes": false
+      "passes": true
     },
     {
       "id": "TUI-007",

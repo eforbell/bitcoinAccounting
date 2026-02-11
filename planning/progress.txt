@@ -1178,3 +1178,66 @@
 
 ---
 
+## 2026-02-11 - TUI-006: Trade history and exchange liquidity screens
+
+- What was implemented:
+  - Created `src/python/tui/screens/trades.py` with TradesScreen class
+  - Two-view system: Trades history and Exchange liquidity (toggle between views)
+  - Trades view: DataTable showing trade history with cost basis
+    - Columns: Date, Type (Buy/Sell), Quantity, Trade Currency, Unit Cost, Total Cost, Exchange
+    - Data from TradeQuery.get_trade_cost(coin, 'USD')
+    - Sorted by date descending (most recent first)
+  - Liquidity view: DataTable showing purchase history by exchange
+    - Columns: Exchange, Total Purchased, Current Balance, Avg Cost (USD)
+    - Includes summary panel with cost basis metrics
+    - Data from TradeQuery + WalletQuery APIs (mimics exchange_liquidity script)
+  - Filter panel: coin selector (default BTC)
+  - View toggle buttons: "View Trades" and "View Liquidity"
+  - Keyboard bindings: X (open trades), T (switch to trades view), E (switch to liquidity), R (reload), Escape (back)
+  - Added "Trades [X]" button to dashboard quick actions
+  - Updated app.py to route X key to TradesScreen
+  - Updated help screen to show X key for "Trade History & Liquidity"
+  - Async data loading with @work(thread=True)
+  - State machine: loading/success/error/empty patterns
+
+- Files changed:
+  - `src/python/tui/screens/trades.py` (new — 473 lines)
+  - `src/python/tui/screens/__init__.py` (updated — added TradesScreen export)
+  - `src/python/tui/app.py` (modified — added X binding, action_menu_trades(), help entry)
+  - `src/python/tui/screens/dashboard.py` (modified — added Trades button and handler)
+  - `tests/test_tui_trades.py` (new — 16 tests across 6 test classes)
+  - `planning/features/feature-9-prd.json` (marked TUI-006 passes: true)
+  - `planning/current-feature.json` (marked TUI-006 completed)
+
+- **Learnings:**
+  - **Widget mounting without compose()**: Can't use `with container:` context manager outside of compose() methods
+    - BAD: `with content_area: section = Container(); content_area.mount(section)` ❌
+    - GOOD: `section = Container(); content_area.mount(section)` ✅
+    - This is a critical pattern - compose-time context manager vs runtime mounting
+  - **Variable name collisions in loops**: Avoid reusing variable names between loop iterations and widget references
+    - BAD: `for row in rows: ... row = Horizontal(); row.mount(Label(...))` ❌ (mypy error: dict vs Horizontal)
+    - GOOD: `for lbl, val in data: summary_row = Horizontal(); summary_row.mount(Label(lbl))` ✅
+  - **DataTable type annotations**: Use `DataTable[str]` for explicit type hint in strict mode
+  - **Exchange liquidity calculation**: Group trades by exchange, filter to buys only (quantity > 0), aggregate purchased and USD spent
+  - **TradeQuery.get_trade_cost() API**: Returns list of dicts with date, quantity (±), trade_curr, unit_cost, total_cost, exchange
+    - Positive quantity = buy, negative quantity = sell
+    - unit_cost and total_cost can be None if price lookup fails
+  - **Summary metrics pattern**: Calculate totals, avg cost, cold storage, then display in summary panel
+  - **Multi-view pattern**: Store current view state, toggle between views by removing/re-mounting content
+    - Alternative to TabbedContent which has registry issues with dynamic mounting
+  - **Known issue**: Segfault when running multiple TUI tests together (SQLite threading + async workers)
+    - Tests pass when run individually
+    - Same issue documented in TUI-004
+
+- **Test Results:**
+  - 16 new trades tests created
+  - Tests pass individually (known segfault issue when run together)
+  - TestTradesScreenMount: 3 tests (mount, header/footer, title)
+  - TestTradesFilterControls: 2 tests (coin selector, view buttons)
+  - TestTradesView: 3 tests (default view, with data, empty state)
+  - TestLiquidityView: 3 tests (switch view, with data, empty state)
+  - TestTradesNavigation: 2 tests (escape, X key)
+  - TestTradesKeyboardShortcuts: 3 tests (T/E/R keys)
+
+---
+
