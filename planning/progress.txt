@@ -1303,6 +1303,9 @@
     - WRONG: `on_resume()` doesn't exist in Textual 7.5.0 ❌
     - CORRECT: `on_screen_resume()` is the proper event handler ✅
     - on_mount() fires once when screen created, on_screen_resume() fires when returning via pop_screen()
+    - **GOTCHA**: on_screen_resume() ALSO fires during initial mount! Must check state to avoid duplicate loading
+      - Pattern: `if self._state == "loading": return` before reloading in on_screen_resume()
+      - Prevents DuplicateIds error when both on_mount() and on_screen_resume() fire at startup
     - Pattern: Add on_screen_resume() that calls same data loading logic as on_mount()
     - Critical for dashboard to show newly recorded transactions after popping back from record screen
     - Textual events: ScreenResume (when screen is resumed), ScreenSuspend (when screen is hidden)
