@@ -46,12 +46,19 @@ class CustodyBar(Static):
     }
     """
 
-    def __init__(self) -> None:
+    def __init__(self, custody_data: dict[str, float] | None = None, total: float = 0.0) -> None:
         super().__init__(id="custody-bar")
+        self._custody_data = custody_data or {}
+        self._total = total
 
     def compose(self) -> ComposeResult:
         yield Label("Custody Breakdown", classes="custody-bar-title")
         yield Label("", id="custody-bar-visual", classes="custody-bar-visual")
+
+    def on_mount(self) -> None:
+        """Update custody data after mounting."""
+        if self._custody_data or self._total > 0:
+            self.update_custody(self._custody_data, self._total)
 
     def update_custody(self, custody_data: dict[str, float], total: float) -> None:
         """Update custody bar display."""
@@ -213,11 +220,11 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
         container = self.query_one("#portfolio-container", Container)
         container.remove_children()
 
-        # Controls bar
+        # Controls bar - mount first, then add children
         controls = Horizontal(id="controls-bar")
+        container.mount(controls)
         controls.mount(Label("Show inactive wallets:"))
         controls.mount(Switch(value=self._show_inactive, id="show-inactive-switch"))
-        container.mount(controls)
 
         # Build tabbed content with both tabs
         tabs = TabbedContent()
@@ -238,12 +245,10 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
 
     def _build_balances_tab(self) -> ComposeResult:
         """Build the Balances tab content."""
-        # Custody bar
-        custody_bar = CustodyBar()
+        # Custody bar - pass data to constructor, will update on mount
         total_balance = self._data.get("total_balance", 0.0)
         custody_data = self._data.get("custody", {})
-        custody_bar.update_custody(custody_data, total_balance)
-        yield custody_bar
+        yield CustodyBar(custody_data, total_balance)
 
         # Wallet balances table
         table: DataTable = DataTable(id="balances-table")
