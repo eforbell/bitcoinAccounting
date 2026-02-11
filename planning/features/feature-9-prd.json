@@ -170,7 +170,7 @@
       "priority": 8,
       "estimatedLines": 350,
       "testStrategy": "Textual pilot with fixture CSV files - verify detection, preview, dry-run results",
-      "passes": false
+      "passes": true
     },
     {
       "id": "TUI-009",

@@ -14,7 +14,7 @@
     {"id": "TUI-005", "title": "Transaction ledger screen with filtering", "status": "completed"},
     {"id": "TUI-006", "title": "Trade history and exchange liquidity screens", "status": "completed"},
     {"id": "TUI-007", "title": "Record transaction screen (buy/sell/transfer/interest)", "status": "completed"},
-    {"id": "TUI-008", "title": "Import wizard screen with file picker and preview", "status": "pending"},
+    {"id": "TUI-008", "title": "Import wizard screen with file picker and preview", "status": "completed"},
     {"id": "TUI-009", "title": "Export transactions screen", "status": "pending"},
     {"id": "TUI-010", "title": "Tax reporting screen (gains tracker, 1099-B, forecast)", "status": "pending"},
     {"id": "TUI-011", "title": "Visualization screen with chart generation", "status": "pending"},

@@ -1332,3 +1332,79 @@
 
 ---
 
+
+## 2026-02-11 - TUI-008: Import wizard screen with file picker and preview
+
+- What was implemented:
+  - Created `src/python/tui/screens/imports.py` with ImportWizardScreen class
+  - 3-step wizard: (1) File selection + detection, (2) Configuration, (3) Preview + Execute
+  - Step 1: File path input + Detect Format button, auto-detection using import registry
+    - Shows detected parser name, source type (exchange/wallet), transaction count
+    - Enables Next button after successful detection
+  - Step 2: Configuration panel adapts based on source type
+    - Wallet imports: wallet-name selector (existing wallets) + custom name input (required)
+    - All imports: withdraw-to selector (optional)
+    - Dry-run checkbox (checked by default for safety)
+  - Step 3: Preview DataTable with first 10 transactions (type, date, amount, currency, exchange, fee)
+    - Import button executes import via crypto.import_transactions()
+    - Results panel shows imported/skipped counts
+    - Dry-run mode shows "would import" without actually importing
+  - Back/Next/Cancel navigation between steps
+  - Error handling: file not found, detection failure, parse errors all show in-line error panel
+  - Wallet list loaded asynchronously via @work(thread=True)
+  - I key binding opens import wizard from anywhere in app
+  - Dashboard already has Import [I] button wired up
+
+- Files changed:
+  - `src/python/tui/screens/imports.py` (new — 576 lines)
+  - `src/python/tui/screens/__init__.py` (updated — added ImportWizardScreen export)
+  - `src/python/tui/app.py` (updated — import ImportWizardScreen, route I key to push screen)
+  - `tests/test_tui_imports.py` (new — 17 tests across 7 test classes)
+  - `planning/features/feature-9-prd.json` (marked TUI-008 passes: true)
+  - `planning/current-feature.json` (marked TUI-008 completed)
+
+- **Learnings:**
+  - **Import registry API**: 
+    - `detect_parser(file_path)` returns BaseImporter instance or None
+    - `parser.parse(file_path, wallet_name, withdraw_to)` returns (colnames, transactions)
+    - `parser.name`, `.source_type`, `.description` for UI display
+  - **Multi-step wizard pattern**: Store current_step state, use show_step_N() methods to rebuild content
+    - Each step calls `content.remove_children()` then mounts new widgets
+    - Update button states (disabled) and labels ("Next" → "Import") per step
+  - **Conditional form fields**: Step 2 adapts based on parser.source_type
+    - Wallet imports require wallet-name selector/input (validation in prepare_preview)
+    - Exchange imports skip wallet-name fields
+  - **Select widget with custom input fallback**: Provide Select with existing options + Input for new value
+    - Pattern: `custom_input.value.strip() or str(select.value)` to get final value
+  - **Dry-run pattern**: Checkbox controls import execution, show different results text
+    - Dry-run: "Would import X" without calling import_transactions()
+    - Real import: Actually call import_transactions(), show success notification
+  - **Results display**: After import completes, change Cancel button to "Close" and show results panel
+  - **DataTable preview**: Add columns (type, date, amount, currency, exchange, fee) + add_row for each tx
+    - First 10 transactions only: `preview_txs = self.parsed_transactions[:10]`
+  - **Widget mounting anti-pattern** (CRITICAL): Never use `with container.mount(widget) as w:` outside compose()
+    - BAD: `with content.mount(Horizontal()) as row: row.mount(Label(...))` ❌
+    - GOOD: `row = Horizontal(); content.mount(row); row.mount(Label(...))` ✅
+    - AwaitMount has no __enter__/__exit__, causes mypy errors
+  - **Step transition logic**: btn-next handler must call show_step_2() for step 1 → 2
+    - Don't leave it as `pass` assuming Next is always disabled in step 1
+    - Next gets enabled after detection succeeds, so must handle transition
+  - **Test API change** (Textual 7.5): Use `label.content` not `label.renderable` to read Label text
+    - Pattern: `assert "Import" in str(label.content)` ✅
+  - **Type annotations**: 
+    - `table: DataTable[str] = DataTable(...)` for explicit type hint
+    - Select.value comparison: use `str(select.value) == ""` not `== Select.BLANK` to avoid type overlap
+
+- **Test Results:**
+  - 17 new import wizard tests passing (100% pass rate)
+  - TestImportWizardScreenMount: 3 tests (mount, header, step indicator)
+  - TestImportWizardStep1: 3 tests (file input, detect button, Next disabled initially)
+  - TestImportWizardDetection: 3 tests (detect Coinbase, detect Ledger wallet, nonexistent file error)
+  - TestImportWizardStep2: 2 tests (dry-run checkbox checked by default, withdraw-to selector)
+  - TestImportWizardStep3: 2 tests (preview table, Import button label)
+  - TestImportWizardNavigation: 3 tests (back button, cancel, escape)
+  - TestImportWizardExecution: 1 test (dry-run execution shows results)
+  - Zero regressions in existing TUI tests
+
+---
+
