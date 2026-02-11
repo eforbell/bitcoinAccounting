@@ -114,6 +114,14 @@ class PortfolioScreen(Screen[None]):
         color: #aaaaaa;
         margin-right: 2;
     }
+    #custody-warning {
+        width: 100%;
+        padding: 1;
+        margin-bottom: 1;
+        background: #3d2a00;
+        border: solid #ffa500;
+        color: #ffcc00;
+    }
     #loading-message {
         color: #f7931a;
         text-align: center;
@@ -215,6 +223,15 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
         container.mount(controls)
         controls.mount(Label("Show inactive wallets:"))
         controls.mount(Switch(value=self._show_inactive, id="show-inactive-switch"))
+
+        # Warning banner if using inferred custody
+        if self._data.get("using_inferred_custody", False):
+            warning = Label(
+                "[yellow]⚠[/yellow] Using inferred custody types (wallets table not found or empty). "
+                "Custody breakdown is based on wallet name heuristics.",
+                id="custody-warning"
+            )
+            container.mount(warning)
 
         # Show balances view (simplified - no tabs for now to avoid TabbedContent complexity)
         # TODO: Add back Wallet Detail tab using proper Textual compose patterns
@@ -336,12 +353,17 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
 
             # Build wallet balance list with metadata
             wallet_balances: list[dict[str, Any]] = []
+            using_inferred_custody = False
             for wallet_data in wallets:
                 wallet_id = wallet_data.get('wallet_id', '')
                 balance = wallet_balances_dict.get(wallet_id, 0.0)
                 custody_type = wallet_data.get('custody', 'unknown').lower()
                 is_active = wallet_data.get('active', True)
                 status = "active" if is_active else "inactive"
+
+                # Check if using inferred custody (type='unknown' means from ledger fallback)
+                if wallet_data.get('type') == 'unknown':
+                    using_inferred_custody = True
 
                 # Include all wallets from filtered list (already filtered by active/inactive toggle)
                 percentage = (balance / total_balance * 100) if total_balance > 0 else 0.0
@@ -375,6 +397,7 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
                 "wallet_balances": wallet_balances,
                 "total_balance": total_balance,
                 "custody": custody_totals,
+                "using_inferred_custody": using_inferred_custody,
             }
 
             self.app.call_from_thread(self._show_success)
