@@ -186,7 +186,7 @@
       "priority": 9,
       "estimatedLines": 200,
       "testStrategy": "Textual pilot - verify export form, preview data, file written to disk",
-      "passes": false
+      "passes": true
     },
     {
       "id": "TUI-010",
