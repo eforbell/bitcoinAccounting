@@ -66,6 +66,15 @@ class LedgerScreen(Screen[None]):
         margin: 0 0 1 0;
     }
 
+    LedgerScreen Select > SelectCurrent {
+        color: #e0e0e0;
+        background: #0f3460;
+    }
+
+    LedgerScreen Select:focus > SelectCurrent {
+        background: #16213e;
+    }
+
     LedgerScreen .status-bar {
         layout: horizontal;
         height: 3;
@@ -120,7 +129,7 @@ class LedgerScreen(Screen[None]):
                     yield Label("Wallet (optional):", classes="filter-label")
                     yield Select(
                         options=[("All Wallets", None)],
-                        prompt="All Wallets",
+                        value=None,
                         id="wallet-select",
                         allow_blank=True,
                     )
@@ -339,8 +348,9 @@ class LedgerScreen(Screen[None]):
         end_input = self.query_one("#end-date-input", Input)
 
         # coin_select.value can be None (All), "BTC", or "USD"
-        self.current_coin = str(coin_select.value) if coin_select.value else None
-        self.current_wallet = str(wallet_select.value) if wallet_select.value else None
+        self.current_coin = str(coin_select.value) if coin_select.value is not None else None
+        # wallet_select.value is None for "All Wallets", or a wallet name string
+        self.current_wallet = str(wallet_select.value) if wallet_select.value is not None else None
         self.start_date = start_input.value.strip() if start_input.value else None
         self.end_date = end_input.value.strip() if end_input.value else None
 
