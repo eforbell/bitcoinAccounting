@@ -2,6 +2,40 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-9: Interactive TUI Application - TUI-010
+
+### Tax Reporting Screen with TabbedContent
+- Created `src/python/tui/screens/tax_reporting.py` with three-tab TaxReportingScreen
+- TabbedContent with TabPane children: "Gains Tracker", "1099-B Export", "Forecast Sale"
+- Each TabPane has unique id for switching: `tabbed.active = "tab-1099b"`
+- Container with id for warning visibility toggle: `warning.display = False/True`
+
+### Tax Data Integration
+- Uses `app.crypto.get_sales_for_1099b(coin, year, wallet)` → (sales_list, worksheet_list)
+- Uses `app.crypto.forecast_capital_gains_fifo(coin, qty, price, wallet)` → (lots_list, summary_dict)
+- Summary dict includes short/long term breakdown, proceeds, cost basis, missing basis flags
+
+### IRS 2025+ Per-Wallet Warning
+- Dynamic warning based on tax year input: hide for pre-2025, show for 2025+
+- Uses `on_input_changed()` to trigger `_update_irs_warning()` when year changes
+- Container display property for visibility control
+
+### Form Validation Pattern
+- Validate inputs before calling async methods
+- Show status errors in dedicated Static widget per tab
+- Use color classes: `.success`, `.error`, `.warning` for status messages
+
+### DataTable Column Setup
+- Call `_setup_tables()` in `on_mount()` to add columns once
+- Use key parameter: `table.add_column("Sale Date", key="sale_date")`
+- Clear with `table.clear()` before repopulating (preserves columns)
+
+### Testing TabbedContent Screens
+- Don't use pilot.click() for buttons on tabbed screens (off-screen issues)
+- Call screen methods directly: `screen.load_gains_data()` instead of clicking button
+- Use `tabbed.active = "tab-id"` to switch tabs programmatically
+- Add `await pilot.pause(0.3)` after async operations to let workers complete
+
 ## Feature-9: Interactive TUI Application - TUI-003
 
 ### Textual CSS Theme File

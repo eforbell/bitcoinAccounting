@@ -40,6 +40,55 @@
 - **Button focus**: Textual buttons are focusable by default, Tab cycles through them automatically
 - **Discovery UX**: Show keyboard shortcuts in button labels: `Button("Portfolio [P]", ...)`
 
+### Textual TabbedContent Patterns
+- **Compose with TabPane children**: Yield TabbedContent with TabPane children inside compose()
+- **Tab switching**: Use `tabbed.active = "tab-id"` to switch tabs programmatically
+- **Tab visibility**: Each TabPane needs unique id for switching: `TabPane("Label", id="tab-name")`
+- **Testing tabs**: Call screen methods directly instead of pilot.click() (buttons may be off-screen)
+- **Container visibility**: Use `container.display = True/False` for dynamic show/hide sections
+
+---
+
+## 2026-02-11 - TUI-010: Tax reporting screen (gains tracker, 1099-B, forecast)
+
+- What was implemented:
+  - Created `src/python/tui/screens/tax_reporting.py` with TaxReportingScreen (560 lines)
+  - TabbedContent with three tabs: Gains Tracker, 1099-B Export, Forecast Sale
+  - Gains Tracker tab: year selector, coin selector, wallet filter, summary panel, lot-by-lot DataTable
+  - 1099-B Export tab: form fields, preview table, export to CSV files (1099-B + worksheet)
+  - Forecast Sale tab: quantity/price inputs, lot breakdown table, tax implications summary
+  - IRS 2025+ per-wallet warning that shows/hides based on tax year input
+  - Color-coded gain/loss display (green positive, red negative)
+  - All data sourced from CapitalGainCalculator API via CryptoAccounts wrapper
+  - Updated app.py to import and wire up TaxReportingScreen to T key
+  - Updated screens/__init__.py to export TaxReportingScreen
+
+- Files changed:
+  - `src/python/tui/screens/tax_reporting.py` (new - 560 lines)
+  - `src/python/tui/screens/__init__.py` (added TaxReportingScreen export)
+  - `src/python/tui/app.py` (wired up action_menu_tax to push TaxReportingScreen)
+  - `tests/test_tui_tax_reporting.py` (new - 15 tests across 5 test classes)
+  - `AGENTS.md` (added TUI-010 learnings)
+  - `planning/features/feature-9-prd.json` (marked TUI-010 passes: true)
+  - `planning/current-feature.json` (marked TUI-010 completed)
+
+- **Learnings:**
+  - TabbedContent with TabPane children: use `tabbed.active = "tab-id"` to switch tabs
+  - Container display property for visibility toggle: `container.display = True/False`
+  - Form validation before async calls: show errors in dedicated Static widget per tab
+  - DataTable column setup in on_mount(), clear with table.clear() before repopulating
+  - Testing TabbedContent: call screen methods directly instead of clicking off-screen buttons
+  - IRS 2025+ compliance: per-wallet accounting required, warn users with dynamic warning section
+
+- **Test Results:**
+  - 15 new TUI tests passing (100% pass rate)
+  - TestTaxReportingScreenMount: 3 tests (keypress mount, tabbed content, escape navigation)
+  - TestGainsTrackerTab: 3 tests (controls, columns, summary labels)
+  - TestExport1099bTab: 4 tests (controls, warning visibility, columns)
+  - TestForecastTab: 3 tests (controls, summary labels, columns)
+  - TestTaxReportingIntegration: 2 tests (load gains with data, forecast with data)
+  - Zero regressions in related tests (54 tax-related tests passing)
+
 ---
 
 ## 2026-02-11 - TUI-001: Application shell, entry point, and main menu

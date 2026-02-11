@@ -207,7 +207,7 @@
       "priority": 10,
       "estimatedLines": 400,
       "testStrategy": "Textual pilot with test transactions - verify gains calculation, 1099-B output, forecast display",
-      "passes": false
+      "passes": true
     },
     {
       "id": "TUI-011",
