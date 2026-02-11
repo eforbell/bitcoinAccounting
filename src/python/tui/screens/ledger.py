@@ -37,7 +37,7 @@ class LedgerScreen(Screen[None]):
     LedgerScreen .filter-panel {
         layout: horizontal;
         height: auto;
-        max-height: 8;
+        max-height: 10;
         padding: 0 2;
         background: #16213e;
         border: solid #444444;
@@ -57,12 +57,13 @@ class LedgerScreen(Screen[None]):
     }
 
     LedgerScreen Input {
-        height: 1;
+        height: 3;
         margin: 0 0 1 0;
     }
 
     LedgerScreen Select {
-        height: 1;
+        height: auto;
+        min-height: 3;
         margin: 0 0 1 0;
     }
 
@@ -110,7 +111,7 @@ class LedgerScreen(Screen[None]):
                 with Vertical(classes="filter-group"):
                     yield Label("Coin:", classes="filter-label")
                     yield Select(
-                        [("BTC", "BTC")],
+                        options=[("BTC", "BTC")],
                         value="BTC",
                         id="coin-select",
                         allow_blank=False,
@@ -119,8 +120,8 @@ class LedgerScreen(Screen[None]):
                 with Vertical(classes="filter-group"):
                     yield Label("Wallet (optional):", classes="filter-label")
                     yield Select(
-                        [("All Wallets", None)],
-                        value=None,
+                        options=[("All Wallets", None)],
+                        prompt="All Wallets",
                         id="wallet-select",
                         allow_blank=True,
                     )
