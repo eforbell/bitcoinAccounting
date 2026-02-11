@@ -150,14 +150,14 @@ class MainMenu(Widget):
         yield Label("Bitcoin Portfolio Management & Tax Reporting", id="menu-subtitle")
         with Center():
             with Horizontal(id="menu-grid-top"):
-                yield MenuButton("Portfolio", "P", "portfolio")
-                yield MenuButton("Ledger", "L", "ledger")
-                yield MenuButton("Record Tx", "R", "record")
+                yield MenuButton("Portfolio", "Balances & custody", "P", "portfolio")
+                yield MenuButton("Ledger", "Transaction history", "L", "ledger")
+                yield MenuButton("Record Tx", "Buy/sell/transfer", "R", "record")
         with Center():
             with Horizontal(id="menu-grid-bottom"):
-                yield MenuButton("Import", "I", "import")
-                yield MenuButton("Tax / Report", "T", "tax")
-                yield MenuButton("Visualize", "V", "viz")
+                yield MenuButton("Import", "Load CSV files", "I", "import")
+                yield MenuButton("Tax / Report", "Gains & 1099-B", "T", "tax")
+                yield MenuButton("Visualize", "Generate charts", "V", "viz")
         yield Label("Press a key or click a menu item  |  ? for help  |  Q to quit", id="menu-hint")
 
 
