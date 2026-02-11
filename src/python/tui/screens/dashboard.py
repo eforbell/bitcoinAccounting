@@ -317,7 +317,7 @@ Press [bold]?[/bold] for help anytime."""
         # Quick action buttons
         actions_row = Horizontal(id="quick-actions")
         container.mount(actions_row)
-        actions_row.mount(Button("Portfolio [P]", id="btn-portfolio", variant="primary"))
+        actions_row.mount(Button("Portfolio [P]", id="btn-portfolio"))
         actions_row.mount(Button("Ledger [L]", id="btn-ledger"))
         actions_row.mount(Button("Record Tx [R]", id="btn-record"))
         actions_row.mount(Button("Import [I]", id="btn-import"))
