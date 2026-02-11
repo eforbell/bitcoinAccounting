@@ -2,6 +2,31 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-9: Interactive TUI Application - TUI-003
+
+### Textual CSS Theme File
+- Created `src/python/tui/styles/app.tcss` with comprehensive theme (355 lines)
+- Use CSS_PATH with Path object: `CSS_PATH = Path(__file__).parent / "styles" / "app.tcss"`
+- CSS variables for consistency: `$background`, `$accent`, `$success`, `$error`, etc.
+- Bitcoin orange (#F7931A) accent on dark navy (#1a1a2e) background
+
+### Theme Structure
+- Color palette section with CSS variables
+- Global screen styles
+- Header/Footer styling
+- DataTable with alternating row colors
+- Input/Button/Select consistent styling
+- Notification colors (info=blue, success=green, warning=orange, error=red)
+- Modal screens, loading indicators, tabs, scrollbars
+- Utility classes (.text-success, .text-accent, .bg-surface, etc.)
+
+### Testing Theme
+- Verify CSS_PATH attribute exists and points to .tcss file
+- Test that theme file exists and is not empty
+- Test app loads without CSS errors
+- Test notifications use correct severity colors
+- Test theme applied consistently across main menu, dashboard, help screen
+
 ## Feature-9: Interactive TUI Application - TUI-002
 
 ### Textual Async Data Loading Pattern

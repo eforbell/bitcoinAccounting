@@ -876,3 +876,63 @@
     - TestDashboardNavigation: 2 tests (escape, P key)
 
 ---
+
+## 2026-02-11 - TUI-003: Textual CSS theme and styling
+
+- What was implemented:
+  - Created `src/python/tui/styles/app.tcss` with comprehensive theme (355 lines)
+  - CSS variables for color consistency ($background, $accent, $success, $warning, $error, etc.)
+  - Bitcoin orange (#F7931A) accent on dark navy (#1a1a2e) background
+  - Styled all common widgets: DataTable, Input, Button, Select, OptionList
+  - DataTable with alternating row colors (.datatable--odd-row, .datatable--even-row)
+  - Notification severity colors (Toast.-information, .-success, .-warning, .-error)
+  - Header/Footer styling with Bitcoin orange accents
+  - Modal screens, Loading indicators, ProgressBar, Tabs, Scrollbars
+  - Utility classes for common patterns (.text-success, .text-accent, .bg-surface, etc.)
+  - Updated `app.py` to load CSS via CSS_PATH with Path object
+  - 16 comprehensive theme tests (loading, colors, widgets, notifications, consistency, accessibility)
+
+- Files changed:
+  - `src/python/tui/styles/app.tcss` (new — 355 lines)
+  - `src/python/tui/app.py` (modified — added Path import, CSS_PATH)
+  - `tests/test_tui_theme.py` (new — 16 tests across 6 test classes)
+  - `AGENTS.md` (updated — TUI-003 learnings)
+  - `planning/features/feature-9-prd.json` (marked TUI-003 passes: true)
+  - `planning/current-feature.json` (marked TUI-003 completed)
+
+- **Learnings:**
+  - **CSS_PATH with Path object**: Use `Path(__file__).parent / "styles" / "app.tcss"` for correct relative path
+    - String paths are relative to module location, causing duplication issues
+    - Path object resolves correctly from file location
+  - **CSS variable pattern**: Define color palette at top with `$variable: #hex;`
+    - Ensures consistency across theme
+    - Easy to change color scheme in one place
+  - **Textual CSS selector syntax**:
+    - Widget classes: `DataTable`, `Button`, `Input`
+    - Pseudo-classes: `:hover`, `:focus`
+    - State classes: `.-active`, `.-invalid`, `.-primary` (with dash prefix)
+    - Child selectors: `DataTable > .datatable--header`
+  - **Notification severity mapping**:
+    - `severity="information"` → Toast.-information (blue)
+    - `severity="success"` → Toast.-success (green)
+    - `severity="warning"` → Toast.-warning (orange)
+    - `severity="error"` → Toast.-error (red)
+  - **Testing theme loading**: Test app.CSS_PATH exists, file exists, loads without errors
+  - **Accessibility colors**: High contrast ratios
+    - Text on dark: #e0e0e0 (primary), #aaaaaa (secondary)
+    - Accent on dark: #f7931a (Bitcoin orange) — sufficient contrast
+    - Error: #e74c3c (red), Success: #00d26a (green)
+
+- **Test Results:**
+  - 16 new theme tests passing (100% pass rate)
+  - 57 total TUI tests passing (22 TUI-001 + 19 TUI-002 + 16 TUI-003)
+  - Zero regressions from adding centralized theme
+  - Test classes:
+    - TestThemeLoading: 3 tests (CSS file loads, has CSS_PATH, file exists)
+    - TestThemeColors: 2 tests (dark background, dashboard applies theme)
+    - TestWidgetStyling: 3 tests (DataTable, Button, Input)
+    - TestNotificationStyling: 4 tests (info, success, warning, error)
+    - TestThemeConsistency: 2 tests (main menu, help screen)
+    - TestThemeAccessibilityColors: 2 tests (variables defined, Bitcoin orange)
+
+---

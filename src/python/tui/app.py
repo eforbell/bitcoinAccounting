@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Container, Horizontal, Vertical
@@ -165,18 +167,9 @@ class CryptoApp(App[None]):
     TITLE = "Crypto Accounting"
     SUB_TITLE = "Bitcoin Portfolio Management"
 
-    CSS = """
-    Screen {
-        background: #1a1a2e;
-    }
-    Header {
-        background: #0f3460;
-        color: #f7931a;
-    }
-    Footer {
-        background: #0f3460;
-    }
-    """
+    # Load centralized theme from .tcss file (TUI-003)
+    # Path is relative to this file's directory
+    CSS_PATH = Path(__file__).parent / "styles" / "app.tcss"
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),

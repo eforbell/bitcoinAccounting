@@ -9,7 +9,7 @@
   "stories": [
     {"id": "TUI-001", "title": "Application shell, entry point, and main menu", "status": "completed"},
     {"id": "TUI-002", "title": "Dashboard screen with portfolio summary", "status": "completed"},
-    {"id": "TUI-003", "title": "Textual CSS theme and styling", "status": "pending"},
+    {"id": "TUI-003", "title": "Textual CSS theme and styling", "status": "completed"},
     {"id": "TUI-004", "title": "Portfolio screen with balances and wallet breakdown", "status": "pending"},
     {"id": "TUI-005", "title": "Transaction ledger screen with filtering", "status": "pending"},
     {"id": "TUI-006", "title": "Trade history and exchange liquidity screens", "status": "pending"},
