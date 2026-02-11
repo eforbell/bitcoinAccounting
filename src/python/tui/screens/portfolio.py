@@ -343,19 +343,19 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
                 is_active = wallet_data.get('active', True)
                 status = "active" if is_active else "inactive"
 
-                # Only include wallets with non-zero balance or active status
-                if balance > 0 or is_active:
-                    percentage = (balance / total_balance * 100) if total_balance > 0 else 0.0
+                # Include all wallets from filtered list (already filtered by active/inactive toggle)
+                percentage = (balance / total_balance * 100) if total_balance > 0 else 0.0
 
-                    wallet_balances.append({
-                        "wallet_id": wallet_id,
-                        "balance": balance,
-                        "percentage": percentage,
-                        "custody": custody_type,
-                        "status": status,
-                    })
+                wallet_balances.append({
+                    "wallet_id": wallet_id,
+                    "balance": balance,
+                    "percentage": percentage,
+                    "custody": custody_type,
+                    "status": status,
+                })
 
-                    # Accumulate custody totals
+                # Accumulate custody totals (only for wallets with balances)
+                if balance > 0:
                     if custody_type in ["self-custodied", "self", "cold", "hardware", "hot"]:
                         custody_totals["self-custodied"] += balance
                     elif custody_type in ["custodial", "exchange", "third-party"]:
