@@ -1,4 +1,57 @@
 
+## Codebase Patterns
+- Textual Label API: Use `label.content` to read text (NOT `.renderable` - removed in v7.5+)
+- Textual test pattern: `async with app.run_test(notifications=True) as pilot:`
+- TUI entry point: mirrors _bootstrap.py pattern with sys.path.insert + dotenv loading
+- Arrow keys + Tab for navigation (NOT vim j/k) - project convention
+
+---
+
+## 2026-02-11 - TUI-001: Application shell, entry point, and main menu
+
+- What was implemented:
+  - Created `src/python/tui/` package with `__init__.py`, `app.py`
+  - Created `src/python/tui/screens/__init__.py` (empty, ready for screen modules)
+  - Created `src/scripts/crypto_tui` entry point (executable, uses sys.path + dotenv pattern)
+  - CryptoApp(App) class with embedded CSS (dark navy/Bitcoin orange theme)
+  - MainMenu widget with 6 MenuButton instances: Portfolio, Ledger, Record Tx, Import, Tax/Report, Visualize
+  - HelpScreen (ModalScreen) with keyboard shortcut reference, opened via ?
+  - Keyboard bindings: P, L, R, I, T, V for menu navigation; Q to quit; ? for help; Escape to close
+  - CryptoAccounts lifecycle: created on_mount, closed on_unmount
+  - Graceful error handling for missing database connection
+  - Stub actions for all 6 menu items (notify "coming in TUI-0XX")
+  - MenuButton widget supports both keyboard shortcuts and mouse clicks
+  - Added `textual>=0.47.0` and `pytest-asyncio` to requirements.txt
+
+- Files changed:
+  - `src/python/tui/__init__.py` (new - 5 lines)
+  - `src/python/tui/app.py` (new - 186 lines)
+  - `src/python/tui/screens/__init__.py` (new - 1 line)
+  - `src/scripts/crypto_tui` (new - 26 lines, executable)
+  - `tests/test_tui_app.py` (new - 22 tests across 6 test classes)
+  - `requirements.txt` (added textual, pytest-asyncio)
+  - `AGENTS.md` (added TUI-001 learnings)
+  - `planning/features/feature-9-prd.json` (marked TUI-001 passes: true)
+  - `planning/current-feature.json` (marked TUI-001 completed, status in_progress)
+
+- **Learnings:**
+  - Textual v7.5 API: `Label.content` for text access (`.renderable` removed)
+  - Embedded CSS via `CSS` class variable works well (no .tcss files needed)
+  - `ModalScreen[None]` for overlays; `push_screen()` + `action_dismiss()` for navigation
+  - `Static` base class for custom display widgets; pass Rich markup to `super().__init__()`
+  - `app.notify()` for toast-style user feedback (info/warning/error)
+  - Textual pilot testing: `run_test(notifications=True)` to access `app._notifications`
+  - `MenuButton` custom widget with `on_click()` + `post_message()` pattern
+  - `action_from_menu()` routing pattern: maps button clicks to `action_menu_{name}()` methods
+
+- **Test Results:**
+  - 22 new TUI tests passing (100% pass rate)
+  - 761 total tests passing (739 existing + 22 new)
+  - 1 pre-existing failure (test_wallet_import_without_wallet_name - `python` binary not found)
+  - Zero regressions from TUI changes
+
+---
+
 ## 2026-02-07 - REFACTOR-008: Add integration tests for refactored code
 
 - What was implemented:

@@ -1,0 +1,280 @@
+{
+  "branchName": "feature/tui-application",
+  "projectName": "Interactive TUI Application",
+  "description": "Build a Textual-based terminal user interface that serves as a unified menu-driven application for all crypto accounting functionality - portfolio views, transaction recording, CSV imports, tax reporting, visualizations, and diagnostics",
+  "principles": [
+    "Additive Only - TUI wraps existing API; no business logic changes, all CLI scripts preserved",
+    "Direct API Access - Screens call CryptoAccounts methods directly, no intermediate REST layer",
+    "Keyboard First - Every action reachable via keyboard shortcuts; mouse supported but not required",
+    "Guided Flows - New users can accomplish tasks without reading docs or knowing CLI arguments",
+    "Consistent Screens - Every screen follows the same compose/mount/load pattern"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "framework": "Textual >= 0.47.0",
+    "testing": "pytest + textual.pilot",
+    "database": "SQLite + PostgreSQL (via DatabaseBackend abstraction)",
+    "styling": "Textual CSS (.tcss files)"
+  },
+  "userStories": [
+    {
+      "id": "TUI-001",
+      "title": "Application shell, entry point, and main menu",
+      "acceptanceCriteria": [
+        "Create src/python/tui/__init__.py package",
+        "Create src/python/tui/app.py with CryptoApp(App) class",
+        "Create src/scripts/crypto_tui entry point script",
+        "Main screen shows 6 menu categories: Portfolio, Record Transaction, Import, Tax & Reporting, Visualizations, Settings",
+        "Each menu item has a keyboard shortcut (P, R, I, T, V, S)",
+        "Footer shows available keybindings",
+        "Header shows app title and current screen name",
+        "CryptoAccounts instance created on mount, closed on unmount",
+        "Escape from any sub-screen returns to main menu",
+        "Q from main menu quits the application",
+        "crypto_tui script launches the app successfully"
+      ],
+      "priority": 1,
+      "estimatedLines": 200,
+      "testStrategy": "pytest with textual pilot - verify app mounts, menu renders, keybindings work",
+      "passes": true
+    },
+    {
+      "id": "TUI-002",
+      "title": "Dashboard screen with portfolio summary",
+      "acceptanceCriteria": [
+        "Create src/python/tui/screens/dashboard.py with DashboardScreen",
+        "Display total BTC balance (from get_balance)",
+        "Display cost basis per BTC (from get_basis)",
+        "Display wallet count with active/total breakdown",
+        "Display custody breakdown percentages (self-custodied vs custodial)",
+        "Show 5 most recent transactions in a summary table",
+        "Dashboard is the default screen shown on app launch",
+        "Data loads asynchronously using Textual workers to avoid blocking",
+        "Handle empty database gracefully (show onboarding message)"
+      ],
+      "priority": 2,
+      "estimatedLines": 250,
+      "testStrategy": "Textual pilot test with in-memory database, verify widgets populate correctly",
+      "passes": false
+    },
+    {
+      "id": "TUI-003",
+      "title": "Textual CSS theme and styling",
+      "acceptanceCriteria": [
+        "Create src/python/tui/styles/app.tcss with project theme",
+        "Define color scheme: Bitcoin orange (#F7931A) accent, dark background",
+        "Style Header with app branding",
+        "Style Footer with keybinding hints",
+        "Style DataTable with alternating row colors",
+        "Style Input fields, Select widgets, and Buttons consistently",
+        "Style notification messages (success=green, error=red, warning=yellow)",
+        "Ensure readable contrast ratios for all text",
+        "Theme applied consistently across all screens"
+      ],
+      "priority": 3,
+      "estimatedLines": 150,
+      "testStrategy": "Visual inspection across all screens, verify CSS loads without errors",
+      "passes": false
+    },
+    {
+      "id": "TUI-004",
+      "title": "Portfolio screen with balances and wallet breakdown",
+      "acceptanceCriteria": [
+        "Create src/python/tui/screens/portfolio.py with PortfolioScreen",
+        "Use TabbedContent with tabs: Balances, Wallet Detail",
+        "Balances tab: DataTable showing per-wallet balances, percentages, custody type, status",
+        "Balances tab: Summary row with totals at bottom",
+        "Balances tab: Custody breakdown bar (text-based) showing self vs custodial percentages",
+        "Wallet Detail tab: Select widget to choose a wallet, then show that wallet's transaction history",
+        "Toggle to show/hide inactive wallets (equivalent of --all flag)",
+        "Support coin selection (default BTC)",
+        "All data sourced from WalletQuery and TransactionQuery APIs"
+      ],
+      "priority": 4,
+      "estimatedLines": 300,
+      "testStrategy": "Textual pilot with test data - verify tables populate, tabs switch, wallet filter works",
+      "passes": false
+    },
+    {
+      "id": "TUI-005",
+      "title": "Transaction ledger screen with filtering",
+      "acceptanceCriteria": [
+        "Create src/python/tui/screens/ledger.py with LedgerScreen",
+        "DataTable displaying transaction history with columns: Date, Type, Buy, Sell, Fee, Exchange, Wallet",
+        "Filter controls: coin selector, wallet selector (multi-select), date range (start/end inputs)",
+        "Apply filters reactively (on change, reload table)",
+        "Sort by clicking column headers (at minimum: date ascending/descending)",
+        "Show row count and filtered count in status area",
+        "Support for all transaction types: Deposit, Withdrawal, Spend, Trade, Mining, Interest Income",
+        "Data sourced from TransactionQuery.get_transactions() with filter kwargs"
+      ],
+      "priority": 5,
+      "estimatedLines": 250,
+      "testStrategy": "Textual pilot - verify table loads, filters reduce row count, sort changes order",
+      "passes": false
+    },
+    {
+      "id": "TUI-006",
+      "title": "Trade history and exchange liquidity screens",
+      "acceptanceCriteria": [
+        "Add Trades tab to Portfolio screen or create separate TradesScreen",
+        "Trades tab: DataTable showing trade history with cost basis per trade",
+        "Add Exchange Liquidity tab showing purchase history by exchange",
+        "Exchange Liquidity: show Total Purchased, Current Balance, Avg Cost columns per exchange",
+        "Exchange Liquidity: summary section with totals and cold storage calculation",
+        "Data sourced from TradeQuery.get_trade_cost() and WalletQuery APIs"
+      ],
+      "priority": 6,
+      "estimatedLines": 250,
+      "testStrategy": "Textual pilot - verify trades display, liquidity calculations match CLI output",
+      "passes": false
+    },
+    {
+      "id": "TUI-007",
+      "title": "Record transaction screen (buy, sell, transfer, interest)",
+      "acceptanceCriteria": [
+        "Create src/python/tui/screens/transactions.py with RecordTransactionScreen",
+        "RadioSet to select transaction type: Buy, Sell, Transfer, Earn Interest",
+        "Form fields adapt based on selected type (buy shows exchange/qty/cost; sell shows wallet source/exchange/qty/proceeds; transfer shows from/to/amount/fee; interest shows exchange/amount)",
+        "Input validation: numeric fields reject non-numbers, required fields shown with indicator",
+        "Preview section shows formatted summary before confirming",
+        "Confirm button records transaction via LedgerWriter API",
+        "Buy flow: deposit USD, execute trade, optional withdraw to cold storage (3-step like buySats script)",
+        "Sell flow: optional transfer to exchange, execute trade, optional USD withdrawal (like sell script)",
+        "Success notification with updated balance shown after recording",
+        "Cancel button returns to previous screen without recording",
+        "Wallet/exchange fields offer autocomplete from existing wallets list"
+      ],
+      "priority": 7,
+      "estimatedLines": 400,
+      "testStrategy": "Textual pilot - fill form fields, verify preview updates, confirm records transaction in test DB",
+      "passes": false
+    },
+    {
+      "id": "TUI-008",
+      "title": "Import wizard screen with file picker and preview",
+      "acceptanceCriteria": [
+        "Create src/python/tui/screens/imports.py with ImportWizardScreen",
+        "Step 1: File selection with text input for path (DirectoryTree optional enhancement)",
+        "Step 1: Auto-detect format on file selection using import registry detect()",
+        "Step 1: Show detected format name, source type (exchange/wallet), and row count",
+        "Step 2: Configuration options - withdraw-to wallet selector, wallet-name for wallet imports",
+        "Step 2: Dry-run checkbox (checked by default for safety)",
+        "Step 3: Preview showing first 10 parsed transactions in DataTable",
+        "Step 3: Import button to execute, with progress indication",
+        "Step 3: Results summary showing imported/skipped/error counts",
+        "Back/Next navigation between steps",
+        "Support both exchange imports and wallet imports",
+        "Handle import errors gracefully with error messages in results"
+      ],
+      "priority": 8,
+      "estimatedLines": 350,
+      "testStrategy": "Textual pilot with fixture CSV files - verify detection, preview, dry-run results",
+      "passes": false
+    },
+    {
+      "id": "TUI-009",
+      "title": "Export transactions screen",
+      "acceptanceCriteria": [
+        "Create src/python/tui/screens/export.py with ExportScreen",
+        "Form fields: coin selector, wallet filter (optional), date range (optional), output file path",
+        "Preview of first 10 rows that would be exported",
+        "Export button calls export_transactions_csv() and writes file",
+        "Success notification with file path and row count",
+        "Option to specify multiple wallets via multi-select widget"
+      ],
+      "priority": 9,
+      "estimatedLines": 200,
+      "testStrategy": "Textual pilot - verify export form, preview data, file written to disk",
+      "passes": false
+    },
+    {
+      "id": "TUI-010",
+      "title": "Tax reporting screen (gains tracker, 1099-B export, forecast)",
+      "acceptanceCriteria": [
+        "Create src/python/tui/screens/tax_reporting.py with TaxReportingScreen",
+        "TabbedContent with tabs: Gains Tracker, 1099-B Export, Forecast Sale",
+        "Gains Tracker tab: year selector, wallet filter, coin selector",
+        "Gains Tracker tab: summary panel (short-term/long-term counts, proceeds, cost basis, gain/loss)",
+        "Gains Tracker tab: DataTable with lot-by-lot breakdown",
+        "1099-B Export tab: year input, output file path, wallet filter, export button",
+        "1099-B Export tab: IRS 2025+ per-wallet warning when year >= 2025 and no wallet selected",
+        "Forecast tab: coin, quantity, sale price inputs with forecast results display",
+        "Forecast tab: lot-by-lot breakdown showing which FIFO lots would be consumed",
+        "Forecast tab: tax implications summary (short-term vs long-term gains)",
+        "All data sourced from CapitalGainCalculator API"
+      ],
+      "priority": 10,
+      "estimatedLines": 400,
+      "testStrategy": "Textual pilot with test transactions - verify gains calculation, 1099-B output, forecast display",
+      "passes": false
+    },
+    {
+      "id": "TUI-011",
+      "title": "Visualization screen with chart generation",
+      "acceptanceCriteria": [
+        "Create src/python/tui/screens/visualizations.py with VisualizationScreen",
+        "Chart type selection: Orange Plot, Balance Chart, Custody Chart, All, PDF Report",
+        "Date range controls: preset selector (YTD, 1Y, 5Y, All) or custom start/end dates",
+        "Options: DPI selector, log scale toggle, cost basis overlay toggle",
+        "Generate button triggers chart creation using viz package",
+        "Progress indication during generation",
+        "On completion: show file paths and offer to open in system viewer",
+        "Open button calls subprocess to launch OS image viewer",
+        "Handle missing optional dependencies gracefully (matplotlib, reportlab)"
+      ],
+      "priority": 11,
+      "estimatedLines": 200,
+      "testStrategy": "Textual pilot - verify form renders, generation triggers, file paths displayed",
+      "passes": false
+    },
+    {
+      "id": "TUI-012",
+      "title": "Help system, keyboard shortcuts reference, and error handling polish",
+      "acceptanceCriteria": [
+        "Create help overlay screen accessible via ? or F1 from any screen",
+        "Help screen shows all keyboard shortcuts organized by screen",
+        "Help screen shows brief description of each functional area",
+        "Global error handler catches unhandled exceptions and shows user-friendly notification",
+        "Database connection errors show reconnection guidance",
+        "Empty state messages on all screens when no data exists (guide user to import first)",
+        "Confirmation dialog before destructive actions (if any)",
+        "About section showing version, database path, backend type",
+        "Add textual to requirements.txt"
+      ],
+      "priority": 12,
+      "estimatedLines": 200,
+      "testStrategy": "Textual pilot - verify help opens, keybindings listed, error handling catches exceptions",
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [],
+    "medium": [
+      "Textual CSS learning curve - DE-RISKED: patterns extracted from Viper TUI project to feature-9-textual-patterns.md",
+      "Long DB queries blocking event loop - mitigate with @work(thread=True) decorator or run_worker() per Viper patterns"
+    ],
+    "low": [
+      "Chart file opening varies by OS - mitigate with platform.system() detection",
+      "Terminal width constraints for wide tables - mitigate with horizontal scroll in DataTable",
+      "Textual version compatibility - pin to specific version in requirements.txt"
+    ]
+  },
+  "futureEnhancements": [
+    "Web UI layer (Feature-11+) reusing TUI screen logic as route handlers",
+    "Real-time BTC price ticker in dashboard header",
+    "Import history log screen showing all past imports",
+    "Pair price management screen (import/export pair prices)",
+    "Multi-coin dashboard with per-coin tabs",
+    "Database backup/restore screen",
+    "Diagnostics screen (diagnose_balances, validate_transfers, compare_with_sparrow)"
+  ],
+  "metrics": {
+    "estimatedTotalLines": 3150,
+    "estimatedCSSLines": 150,
+    "newDependencies": 1,
+    "screensCount": 10,
+    "existingScriptsModified": 0,
+    "targetTestCoverage": "80%"
+  }
+}

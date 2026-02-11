@@ -2,6 +2,43 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-9: Interactive TUI Application - TUI-001
+
+### Textual App Setup Pattern
+- Main app class extends `App[None]` with embedded CSS in `CSS` class variable
+- Use `BINDINGS` list for keyboard shortcuts: `Binding("key", "action_name", "Label")`
+- Set `show=False` on bindings that are context-specific (not shown in footer)
+- `on_mount()` initializes CryptoAccounts; `on_unmount()` closes it
+- Entry point script mirrors `_bootstrap.py` pattern: add src/python to sys.path, load .env
+
+### Textual Widget API (v7.5+)
+- `Label.content` returns the text content (NOT `.renderable` which doesn't exist in v7.5)
+- `Static` is the base for custom display widgets; pass content to `super().__init__(markup_string)`
+- `ModalScreen[None]` for overlay screens (help, dialogs)
+- `app.push_screen(screen)` to navigate forward; `action_dismiss()` or Escape to go back
+- `app.notify(message, severity="information"|"warning"|"error")` for toast notifications
+- `app._notifications` list available in tests (via `run_test(notifications=True)`)
+
+### Textual Testing Pattern
+- Use `pytest-asyncio` with `@pytest.mark.asyncio` decorator
+- `async with app.run_test() as pilot:` creates test harness
+- `await pilot.press("key_name")` simulates keyboard input
+- `app.query(WidgetClass)` returns all matching widgets
+- `app.query_one("#id", WidgetClass)` returns single widget by CSS id
+- `app.screen` returns current screen (check `isinstance` for screen type)
+- `app.is_running` confirms app mounted successfully
+
+### Menu Pattern
+- Custom `MenuButton(Static)` widget stores action string, posts to app on click
+- `action_from_menu(action)` routes menu clicks to `action_menu_{name}()` methods
+- Stub actions use `self.notify()` for "coming soon" placeholders
+- Six categories: Portfolio, Ledger, Record Tx, Import, Tax/Report, Visualize
+
+### Navigation Design
+- Arrow keys + Tab for widget navigation (NOT vim j/k) - user preference
+- Letter keys (P, L, R, I, T, V) for menu shortcuts from main screen
+- ? for help overlay, Q for quit, Escape for back/close
+
 ## Feature-8: CryptoAccounts Refactoring - REFACTOR-008
 
 ### Integration Testing Patterns
