@@ -245,7 +245,9 @@ class LedgerScreen(Screen[None]):
             # Store data
             self.column_names = list(headers)
             self.all_transactions = list(transactions)
-            self.filtered_transactions = list(transactions)
+
+            # Reverse to show most recent first (more natural)
+            self.filtered_transactions = list(reversed(transactions))
 
             # Apply sorting if set
             if self.sort_column and self.sort_column in self.column_names:

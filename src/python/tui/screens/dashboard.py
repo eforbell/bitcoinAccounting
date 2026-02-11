@@ -12,6 +12,7 @@ from textual.widgets import Button, DataTable, Footer, Header, Label, Static
 
 if TYPE_CHECKING:
     from tui.app import CryptoApp
+    from tui.screens.record_transaction import RecordTransactionScreen
     from cryptoAccounts import CryptoAccounts
 
 
@@ -229,6 +230,14 @@ class DashboardScreen(Screen[None]):
             return
 
         # Refresh dashboard to show newly recorded transactions
+        self._show_loading()
+        self.load_dashboard_data()
+
+    def on_record_transaction_screen_transaction_recorded(
+        self, message: "RecordTransactionScreen.TransactionRecorded"
+    ) -> None:
+        """Handle transaction recorded message from record transaction screen."""
+        # Reload dashboard when a transaction is recorded
         self._show_loading()
         self.load_dashboard_data()
 
