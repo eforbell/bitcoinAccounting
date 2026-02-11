@@ -47,6 +47,7 @@ class LedgerScreen(Screen[None]):
         width: 1fr;
         height: auto;
         padding: 0 1;
+        align-vertical: top;
     }
 
     LedgerScreen .filter-label {
@@ -61,8 +62,7 @@ class LedgerScreen(Screen[None]):
     }
 
     LedgerScreen Select {
-        height: auto;
-        min-height: 3;
+        height: 3;
         margin: 0 0 1 0;
     }
 
