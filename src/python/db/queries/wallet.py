@@ -82,7 +82,8 @@ class WalletQuery:
 
         if table_exists:
             # Get wallet metadata from wallets table
-            active_filter = "WHERE active = 1" if active_only else ""  # Use 1 for boolean (works in both backends)
+            # Use TRUE for boolean - works in both SQLite and PostgreSQL
+            active_filter = "WHERE active = TRUE" if active_only else ""
             query = f"""
                 SELECT wallet_id, wallet_type, custody, description, active
                 FROM wallets
