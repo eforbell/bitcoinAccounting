@@ -245,7 +245,7 @@ class DashboardScreen(Screen[None]):
         """Explicitly refresh dashboard data (called by app callbacks)."""
         # Reload data in background WITHOUT showing loading screen
         # This preserves focus and keyboard navigation
-        self.load_dashboard_data()
+        self.load_dashboard_data(refresh_only=True)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle quick action button clicks."""
@@ -303,6 +303,48 @@ Press [bold]?[/bold] for help anytime."""
         container = self.query_one("#dashboard-container", Container)
         container.remove_children()
         container.mount(Label(f"[red]Error loading data:[/red]\n{error}", id="error-message"))
+
+    def _update_widgets(self) -> None:
+        """Update existing widgets with new data (for refresh without rebuild)."""
+        balance = self._data.get("balance", 0.0)
+        basis = self._data.get("basis", 0.0)
+        active_wallets = self._data.get("active_wallets", 0)
+        total_wallets = self._data.get("total_wallets", 0)
+
+        # Update stat cards
+        try:
+            balance_card = self.query_one("#balance-card", StatCard)
+            balance_card.update_value(f"{balance:.8f} BTC")
+        except Exception:
+            pass  # Widget doesn't exist yet
+
+        try:
+            basis_card = self.query_one("#basis-card", StatCard)
+            basis_card.update_value(f"${basis:,.2f}" if basis > 0 else "N/A")
+        except Exception:
+            pass
+
+        try:
+            wallets_card = self.query_one("#wallets-card", StatCard)
+            wallets_card.update_value(f"{active_wallets} active / {total_wallets} total")
+        except Exception:
+            pass
+
+        # Update custody breakdown
+        try:
+            custody_widget = self.query_one("#custody-breakdown", CustodyBreakdown)
+            custody_widget.update_custody(self._data.get("custody", {}))
+        except Exception:
+            pass
+
+        # Update recent transactions
+        try:
+            tx_widget = self.query_one("#recent-transactions", RecentTransactions)
+            headers = self._data.get("tx_headers", [])
+            transactions = self._data.get("transactions", [])
+            tx_widget.update_transactions(headers, transactions)
+        except Exception:
+            pass
 
     def _show_success(self) -> None:
         """Display loaded data."""
@@ -367,8 +409,12 @@ Press [bold]?[/bold] for help anytime."""
         tx_widget.update_transactions(headers, transactions)
 
     @work(thread=True)
-    def load_dashboard_data(self) -> None:
-        """Load all dashboard data in background thread."""
+    def load_dashboard_data(self, refresh_only: bool = False) -> None:
+        """Load all dashboard data in background thread.
+
+        Args:
+            refresh_only: If True, update existing widgets instead of rebuilding UI
+        """
         from tui.app import CryptoApp
 
         app = self.app
@@ -437,7 +483,11 @@ Press [bold]?[/bold] for help anytime."""
                 "transactions": recent_transactions,
             }
 
-            self.app.call_from_thread(self._show_success)
+            # Update UI: either rebuild from scratch or update existing widgets
+            if refresh_only and self._state == "success":
+                self.app.call_from_thread(self._update_widgets)
+            else:
+                self.app.call_from_thread(self._show_success)
 
         except Exception as e:
             self.app.call_from_thread(self._show_error, str(e))
