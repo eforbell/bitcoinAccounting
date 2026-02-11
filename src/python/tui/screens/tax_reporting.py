@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import (
     Button,
@@ -48,10 +48,53 @@ class TaxReportingScreen(Screen[None]):
         height: 100%;
     }
 
+    /* TabbedContent and Tab styling */
+    TabbedContent {
+        height: 1fr;
+    }
+
+    Tabs {
+        background: #16213e;
+        dock: top;
+        height: 3;
+    }
+
+    Tab {
+        background: #16213e;
+        color: #aaaaaa;
+        padding: 0 2;
+    }
+
+    Tab:hover {
+        background: #0f3460;
+        color: #e0e0e0;
+    }
+
+    Tab.-active {
+        background: #1a1a2e;
+        color: #f7931a;
+        text-style: bold;
+    }
+
+    ContentSwitcher {
+        height: 1fr;
+    }
+
+    TabPane {
+        padding: 0;
+        height: 1fr;
+    }
+
+    /* Scrollable tab content */
+    .tab-scroll {
+        height: 1fr;
+        padding: 1;
+    }
+
     .section-header {
         height: auto;
         margin-bottom: 1;
-        color: $accent;
+        color: #f7931a;
         text-style: bold;
     }
 
@@ -59,8 +102,8 @@ class TaxReportingScreen(Screen[None]):
         height: auto;
         margin-bottom: 1;
         padding: 1;
-        background: $surface;
-        border: solid $primary;
+        background: #16213e;
+        border: solid #444444;
     }
 
     .form-row {
@@ -83,8 +126,8 @@ class TaxReportingScreen(Screen[None]):
         height: auto;
         margin-bottom: 1;
         padding: 1;
-        background: $surface-darken-1;
-        border: solid $primary;
+        background: #16213e;
+        border: solid #444444;
     }
 
     .summary-row {
@@ -93,7 +136,7 @@ class TaxReportingScreen(Screen[None]):
 
     .summary-label {
         width: 20;
-        color: $text-muted;
+        color: #888888;
     }
 
     .summary-value {
@@ -102,62 +145,60 @@ class TaxReportingScreen(Screen[None]):
     }
 
     .summary-value-positive {
-        color: $success;
+        color: #00d26a;
     }
 
     .summary-value-negative {
-        color: $error;
+        color: #e74c3c;
     }
 
     .data-section {
-        height: 1fr;
-        min-height: 10;
-        max-height: 25;
+        height: auto;
+        min-height: 8;
+        margin-bottom: 1;
     }
 
     DataTable {
-        height: 1fr;
+        height: auto;
+        min-height: 6;
+        max-height: 15;
     }
 
     #status-message {
         height: auto;
         margin-top: 1;
         padding: 1;
-        background: $surface-darken-1;
+        background: #16213e;
     }
 
     .success {
-        border: solid $success;
-        color: $success;
+        border: solid #00d26a;
+        color: #00d26a;
     }
 
     .error {
-        border: solid $error;
-        color: $error;
+        border: solid #e74c3c;
+        color: #e74c3c;
     }
 
     .warning {
-        border: solid $warning;
-        color: $warning;
+        border: solid #f39c12;
+        color: #f39c12;
     }
 
     .warning-section {
         height: auto;
         padding: 1;
         margin-bottom: 1;
-        background: $warning-darken-2;
-        border: solid $warning;
-        color: $warning;
+        background: #3d2a00;
+        border: solid #f39c12;
+        color: #f39c12;
     }
 
     #actions-section {
         height: auto;
         align: center middle;
         margin-top: 1;
-    }
-
-    TabPane {
-        padding: 1;
     }
     """
 
@@ -190,204 +231,207 @@ class TaxReportingScreen(Screen[None]):
 
     def _compose_gains_tab(self) -> ComposeResult:
         """Compose the gains tracker tab."""
-        # Controls
-        with Container(classes="form-section"):
-            yield Label("Filters", classes="section-header")
+        with VerticalScroll(classes="tab-scroll"):
+            # Controls
+            with Container(classes="form-section"):
+                yield Label("Filters", classes="section-header")
 
-            with Horizontal(classes="form-row"):
-                yield Label("Tax Year:", classes="form-label")
-                yield Input(
-                    value=str(datetime.now().year - 1),
-                    placeholder="YYYY",
-                    id="gains-year",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Tax Year:", classes="form-label")
+                    yield Input(
+                        value=str(datetime.now().year - 1),
+                        placeholder="YYYY",
+                        id="gains-year",
+                        classes="form-input",
+                    )
 
-            with Horizontal(classes="form-row"):
-                yield Label("Coin:", classes="form-label")
-                yield Select(
-                    options=[("BTC", "BTC")],
-                    value="BTC",
-                    id="gains-coin",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Coin:", classes="form-label")
+                    yield Select(
+                        options=[("BTC", "BTC")],
+                        value="BTC",
+                        id="gains-coin",
+                        classes="form-input",
+                    )
 
-            with Horizontal(classes="form-row"):
-                yield Label("Wallet:", classes="form-label")
-                yield Input(
-                    placeholder="All wallets (or specific wallet ID)",
-                    id="gains-wallet",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Wallet:", classes="form-label")
+                    yield Input(
+                        placeholder="All wallets (or specific wallet ID)",
+                        id="gains-wallet",
+                        classes="form-input",
+                    )
 
-            with Horizontal(id="actions-section"):
-                yield Button("Load Gains", id="btn-load-gains", variant="primary")
+                with Horizontal(id="actions-section"):
+                    yield Button("Load Gains", id="btn-load-gains", variant="primary")
 
-        # Summary section
-        with Container(classes="summary-section", id="gains-summary"):
-            yield Label("Summary", classes="section-header")
-            with Horizontal(classes="summary-row"):
-                yield Label("Short-term sales:", classes="summary-label")
-                yield Label("-", id="gains-short-count", classes="summary-value")
-            with Horizontal(classes="summary-row"):
-                yield Label("Long-term sales:", classes="summary-label")
-                yield Label("-", id="gains-long-count", classes="summary-value")
-            with Horizontal(classes="summary-row"):
-                yield Label("Total proceeds:", classes="summary-label")
-                yield Label("-", id="gains-proceeds", classes="summary-value")
-            with Horizontal(classes="summary-row"):
-                yield Label("Total cost basis:", classes="summary-label")
-                yield Label("-", id="gains-cost-basis", classes="summary-value")
-            with Horizontal(classes="summary-row"):
-                yield Label("Net gain/(loss):", classes="summary-label")
-                yield Label("-", id="gains-net", classes="summary-value")
+            # Summary section
+            with Container(classes="summary-section", id="gains-summary"):
+                yield Label("Summary", classes="section-header")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Short-term sales:", classes="summary-label")
+                    yield Label("-", id="gains-short-count", classes="summary-value")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Long-term sales:", classes="summary-label")
+                    yield Label("-", id="gains-long-count", classes="summary-value")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Total proceeds:", classes="summary-label")
+                    yield Label("-", id="gains-proceeds", classes="summary-value")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Total cost basis:", classes="summary-label")
+                    yield Label("-", id="gains-cost-basis", classes="summary-value")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Net gain/(loss):", classes="summary-label")
+                    yield Label("-", id="gains-net", classes="summary-value")
 
-        # Data table
-        with Container(classes="data-section"):
-            yield Label("Lot-by-lot Breakdown", classes="section-header")
-            yield DataTable[str](id="gains-table")
+            # Data table
+            with Container(classes="data-section"):
+                yield Label("Lot-by-lot Breakdown", classes="section-header")
+                yield DataTable[str](id="gains-table")
 
-        yield Static("", id="gains-status")
+            yield Static("", id="gains-status")
 
     def _compose_1099b_tab(self) -> ComposeResult:
         """Compose the 1099-B export tab."""
-        # Warning section (shown for 2025+)
-        yield Container(
-            Label(
-                "[bold]⚠ IRS 2025+ Per-Wallet Requirement[/bold]\n"
-                "Starting in 2025, the IRS requires per-wallet cost basis tracking.\n"
-                "If no wallet is selected, global FIFO will be used (may not be compliant).",
-            ),
-            id="irs-warning",
-            classes="warning-section",
-        )
+        with VerticalScroll(classes="tab-scroll"):
+            # Warning section (shown for 2025+)
+            yield Container(
+                Label(
+                    "[bold]⚠ IRS 2025+ Per-Wallet Requirement[/bold]\n"
+                    "Starting in 2025, the IRS requires per-wallet cost basis tracking.\n"
+                    "If no wallet is selected, global FIFO will be used (may not be compliant).",
+                ),
+                id="irs-warning",
+                classes="warning-section",
+            )
 
-        # Controls
-        with Container(classes="form-section"):
-            yield Label("Export Options", classes="section-header")
+            # Controls
+            with Container(classes="form-section"):
+                yield Label("Export Options", classes="section-header")
 
-            with Horizontal(classes="form-row"):
-                yield Label("Tax Year:", classes="form-label")
-                yield Input(
-                    value=str(datetime.now().year - 1),
-                    placeholder="YYYY",
-                    id="export-year",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Tax Year:", classes="form-label")
+                    yield Input(
+                        value=str(datetime.now().year - 1),
+                        placeholder="YYYY",
+                        id="export-year",
+                        classes="form-input",
+                    )
 
-            with Horizontal(classes="form-row"):
-                yield Label("Coin:", classes="form-label")
-                yield Select(
-                    options=[("BTC", "BTC")],
-                    value="BTC",
-                    id="export-coin",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Coin:", classes="form-label")
+                    yield Select(
+                        options=[("BTC", "BTC")],
+                        value="BTC",
+                        id="export-coin",
+                        classes="form-input",
+                    )
 
-            with Horizontal(classes="form-row"):
-                yield Label("Wallet:", classes="form-label")
-                yield Input(
-                    placeholder="All wallets (or specific wallet ID)",
-                    id="export-wallet",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Wallet:", classes="form-label")
+                    yield Input(
+                        placeholder="All wallets (or specific wallet ID)",
+                        id="export-wallet",
+                        classes="form-input",
+                    )
 
-            with Horizontal(classes="form-row"):
-                yield Label("Output File:", classes="form-label")
-                yield Input(
-                    value="",
-                    placeholder="1099b_YEAR.csv (auto-generated if empty)",
-                    id="export-file",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Output File:", classes="form-label")
+                    yield Input(
+                        value="",
+                        placeholder="1099b_YEAR.csv (auto-generated if empty)",
+                        id="export-file",
+                        classes="form-input",
+                    )
 
-            with Horizontal(id="actions-section"):
-                yield Button("Preview", id="btn-preview-1099b", variant="default")
-                yield Button("Export", id="btn-export-1099b", variant="primary")
+                with Horizontal(id="actions-section"):
+                    yield Button("Preview", id="btn-preview-1099b", variant="default")
+                    yield Button("Export", id="btn-export-1099b", variant="primary")
 
-        # Preview table
-        with Container(classes="data-section"):
-            yield Label("Preview (first 10 rows)", classes="section-header")
-            yield DataTable[str](id="export-table")
+            # Preview table
+            with Container(classes="data-section"):
+                yield Label("Preview (first 10 rows)", classes="section-header")
+                yield DataTable[str](id="export-table")
 
-        yield Static("", id="export-status")
+            yield Static("", id="export-status")
 
     def _compose_forecast_tab(self) -> ComposeResult:
         """Compose the forecast sale tab."""
-        # Controls
-        with Container(classes="form-section"):
-            yield Label("Sale Parameters", classes="section-header")
+        with VerticalScroll(classes="tab-scroll"):
+            # Controls
+            with Container(classes="form-section"):
+                yield Label("Sale Parameters", classes="section-header")
 
-            with Horizontal(classes="form-row"):
-                yield Label("Coin:", classes="form-label")
-                yield Select(
-                    options=[("BTC", "BTC")],
-                    value="BTC",
-                    id="forecast-coin",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Coin:", classes="form-label")
+                    yield Select(
+                        options=[("BTC", "BTC")],
+                        value="BTC",
+                        id="forecast-coin",
+                        classes="form-input",
+                    )
 
-            with Horizontal(classes="form-row"):
-                yield Label("Quantity:", classes="form-label")
-                yield Input(
-                    placeholder="Amount to sell (e.g., 0.5)",
-                    id="forecast-quantity",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Quantity:", classes="form-label")
+                    yield Input(
+                        placeholder="Amount to sell (e.g., 0.5)",
+                        id="forecast-quantity",
+                        classes="form-input",
+                    )
 
-            with Horizontal(classes="form-row"):
-                yield Label("Sale Price (USD):", classes="form-label")
-                yield Input(
-                    placeholder="Price per unit (e.g., 95000)",
-                    id="forecast-price",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Sale Price (USD):", classes="form-label")
+                    yield Input(
+                        placeholder="Price per unit (e.g., 95000)",
+                        id="forecast-price",
+                        classes="form-input",
+                    )
 
-            with Horizontal(classes="form-row"):
-                yield Label("Wallet:", classes="form-label")
-                yield Input(
-                    placeholder="All wallets (or specific wallet ID)",
-                    id="forecast-wallet",
-                    classes="form-input",
-                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Wallet:", classes="form-label")
+                    yield Input(
+                        placeholder="All wallets (or specific wallet ID)",
+                        id="forecast-wallet",
+                        classes="form-input",
+                    )
 
-            with Horizontal(id="actions-section"):
-                yield Button("Calculate Forecast", id="btn-forecast", variant="primary")
+                with Horizontal(id="actions-section"):
+                    yield Button("Calculate Forecast", id="btn-forecast", variant="primary")
 
-        # Summary section
-        with Container(classes="summary-section", id="forecast-summary"):
-            yield Label("Tax Implications", classes="section-header")
+            # Summary section
+            with Container(classes="summary-section", id="forecast-summary"):
+                yield Label("Tax Implications", classes="section-header")
 
-            with Horizontal(classes="summary-row"):
-                yield Label("Current balance:", classes="summary-label")
-                yield Label("-", id="forecast-balance", classes="summary-value")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Current balance:", classes="summary-label")
+                    yield Label("-", id="forecast-balance", classes="summary-value")
 
-            with Horizontal(classes="summary-row"):
-                yield Label("Total proceeds:", classes="summary-label")
-                yield Label("-", id="forecast-proceeds", classes="summary-value")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Total proceeds:", classes="summary-label")
+                    yield Label("-", id="forecast-proceeds", classes="summary-value")
 
-            with Horizontal(classes="summary-row"):
-                yield Label("Total cost basis:", classes="summary-label")
-                yield Label("-", id="forecast-cost-basis", classes="summary-value")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Total cost basis:", classes="summary-label")
+                    yield Label("-", id="forecast-cost-basis", classes="summary-value")
 
-            with Horizontal(classes="summary-row"):
-                yield Label("Short-term gain:", classes="summary-label")
-                yield Label("-", id="forecast-short-gain", classes="summary-value")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Short-term gain:", classes="summary-label")
+                    yield Label("-", id="forecast-short-gain", classes="summary-value")
 
-            with Horizontal(classes="summary-row"):
-                yield Label("Long-term gain:", classes="summary-label")
-                yield Label("-", id="forecast-long-gain", classes="summary-value")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Long-term gain:", classes="summary-label")
+                    yield Label("-", id="forecast-long-gain", classes="summary-value")
 
-            with Horizontal(classes="summary-row"):
-                yield Label("Total gain/(loss):", classes="summary-label")
-                yield Label("-", id="forecast-total-gain", classes="summary-value")
+                with Horizontal(classes="summary-row"):
+                    yield Label("Total gain/(loss):", classes="summary-label")
+                    yield Label("-", id="forecast-total-gain", classes="summary-value")
 
-        # Lots table
-        with Container(classes="data-section"):
-            yield Label("Lots to be Sold (FIFO Order)", classes="section-header")
-            yield DataTable[str](id="forecast-table")
+            # Lots table
+            with Container(classes="data-section"):
+                yield Label("Lots to be Sold (FIFO Order)", classes="section-header")
+                yield DataTable[str](id="forecast-table")
 
-        yield Static("", id="forecast-status")
+            yield Static("", id="forecast-status")
 
     def on_mount(self) -> None:
         """Load wallets and setup UI after mounting."""
