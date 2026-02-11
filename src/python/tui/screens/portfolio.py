@@ -72,14 +72,14 @@ class CustodyBar(Static):
         multisig_pct = (custody_data.get("multisig", 0.0) / total) * 100
         unknown_pct = (custody_data.get("unknown", 0.0) / total) * 100
 
-        # Build text summary (no visual bar - just percentages)
+        # Build text summary with color-coding
         parts = [
-            f"Self-custodied: {self_pct:.1f}%",
-            f"Custodial: {custodial_pct:.1f}%",
-            f"Multisig: {multisig_pct:.1f}%"
+            f"[green]Self-custodied: {self_pct:.1f}%[/green]",
+            f"[yellow]Custodial: {custodial_pct:.1f}%[/yellow]",
+            f"[cyan]Multisig: {multisig_pct:.1f}%[/cyan]"
         ]
         if unknown_pct > 0:
-            parts.append(f"Unknown: {unknown_pct:.1f}%")
+            parts.append(f"[dim]Unknown: {unknown_pct:.1f}%[/dim]")
 
         bar_label.update("  |  ".join(parts))
 
