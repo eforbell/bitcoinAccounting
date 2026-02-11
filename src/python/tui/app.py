@@ -12,7 +12,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
 from cryptoAccounts import CryptoAccounts
-from tui.screens import DashboardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TradesScreen
+from tui.screens import DashboardScreen, ImportWizardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TradesScreen
 
 
 class HelpScreen(ModalScreen[None]):
@@ -241,7 +241,8 @@ class CryptoApp(App[None]):
         self.push_screen(RecordTransactionScreen())
 
     def action_menu_import(self) -> None:
-        self.notify("Import wizard coming in TUI-008", severity="information")
+        # TUI-008: Import wizard screen with file picker and preview
+        self.push_screen(ImportWizardScreen())
 
     def action_menu_tax(self) -> None:
         self.notify("Tax reporting screen coming in TUI-010", severity="information")
