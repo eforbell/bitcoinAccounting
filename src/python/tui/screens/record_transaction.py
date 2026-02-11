@@ -530,7 +530,7 @@ class RecordTransactionScreen(Screen[None]):
         crypto = app.crypto
 
         if crypto is None:
-            self.app.call_from_thread(self.app.notify, "No database connection", "error", 3)
+            self.app.call_from_thread(lambda: self.app.notify("No database connection", severity="error", timeout=3))
             return
 
         try:
@@ -544,7 +544,7 @@ class RecordTransactionScreen(Screen[None]):
 
             # Validate
             if not exchange or not quantity_str or not total_cost_str:
-                self.app.call_from_thread(self.app.notify, "Please fill in all required fields", "error", 3)
+                self.app.call_from_thread(lambda: self.app.notify("Please fill in all required fields", severity="error", timeout=3))
                 return
 
             quantity = float(quantity_str)
@@ -595,15 +595,16 @@ class RecordTransactionScreen(Screen[None]):
             balance = crypto.get_balance("BTC")
             basis = crypto.get_basis("BTC")
             self.app.call_from_thread(
-                self.app.notify,
-                f"Transaction recorded. Balance: {balance:.8f} BTC @ ${basis:.2f}/BTC",
-                "success",
-                5
+                lambda: self.app.notify(
+                    f"Transaction recorded. Balance: {balance:.8f} BTC @ ${basis:.2f}/BTC",
+                    severity="success",
+                    timeout=5
+                )
             )
             self.app.call_from_thread(self.app.pop_screen)
 
         except Exception as e:
-            self.app.call_from_thread(self.app.notify, f"Error: {str(e)}", "error", 5)
+            self.app.call_from_thread(lambda: self.app.notify(f"Error: {str(e)}", severity="error", timeout=5))
 
     @work(thread=True)
     def _record_sell(self) -> None:
@@ -615,7 +616,7 @@ class RecordTransactionScreen(Screen[None]):
         crypto = app.crypto
 
         if crypto is None:
-            self.app.call_from_thread(self.app.notify, "No database connection", "error", 3)
+            self.app.call_from_thread(lambda: self.app.notify("No database connection", severity="error", timeout=3))
             return
 
         try:
@@ -628,7 +629,7 @@ class RecordTransactionScreen(Screen[None]):
 
             # Validate
             if not exchange or not quantity_str or not total_proceeds_str:
-                self.app.call_from_thread(self.app.notify, "Please fill in all required fields", "error", 3)
+                self.app.call_from_thread(lambda: self.app.notify("Please fill in all required fields", severity="error", timeout=3))
                 return
 
             quantity = float(quantity_str)
@@ -673,15 +674,16 @@ class RecordTransactionScreen(Screen[None]):
             balance = crypto.get_balance("BTC")
             basis = crypto.get_basis("BTC")
             self.app.call_from_thread(
-                self.app.notify,
-                f"Transaction recorded. Balance: {balance:.8f} BTC @ ${basis:.2f}/BTC",
-                "success",
-                5
+                lambda: self.app.notify(
+                    f"Transaction recorded. Balance: {balance:.8f} BTC @ ${basis:.2f}/BTC",
+                    severity="success",
+                    timeout=5
+                )
             )
             self.app.call_from_thread(self.app.pop_screen)
 
         except Exception as e:
-            self.app.call_from_thread(self.app.notify, f"Error: {str(e)}", "error", 5)
+            self.app.call_from_thread(lambda: self.app.notify(f"Error: {str(e)}", severity="error", timeout=5))
 
     @work(thread=True)
     def _record_transfer(self) -> None:
@@ -693,7 +695,7 @@ class RecordTransactionScreen(Screen[None]):
         crypto = app.crypto
 
         if crypto is None:
-            self.app.call_from_thread(self.app.notify, "No database connection", "error", 3)
+            self.app.call_from_thread(lambda: self.app.notify("No database connection", severity="error", timeout=3))
             return
 
         try:
@@ -706,7 +708,7 @@ class RecordTransactionScreen(Screen[None]):
 
             # Validate
             if not from_wallet or not to_wallet or not amount_str:
-                self.app.call_from_thread(self.app.notify, "Please fill in all required fields", "error", 3)
+                self.app.call_from_thread(lambda: self.app.notify("Please fill in all required fields", severity="error", timeout=3))
                 return
 
             amount = float(amount_str)
@@ -729,15 +731,16 @@ class RecordTransactionScreen(Screen[None]):
             from_balance = crypto.get_balance_by_account("BTC", from_wallet)
             to_balance = crypto.get_balance_by_account("BTC", to_wallet)
             self.app.call_from_thread(
-                self.app.notify,
-                f"Transfer recorded. From: {from_balance:.8f}, To: {to_balance:.8f}",
-                "success",
-                5
+                lambda: self.app.notify(
+                    f"Transfer recorded. From: {from_balance:.8f}, To: {to_balance:.8f}",
+                    severity="success",
+                    timeout=5
+                )
             )
             self.app.call_from_thread(self.app.pop_screen)
 
         except Exception as e:
-            self.app.call_from_thread(self.app.notify, f"Error: {str(e)}", "error", 5)
+            self.app.call_from_thread(lambda: self.app.notify(f"Error: {str(e)}", severity="error", timeout=5))
 
     @work(thread=True)
     def _record_interest(self) -> None:
@@ -749,7 +752,7 @@ class RecordTransactionScreen(Screen[None]):
         crypto = app.crypto
 
         if crypto is None:
-            self.app.call_from_thread(self.app.notify, "No database connection", "error", 3)
+            self.app.call_from_thread(lambda: self.app.notify("No database connection", severity="error", timeout=3))
             return
 
         try:
@@ -762,7 +765,7 @@ class RecordTransactionScreen(Screen[None]):
 
             # Validate
             if not exchange or not amount_str:
-                self.app.call_from_thread(self.app.notify, "Please fill in all required fields", "error", 3)
+                self.app.call_from_thread(lambda: self.app.notify("Please fill in all required fields", severity="error", timeout=3))
                 return
 
             amount = float(amount_str)
@@ -781,12 +784,13 @@ class RecordTransactionScreen(Screen[None]):
             # Success
             balance = crypto.get_balance(currency)
             self.app.call_from_thread(
-                self.app.notify,
-                f"Interest recorded. Balance: {balance:.8f} {currency}",
-                "success",
-                5
+                lambda: self.app.notify(
+                    f"Interest recorded. Balance: {balance:.8f} {currency}",
+                    severity="success",
+                    timeout=5
+                )
             )
             self.app.call_from_thread(self.app.pop_screen)
 
         except Exception as e:
-            self.app.call_from_thread(self.app.notify, f"Error: {str(e)}", "error", 5)
+            self.app.call_from_thread(lambda: self.app.notify(f"Error: {str(e)}", severity="error", timeout=5))
