@@ -12,7 +12,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
 from cryptoAccounts import CryptoAccounts
-from tui.screens import DashboardScreen, LedgerScreen, PortfolioScreen, TradesScreen
+from tui.screens import DashboardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TradesScreen
 
 
 class HelpScreen(ModalScreen[None]):
@@ -65,7 +65,7 @@ class HelpScreen(ModalScreen[None]):
             yield Label("  P   Portfolio & Balances", classes="help-line")
             yield Label("  L   Transaction Ledger", classes="help-line")
             yield Label("  X   Trade History & Liquidity", classes="help-line")
-            yield Label("  R   Record Transaction", classes="help-line")
+            yield Label("  R   Record Transaction (Buy/Sell/Transfer/Interest)", classes="help-line")
             yield Label("  I   Import CSV", classes="help-line")
             yield Label("  T   Tax & Reporting", classes="help-line")
             yield Label("  V   Visualizations", classes="help-line")
@@ -229,7 +229,8 @@ class CryptoApp(App[None]):
         self.push_screen(TradesScreen())
 
     def action_menu_record(self) -> None:
-        self.notify("Record transaction screen coming in TUI-007", severity="information")
+        # TUI-007: Record transaction screen
+        self.push_screen(RecordTransactionScreen())
 
     def action_menu_import(self) -> None:
         self.notify("Import wizard coming in TUI-008", severity="information")

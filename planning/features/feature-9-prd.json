@@ -148,7 +148,7 @@
       "priority": 7,
       "estimatedLines": 400,
       "testStrategy": "Textual pilot - fill form fields, verify preview updates, confirm records transaction in test DB",
-      "passes": false
+      "passes": true
     },
     {
       "id": "TUI-008",

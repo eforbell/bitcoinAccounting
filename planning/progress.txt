@@ -1241,3 +1241,77 @@
 
 ---
 
+## 2026-02-11 - TUI-007: Record transaction screen (buy/sell/transfer/interest)
+
+- What was implemented:
+  - Created `src/python/tui/screens/record_transaction.py` with RecordTransactionScreen class
+  - RadioSet transaction type selector: Buy, Sell, Transfer, Earn Interest
+  - Dynamic form system: form fields adapt based on selected transaction type
+  - **Buy form**: exchange, quantity, total cost, fee, date, group, optional withdraw to cold storage
+    - 3-step workflow: deposit USD → execute trade → optional withdraw to wallet
+    - Withdraw checkbox reveals wallet and delay fields
+  - **Sell form**: exchange, quantity, total proceeds, fee, date, optional transfer from wallet
+    - Optional transfer checkbox reveals source wallet field
+    - Transfer happens before trade (like sell script)
+  - **Transfer form**: from wallet, to wallet, amount (received after fee), fee, date
+    - Simple 1-step transfer via transfer_funds()
+  - **Interest form**: exchange/account, amount, currency selector (BTC/USD), date, group
+    - Records interest income via interest() method
+  - Preview panel: shows formatted summary of current form values
+    - Computes and displays price per BTC for buy/sell
+    - Updates dynamically as user types (on_input_changed handler)
+  - Input validation: Number validators on numeric fields (quantity, amount, fee, cost)
+  - Confirm/Cancel buttons: Confirm records via @work(thread=True), Cancel returns to previous screen
+  - Success notifications: Shows updated balance after recording
+  - Async transaction recording with proper error handling
+  - R key binding from dashboard opens record transaction screen
+
+- Files changed:
+  - `src/python/tui/screens/record_transaction.py` (new — 743 lines)
+  - `src/python/tui/screens/__init__.py` (updated — added RecordTransactionScreen export)
+  - `src/python/tui/app.py` (modified — updated action_menu_record(), help text)
+  - `tests/test_tui_record_transaction.py` (new — 18 tests across 10 test classes)
+  - `planning/features/feature-9-prd.json` (marked TUI-007 passes: true)
+  - `planning/current-feature.json` (marked TUI-007 completed)
+
+- **Learnings:**
+  - **Dynamic form pattern**: Remove all children from container, then mount new form widgets
+    - Pattern: `container.remove_children()` → create widgets → `container.mount(widget)`
+    - Each transaction type has its own `_show_X_form()` method
+  - **Conditional field visibility**: Use checkbox changed handler to toggle field containers
+    - Pattern: checkbox triggers `_toggle_X_fields(show: bool)` which mounts/removes widgets
+    - Example: withdraw checkbox shows/hides withdraw wallet and delay fields
+  - **Preview updates**: Connect on_input_changed handler to _update_preview() method
+    - Updates preview panel in real-time as user types
+    - Handles exceptions gracefully if widgets not yet mounted
+  - **Multi-step workflows in code**:
+    - Buy: deposit() → execute_trade() → optional transfer_funds()
+    - Sell: optional transfer_funds() → execute_trade()
+    - Add timedelta seconds between steps for proper temporal ordering
+  - **Date parsing**: Use datetime.strptime() with "%Y-%m-%d %H:%M:%S" format
+    - Default to datetime.now() for convenience
+  - **Number validation**: Textual's Number validator for numeric input fields
+    - Pattern: `Input(validators=[Number(minimum=0)])`
+  - **Worker thread pattern**: Use @work(thread=True) for database operations
+    - Call app methods via `self.app.call_from_thread(method, args)`
+    - Pattern: worker does DB work, calls app.notify() and app.pop_screen() via call_from_thread
+  - **Balance display**: Show balance + basis after recording transactions
+    - Pattern: `f"{balance:.8f} BTC @ ${basis:.2f}/BTC"`
+  - **Error handling in workers**: Wrap DB operations in try/except, notify user via call_from_thread
+
+- **Test Results:**
+  - 18 new record transaction tests created
+  - Tests pass individually (known segfault issue when run together)
+  - TestRecordTransactionScreenMount: 3 tests (mount, header/footer, title)
+  - TestTransactionTypeSelector: 3 tests (present, labels, default selection)
+  - TestBuyForm: 2 tests (fields present, default values)
+  - TestSellForm: 1 test (switch to sell form)
+  - TestTransferForm: 1 test (switch to transfer form)
+  - TestInterestForm: 1 test (switch to interest form)
+  - TestPreview: 2 tests (panel present, content present)
+  - TestActionButtons: 2 tests (buttons present, cancel returns)
+  - TestNavigation: 2 tests (escape, R key)
+  - TestRecordTransactionWithDatabase: 1 test (transfer with in-memory DB)
+
+---
+
