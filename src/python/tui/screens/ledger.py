@@ -159,9 +159,7 @@ class LedgerScreen(Screen[None]):
             if app.crypto is None:
                 return
 
-            wallets = app.crypto.wallet_query.get_wallets(  # type: ignore[attr-defined]
-                coin=self.current_coin, active_only=False
-            )
+            wallets = app.crypto.wallet_query.get_wallets(active_only=False)  # type: ignore[attr-defined]
 
             # Build wallet options
             wallet_options = [("All Wallets", None)]
