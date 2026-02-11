@@ -249,6 +249,8 @@ class DashboardScreen(Screen[None]):
             self.app.action_menu_record()  # type: ignore[attr-defined]
         elif button_id == "btn-import":
             self.app.action_menu_import()  # type: ignore[attr-defined]
+        elif button_id == "btn-export":
+            self.app.action_menu_export()  # type: ignore[attr-defined]
         elif button_id == "btn-tax":
             self.app.action_menu_tax()  # type: ignore[attr-defined]
         elif button_id == "btn-viz":
@@ -382,6 +384,7 @@ Press [bold]?[/bold] for help anytime."""
         actions_row.mount(Button("Trades [X]", id="btn-trades"))
         actions_row.mount(Button("Record Tx [R]", id="btn-record"))
         actions_row.mount(Button("Import [I]", id="btn-import"))
+        actions_row.mount(Button("Export [E]", id="btn-export"))
         actions_row.mount(Button("Tax/Report [T]", id="btn-tax"))
         actions_row.mount(Button("Visualize [V]", id="btn-viz"))
 

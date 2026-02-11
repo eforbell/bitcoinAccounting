@@ -12,7 +12,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
 from cryptoAccounts import CryptoAccounts
-from tui.screens import DashboardScreen, ImportWizardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TradesScreen
+from tui.screens import DashboardScreen, ExportScreen, ImportWizardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TradesScreen
 
 
 class HelpScreen(ModalScreen[None]):
@@ -67,6 +67,7 @@ class HelpScreen(ModalScreen[None]):
             yield Label("  X   Trade History & Liquidity", classes="help-line")
             yield Label("  R   Record Transaction (Buy/Sell/Transfer/Interest)", classes="help-line")
             yield Label("  I   Import CSV", classes="help-line")
+            yield Label("  E   Export Transactions", classes="help-line")
             yield Label("  T   Tax & Reporting", classes="help-line")
             yield Label("  V   Visualizations", classes="help-line")
             yield Label("")
@@ -179,6 +180,7 @@ class CryptoApp(App[None]):
         Binding("x", "menu_trades", "Trades", show=False),
         Binding("r", "menu_record", "Record Tx", show=False),
         Binding("i", "menu_import", "Import", show=False),
+        Binding("e", "menu_export", "Export", show=False),
         Binding("t", "menu_tax", "Tax/Report", show=False),
         Binding("v", "menu_viz", "Visualize", show=False),
         Binding("question_mark", "show_help", "Help"),
@@ -243,6 +245,10 @@ class CryptoApp(App[None]):
     def action_menu_import(self) -> None:
         # TUI-008: Import wizard screen with file picker and preview
         self.push_screen(ImportWizardScreen())
+
+    def action_menu_export(self) -> None:
+        # TUI-009: Export transactions screen
+        self.push_screen(ExportScreen())
 
     def action_menu_tax(self) -> None:
         self.notify("Tax reporting screen coming in TUI-010", severity="information")
