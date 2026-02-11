@@ -48,7 +48,7 @@ class TransactionQuery:
                 - column_names: List of column names
                 - transactions: List of transaction dictionaries
         """
-        base_query = '''select l.trans_type "Type", l.buy "Buy", l.buy_curr "Buy Cur.", l.sell "Sell", l.sell_curr "Sell Cur.", l.fee "Fee", l.fee_curr "Fee Cur.", l.exchange "Exchange", l."group" "Group", l."comment" "Comment", l.createddate "Date" from ledger l'''
+        base_query = '''select l.createddate "Date", l.trans_type "Type", l.buy "Buy", l.buy_curr "Buy Cur.", l.sell "Sell", l.sell_curr "Sell Cur.", l.fee "Fee", l.fee_curr "Fee Cur.", l.exchange "Exchange", l."group" "Group", l."comment" "Comment" from ledger l'''
 
         # Build WHERE clause with filters
         where_clauses = []
