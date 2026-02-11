@@ -255,7 +255,11 @@ Press [bold]?[/bold] for help anytime."""
         active_wallets = self._data.get("active_wallets", 0)
         total_wallets = self._data.get("total_wallets", 0)
 
+        # Mount stats row first, then add widgets to it
         stats_row = Horizontal(id="stats-row")
+        container.mount(stats_row)
+
+        # Now mount stat cards to the row
         stats_row.mount(
             StatCard(
                 "Total Balance",
@@ -277,19 +281,18 @@ Press [bold]?[/bold] for help anytime."""
                 "wallets-card"
             )
         )
-        container.mount(stats_row)
 
-        # Custody breakdown
+        # Custody breakdown - mount first, then update
         custody_widget = CustodyBreakdown()
-        custody_widget.update_custody(self._data.get("custody", {}))
         container.mount(custody_widget)
+        custody_widget.update_custody(self._data.get("custody", {}))
 
-        # Recent transactions
+        # Recent transactions - mount first, then update
         tx_widget = RecentTransactions()
+        container.mount(tx_widget)
         headers = self._data.get("tx_headers", [])
         transactions = self._data.get("transactions", [])
         tx_widget.update_transactions(headers, transactions)
-        container.mount(tx_widget)
 
     @work(thread=True)
     def load_dashboard_data(self) -> None:

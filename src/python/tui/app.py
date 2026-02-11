@@ -12,7 +12,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
 from cryptoAccounts import CryptoAccounts
-from tui.screens import DashboardScreen
+from tui.screens import DashboardScreen, PortfolioScreen
 
 
 class HelpScreen(ModalScreen[None]):
@@ -215,9 +215,8 @@ class CryptoApp(App[None]):
     # -- Menu actions (stubs for TUI-001, implemented in later stories) --
 
     def action_menu_portfolio(self) -> None:
-        # TUI-002: Dashboard screen (portfolio summary)
-        # TUI-004: Full portfolio screen will be added later
-        self.push_screen(DashboardScreen())
+        # TUI-004: Full portfolio screen with balances and wallet detail
+        self.push_screen(PortfolioScreen())
 
     def action_menu_ledger(self) -> None:
         self.notify("Ledger screen coming in TUI-005", severity="information")

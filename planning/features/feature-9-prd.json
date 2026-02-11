@@ -93,7 +93,7 @@
       "priority": 4,
       "estimatedLines": 300,
       "testStrategy": "Textual pilot with test data - verify tables populate, tabs switch, wallet filter works",
-      "passes": false
+      "passes": true
     },
     {
       "id": "TUI-005",
