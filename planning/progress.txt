@@ -1299,16 +1299,19 @@
     - BAD: `self.app.call_from_thread(self.app.notify, "message", "error", 3)` ❌ (TypeError)
     - GOOD: `self.app.call_from_thread(lambda: self.app.notify("message", severity="error", timeout=3))` ✅
     - Use lambda wrapper to properly pass keyword arguments through call_from_thread()
-  - **on_screen_resume() handler** (CRITICAL fix): Screens should reload data when resumed
+  - **Screen refresh pattern** (BEST PRACTICE): Use custom messages instead of relying on on_screen_resume()
+    - **Better approach**: Post custom messages when state changes, parent screens listen for messages
+    - Pattern: `class TransactionRecorded(Message): pass` in child screen
+    - Child: `self.post_message(self.TransactionRecorded())` after recording
+    - Parent: `def on_record_transaction_screen_transaction_recorded(self, msg): self.reload_data()`
+    - More reliable and explicit than on_screen_resume() which has timing issues
+    - Follows Textual best practice of explicit communication between screens
+  - **on_screen_resume() gotchas** (if you must use it):
     - WRONG: `on_resume()` doesn't exist in Textual 7.5.0 ❌
     - CORRECT: `on_screen_resume()` is the proper event handler ✅
-    - on_mount() fires once when screen created, on_screen_resume() fires when returning via pop_screen()
-    - **GOTCHA**: on_screen_resume() ALSO fires during initial mount! Must check state to avoid duplicate loading
-      - Pattern: `if self._state == "loading": return` before reloading in on_screen_resume()
-      - Prevents DuplicateIds error when both on_mount() and on_screen_resume() fire at startup
-    - Pattern: Add on_screen_resume() that calls same data loading logic as on_mount()
-    - Critical for dashboard to show newly recorded transactions after popping back from record screen
-    - Textual events: ScreenResume (when screen is resumed), ScreenSuspend (when screen is hidden)
+    - **GOTCHA**: on_screen_resume() fires during initial mount AND when resuming
+      - Must check state to avoid duplicate loading: `if self._state == "loading": return`
+      - Can be unreliable - prefer custom messages instead
   - **Balance display**: Show balance + basis after recording transactions
     - Pattern: `f"{balance:.8f} BTC @ ${basis:.2f}/BTC"`
   - **Error handling in workers**: Wrap DB operations in try/except, notify user via call_from_thread()
