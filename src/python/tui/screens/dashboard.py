@@ -229,16 +229,12 @@ class DashboardScreen(Screen[None]):
         if self._state == "loading":
             return
 
-        # Refresh dashboard to show newly recorded transactions
-        self._show_loading()
-        self.load_dashboard_data()
+        # Skip if we're empty (no need to reload empty state)
+        if self._state == "empty":
+            return
 
-    def on_record_transaction_screen_transaction_recorded(
-        self, message: "RecordTransactionScreen.TransactionRecorded"
-    ) -> None:
-        """Handle transaction recorded message from record transaction screen."""
-        # Reload dashboard when a transaction is recorded
-        self._show_loading()
+        # Reload data in background WITHOUT showing loading screen
+        # This preserves focus and keyboard navigation
         self.load_dashboard_data()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
