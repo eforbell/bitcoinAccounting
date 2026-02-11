@@ -222,8 +222,9 @@ class DashboardScreen(Screen[None]):
         self._show_loading()
         self.load_dashboard_data()
 
-    def on_resume(self) -> None:
-        """Reload dashboard data when returning to screen."""
+    def on_screen_resume(self) -> None:
+        """Reload dashboard data when screen is resumed (returning from another screen)."""
+        # Refresh dashboard to show newly recorded transactions
         self._show_loading()
         self.load_dashboard_data()
 
