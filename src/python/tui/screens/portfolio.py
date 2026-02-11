@@ -228,20 +228,19 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
 
         # Build tabbed content with both tabs
         tabs = TabbedContent()
+        container.mount(tabs)
 
-        # Balances tab
+        # Balances tab - mount tab first, then add widgets
         balances_tab = TabPane("Balances", id="balances-tab")
+        tabs.mount(balances_tab)
         for widget in self._build_balances_tab():
             balances_tab.mount(widget)
-        tabs.mount(balances_tab)
 
-        # Wallet Detail tab
+        # Wallet Detail tab - mount tab first, then add widgets
         wallet_tab = TabPane("Wallet Detail", id="wallet-detail-tab")
+        tabs.mount(wallet_tab)
         for widget in self._build_wallet_detail_tab():
             wallet_tab.mount(widget)
-        tabs.mount(wallet_tab)
-
-        container.mount(tabs)
 
     def _build_balances_tab(self) -> ComposeResult:
         """Build the Balances tab content."""
