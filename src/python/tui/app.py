@@ -229,8 +229,14 @@ class CryptoApp(App[None]):
         self.push_screen(TradesScreen())
 
     def action_menu_record(self) -> None:
-        # TUI-007: Record transaction screen
-        self.push_screen(RecordTransactionScreen())
+        # TUI-007: Record transaction screen with callback to refresh dashboard
+        def on_record_complete(result: None) -> None:
+            """Refresh dashboard when returning from record transaction screen."""
+            # Check if the current screen is a dashboard and refresh it
+            if isinstance(self.screen, DashboardScreen):
+                self.screen.refresh_dashboard()
+
+        self.push_screen(RecordTransactionScreen(), callback=on_record_complete)
 
     def action_menu_import(self) -> None:
         self.notify("Import wizard coming in TUI-008", severity="information")

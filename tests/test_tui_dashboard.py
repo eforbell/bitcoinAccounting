@@ -290,8 +290,8 @@ class TestRecentTransactionsWidget:
             # Update with test data
             headers = ['Date', 'Type', 'Amount', 'Exchange']
             transactions = [
-                ('2024-01-01', 'Deposit', '1.0', 'TestExchange'),
-                ('2024-01-02', 'Withdrawal', '0.5', 'TestExchange'),
+                {'Date': '2024-01-01', 'Type': 'Deposit', 'Amount': '1.0', 'Exchange': 'TestExchange'},
+                {'Date': '2024-01-02', 'Type': 'Withdrawal', 'Amount': '0.5', 'Exchange': 'TestExchange'},
             ]
             tx_widget.update_transactions(headers, transactions)
             await pilot.pause()
@@ -316,7 +316,7 @@ class TestRecentTransactionsWidget:
             # Update with 10 transactions
             headers = ['Date', 'Type', 'Amount']
             transactions = [
-                (f'2024-01-{i:02d}', 'Deposit', f'{i}.0')
+                {'Date': f'2024-01-{i:02d}', 'Type': 'Deposit', 'Amount': f'{i}.0'}
                 for i in range(1, 11)
             ]
             tx_widget.update_transactions(headers, transactions)

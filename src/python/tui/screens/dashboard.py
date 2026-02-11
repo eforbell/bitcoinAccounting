@@ -233,6 +233,11 @@ class DashboardScreen(Screen[None]):
         if self._state == "empty":
             return
 
+        # NOTE: Dashboard refresh is now handled via callback pattern in app.py
+        # This method is kept for future use but doesn't auto-reload anymore
+
+    def refresh_dashboard(self) -> None:
+        """Explicitly refresh dashboard data (called by app callbacks)."""
         # Reload data in background WITHOUT showing loading screen
         # This preserves focus and keyboard navigation
         self.load_dashboard_data()

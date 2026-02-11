@@ -9,7 +9,6 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
-from textual.message import Message
 from textual.screen import Screen
 from textual.validation import Number
 from textual.widgets import (
@@ -32,10 +31,6 @@ if TYPE_CHECKING:
 
 class RecordTransactionScreen(Screen[None]):
     """Screen for recording transactions manually."""
-
-    class TransactionRecorded(Message):
-        """Message sent when a transaction is successfully recorded."""
-        pass
 
     DEFAULT_CSS = """
     RecordTransactionScreen {
@@ -606,8 +601,7 @@ class RecordTransactionScreen(Screen[None]):
                     timeout=5
                 )
             )
-            # Post message to notify app that transaction was recorded
-            self.app.call_from_thread(lambda: self.post_message(self.TransactionRecorded()))
+            # Pop screen - callback in app.py will refresh dashboard
             self.app.call_from_thread(self.app.pop_screen)
 
         except Exception as e:
@@ -687,8 +681,7 @@ class RecordTransactionScreen(Screen[None]):
                     timeout=5
                 )
             )
-            # Post message to notify app that transaction was recorded
-            self.app.call_from_thread(lambda: self.post_message(self.TransactionRecorded()))
+            # Pop screen - callback in app.py will refresh dashboard
             self.app.call_from_thread(self.app.pop_screen)
 
         except Exception as e:
@@ -746,8 +739,7 @@ class RecordTransactionScreen(Screen[None]):
                     timeout=5
                 )
             )
-            # Post message to notify app that transaction was recorded
-            self.app.call_from_thread(lambda: self.post_message(self.TransactionRecorded()))
+            # Pop screen - callback in app.py will refresh dashboard
             self.app.call_from_thread(self.app.pop_screen)
 
         except Exception as e:
@@ -801,8 +793,7 @@ class RecordTransactionScreen(Screen[None]):
                     timeout=5
                 )
             )
-            # Post message to notify app that transaction was recorded
-            self.app.call_from_thread(lambda: self.post_message(self.TransactionRecorded()))
+            # Pop screen - callback in app.py will refresh dashboard
             self.app.call_from_thread(self.app.pop_screen)
 
         except Exception as e:
