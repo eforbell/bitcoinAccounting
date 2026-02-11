@@ -5,6 +5,41 @@
 - TUI entry point: mirrors _bootstrap.py pattern with sys.path.insert + dotenv loading
 - Arrow keys + Tab for navigation (NOT vim j/k) - project convention
 
+### Textual Widget Mounting Patterns (CRITICAL)
+- **Mount parent before children**: Always mount container to its parent BEFORE mounting children to container
+  - BAD: `row = Horizontal(); row.mount(widget); container.mount(row)` ❌ (Can't mount to unmounted parent)
+  - GOOD: `row = Horizontal(); container.mount(row); row.mount(widget)` ✅
+- **Mount before querying**: Mount widget BEFORE calling methods that query for child elements
+  - BAD: `widget.update_data(); container.mount(widget)` ❌ (Widget not mounted, can't query children)
+  - GOOD: `container.mount(widget); widget.update_data()` ✅
+- **Constructor + on_mount pattern**: Pass data to constructors, call update methods in on_mount()
+  - Pattern: `__init__(self, data) -> store data; on_mount(self) -> self.update_with_stored_data()`
+  - This ensures widget is fully mounted before querying children
+- **Avoid TabbedContent dynamic mounting**: TabbedContent manages internal tab registry, manual TabPane mounting breaks it
+  - Prefer: Simple Container hierarchy or proper compose() patterns
+  - If using tabs: Use compose() to yield TabbedContent with TabPane children, don't mount manually
+
+### Textual Layout & Styling Patterns
+- **Flexible height**: Use `height: auto` with `min-height` for content that varies
+  - Add `max-height` to prevent excessive expansion (e.g., `max-height: 15` for tables)
+- **Explicit layout**: Add `layout: vertical` to containers that stack children vertically
+- **Fractional widths**: Use `width: 1fr` to distribute space equally among siblings
+- **Terminal compatibility**: Avoid Unicode box-drawing chars (█▓▒░), use Rich markup colors instead
+  - Good: `[green]Self-custodied: 45.2%[/green]` ✅
+  - Bad: `██████████▓▓▓▓▓▓▒▒▒░░` ❌ (renders poorly in some terminals)
+
+### Database Cross-compatibility Patterns
+- **SQLite threading**: Set `check_same_thread=False` for TUI @work(thread=True) workers
+  - Safe for read-heavy workloads with single writer
+- **Boolean queries**: Use `TRUE`/`FALSE` keywords (work in both SQLite and PostgreSQL)
+  - BAD: `WHERE active = 1` ❌ (PostgreSQL: "operator does not exist: boolean = integer")
+  - GOOD: `WHERE active = TRUE` ✅ (works in both databases)
+
+### Textual Navigation Patterns
+- **Screen binding for back**: Use `Binding("escape", "app.pop_screen", "Back", show=True)` on screens
+- **Button focus**: Textual buttons are focusable by default, Tab cycles through them automatically
+- **Discovery UX**: Show keyboard shortcuts in button labels: `Button("Portfolio [P]", ...)`
+
 ---
 
 ## 2026-02-11 - TUI-001: Application shell, entry point, and main menu
@@ -986,5 +1021,104 @@
   - 19 dashboard tests: all passing after mount fix
   - Note: Segfault when running all TUI tests together - indicates need for connection pooling or async patterns
   - Core functionality verified working in individual test runs
+
+---
+
+## 2026-02-11 - TUI-002/TUI-004 Iterative Fixes: UX Polish & Cross-DB Compatibility
+
+- What was fixed (iterative refinement after initial TUI-004 implementation):
+  - **PostgreSQL compatibility**: Fixed boolean comparison error (active = 1 → active = TRUE)
+  - **TabbedContent crash**: Removed TabbedContent from Portfolio (manual TabPane mounting broke internal registry)
+  - **Dashboard stat cards**: Fixed empty values (changed height to auto with layout: vertical)
+  - **Dashboard layout**: Added max-height constraints to prevent scrolling (custody: 12, transactions: 15)
+  - **StatCard display**: Changed from fixed height to height: auto with min-height: 4 and layout: vertical
+  - **Unicode artifacts**: Removed box-drawing characters (█▓▒░) from custody bar, kept text-only with Rich colors
+  - **Discovery UX**: Added 6 quick-action buttons to Dashboard for feature discoverability
+  - **MenuButton API**: Updated to accept description parameter for better button labels
+  - **Navigation**: Added Esc binding to PortfolioScreen to pop back to Dashboard
+  - **Button styling**: Removed variant="primary" from Portfolio button for consistent appearance
+  - **Constructor pattern**: CustodyBar now accepts data in __init__ and updates in on_mount()
+
+- Root causes and solutions:
+  - **PostgreSQL boolean error** (`operator does not exist: boolean = integer`):
+    - Cause: `WHERE active = 1` incompatible with PostgreSQL boolean type
+    - Fix: Changed to `WHERE active = TRUE` (works in both SQLite and PostgreSQL)
+    - Location: src/python/db/queries/wallet.py:86
+  - **TabbedContent crash** (`ValueError: No Tab with id '--content-tab-balances-tab'`):
+    - Cause: Manually mounting TabPane instances breaks Textual's internal tab registry
+    - Fix: Removed TabbedContent entirely, simplified to direct Container hierarchy
+    - Lesson: TabbedContent requires proper compose() patterns, avoid dynamic mounting
+  - **Empty stat card values**:
+    - Cause: Fixed height prevented content from displaying; missing layout directive
+    - Fix: Changed to `height: auto` with `min-height: 4` and added `layout: vertical`
+    - Lesson: Use flexible heights for variable content, explicit layout for stacking
+  - **Excessive scrolling**:
+    - Cause: CustodyBreakdown and RecentTransactions expanding to fill available space
+    - Fix: Added `max-height: 12` and `max-height: 15` constraints respectively
+    - Lesson: Combine height: auto with max-height to prevent widget bloat
+  - **Unicode garbled characters**:
+    - Cause: Terminal font doesn't render box-drawing characters (█▓▒░) correctly
+    - Fix: Removed visual bar, used Rich markup colors instead: `[green]...[/green]`
+    - Lesson: Text + color is more portable than Unicode art
+  - **No feature discovery**:
+    - Cause: App went straight to Dashboard, main menu only visible via Esc
+    - Fix: Added 6 quick-action buttons to Dashboard with keyboard shortcuts in labels
+    - Lesson: Show available actions inline, don't rely solely on help screen
+  - **CustodyBar "No nodes match" error**:
+    - Cause: Calling update_custody() before widget fully mounted and composed
+    - Fix: Pass data to __init__, call update_custody() in on_mount() after composition
+    - Lesson: Mount-then-update pattern or constructor-data pattern for widgets with children
+
+- Files changed:
+  - `src/python/db/queries/wallet.py` (modified - PostgreSQL boolean fix)
+  - `src/python/tui/screens/portfolio.py` (modified - removed TabbedContent, added Esc binding)
+  - `src/python/tui/screens/dashboard.py` (modified - stat cards, layout, quick-action buttons)
+  - `src/python/tui/app.py` (modified - MenuButton description parameter)
+
+- **Learnings:**
+  - **Cross-DB SQL**: Use TRUE/FALSE for booleans, not 0/1 (PostgreSQL strict typing)
+  - **TabbedContent limitation**: Don't manually mount TabPanes, use compose() or avoid tabs
+  - **Flexible layout formula**: `height: auto` + `min-height` + `max-height` for bounded flexibility
+  - **Terminal portability**: Prefer Rich markup colors over Unicode box-drawing characters
+  - **Discovery UX**: Show keyboard shortcuts in button labels: `Button("Portfolio [P]", ...)`
+  - **Widget composition order**: Constructor → mount → on_mount → update (for widgets with children)
+  - **Navigation UX**: Add Escape bindings to screens with `show=True` for footer visibility
+  - **Button consistency**: All sibling buttons should have same variant unless hierarchically different
+
+- **Pattern Summary** (critical for future TUI work):
+  ```python
+  # ✅ CORRECT mounting order
+  row = Horizontal(id="stats-row")
+  container.mount(row)  # Mount parent first
+  row.mount(StatCard(...))  # Then mount children
+
+  # ✅ CORRECT update pattern
+  class Widget(Static):
+      def __init__(self, data):
+          super().__init__()
+          self._data = data
+      def on_mount(self):
+          self.update_display(self._data)  # Update AFTER mounting
+
+  # ✅ CORRECT cross-DB boolean
+  query = "SELECT * FROM wallets WHERE active = TRUE"  # Not: = 1
+
+  # ✅ CORRECT flexible layout
+  """
+  Widget {
+      height: auto;
+      min-height: 4;
+      max-height: 15;
+      layout: vertical;
+  }
+  """
+  ```
+
+- **User Feedback:**
+  - "ok this is looking much better. menu items are displayed... everything works as expected now and we are on our way. thank you!"
+  - Dashboard now shows stat values, no scrolling required, compact custody breakdown
+  - Quick-action buttons enable discovery without memorizing shortcuts
+  - Esc navigation works intuitively
+  - All buttons styled consistently
 
 ---
