@@ -12,7 +12,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
 from cryptoAccounts import CryptoAccounts
-from tui.screens import DashboardScreen, PortfolioScreen
+from tui.screens import DashboardScreen, LedgerScreen, PortfolioScreen
 
 
 class HelpScreen(ModalScreen[None]):
@@ -219,7 +219,8 @@ class CryptoApp(App[None]):
         self.push_screen(PortfolioScreen())
 
     def action_menu_ledger(self) -> None:
-        self.notify("Ledger screen coming in TUI-005", severity="information")
+        # TUI-005: Transaction ledger screen with filtering
+        self.push_screen(LedgerScreen())
 
     def action_menu_record(self) -> None:
         self.notify("Record transaction screen coming in TUI-007", severity="information")
