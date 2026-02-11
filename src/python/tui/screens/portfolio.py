@@ -316,7 +316,7 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
 
             # Filter by active status if needed
             if not self._show_inactive:
-                wallets = [w for w in all_wallets if w.get("status", "active") == "active"]
+                wallets = [w for w in all_wallets if w.get("active", True)]
             else:
                 wallets = all_wallets
 
@@ -340,10 +340,11 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
                 wallet_id = wallet_data.get('wallet_id', '')
                 balance = wallet_balances_dict.get(wallet_id, 0.0)
                 custody_type = wallet_data.get('custody', 'unknown').lower()
-                status = wallet_data.get('status', 'active')
+                is_active = wallet_data.get('active', True)
+                status = "active" if is_active else "inactive"
 
                 # Only include wallets with non-zero balance or active status
-                if balance > 0 or status == "active":
+                if balance > 0 or is_active:
                     percentage = (balance / total_balance * 100) if total_balance > 0 else 0.0
 
                     wallet_balances.append({
