@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Center, Container, Horizontal, Vertical
 from textual.screen import ModalScreen
+from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
 from cryptoAccounts import CryptoAccounts
@@ -104,7 +105,7 @@ class MenuButton(Static):
         self.app.action_from_menu(self._action)
 
 
-class MainMenu(Static):
+class MainMenu(Widget):
     """Main menu screen content with navigation buttons."""
 
     DEFAULT_CSS = """
@@ -126,9 +127,12 @@ class MainMenu(Static):
         width: 100%;
         margin-bottom: 2;
     }
+    Center {
+        height: auto;
+    }
     #menu-grid-top, #menu-grid-bottom {
         height: auto;
-        width: 60;
+        width: auto;
     }
     #menu-hint {
         text-align: center;
@@ -141,14 +145,16 @@ class MainMenu(Static):
     def compose(self) -> ComposeResult:
         yield Label("Crypto Accounting", id="menu-title")
         yield Label("Bitcoin Portfolio Management & Tax Reporting", id="menu-subtitle")
-        with Horizontal(id="menu-grid-top"):
-            yield MenuButton("Portfolio", "P", "portfolio")
-            yield MenuButton("Ledger", "L", "ledger")
-            yield MenuButton("Record Tx", "R", "record")
-        with Horizontal(id="menu-grid-bottom"):
-            yield MenuButton("Import", "I", "import")
-            yield MenuButton("Tax / Report", "T", "tax")
-            yield MenuButton("Visualize", "V", "viz")
+        with Center():
+            with Horizontal(id="menu-grid-top"):
+                yield MenuButton("Portfolio", "P", "portfolio")
+                yield MenuButton("Ledger", "L", "ledger")
+                yield MenuButton("Record Tx", "R", "record")
+        with Center():
+            with Horizontal(id="menu-grid-bottom"):
+                yield MenuButton("Import", "I", "import")
+                yield MenuButton("Tax / Report", "T", "tax")
+                yield MenuButton("Visualize", "V", "viz")
         yield Label("Press a key or click a menu item  |  ? for help  |  Q to quit", id="menu-hint")
 
 
