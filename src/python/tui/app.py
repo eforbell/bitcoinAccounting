@@ -128,8 +128,7 @@ class MainMenu(Static):
     }
     #menu-grid-top, #menu-grid-bottom {
         height: auto;
-        align: center middle;
-        max-width: 80;
+        width: 60;
     }
     #menu-hint {
         text-align: center;
