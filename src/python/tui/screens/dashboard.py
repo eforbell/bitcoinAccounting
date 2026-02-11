@@ -139,7 +139,7 @@ class RecentTransactions(Static):
         yield Label("Recent Transactions (Last 5)", classes="section-title")
         yield DataTable(id="tx-table")
 
-    def update_transactions(self, headers: list[str], transactions: list[tuple[Any, ...]]) -> None:
+    def update_transactions(self, headers: list[str], transactions: list[dict[str, Any]]) -> None:
         """Update transaction table with recent data."""
         table = self.query_one("#tx-table", DataTable)
         table.clear(columns=True)
@@ -152,9 +152,11 @@ class RecentTransactions(Static):
             table.add_column(header, key=header)
 
         # Add rows (limit to 5 most recent)
-        for tx in transactions[:5]:
-            # Convert tuple to list of strings for display
-            row_data = [str(val) if val is not None else "" for val in tx]
+        # Note: get_transactions() returns list of dicts, not tuples
+        for tx_dict in transactions[:5]:
+            # Extract values in the same order as headers
+            row_data = [str(tx_dict.get(col, "")) if tx_dict.get(col) is not None else ""
+                       for col in headers]
             table.add_row(*row_data)
 
 
