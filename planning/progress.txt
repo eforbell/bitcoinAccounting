@@ -1299,9 +1299,13 @@
     - BAD: `self.app.call_from_thread(self.app.notify, "message", "error", 3)` ❌ (TypeError)
     - GOOD: `self.app.call_from_thread(lambda: self.app.notify("message", severity="error", timeout=3))` ✅
     - Use lambda wrapper to properly pass keyword arguments through call_from_thread()
+  - **on_resume() handler** (UX improvement): Screens should reload data when resumed
+    - on_mount() fires once when screen created, on_resume() fires when returning to screen
+    - Pattern: Add on_resume() that calls same data loading logic as on_mount()
+    - Critical for dashboard to show newly recorded transactions after popping back from record screen
   - **Balance display**: Show balance + basis after recording transactions
     - Pattern: `f"{balance:.8f} BTC @ ${basis:.2f}/BTC"`
-  - **Error handling in workers**: Wrap DB operations in try/except, notify user via call_from_thread
+  - **Error handling in workers**: Wrap DB operations in try/except, notify user via call_from_thread()
 
 - **Test Results:**
   - 18 new record transaction tests created
