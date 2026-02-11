@@ -36,7 +36,7 @@ class LedgerScreen(Screen[None]):
 
     LedgerScreen .filter-panel {
         layout: horizontal;
-        height: 9;
+        height: 11;
         padding: 1 2;
         background: #16213e;
         border: solid #444444;
@@ -58,12 +58,13 @@ class LedgerScreen(Screen[None]):
 
     LedgerScreen Input {
         height: 3;
-        margin: 0 0 1 0;
+        margin: 0;
+        padding: 1 2;
     }
 
     LedgerScreen Select {
-        height: 3;
-        margin: 0 0 1 0;
+        height: 5;
+        margin: 0;
     }
 
     LedgerScreen Select > SelectCurrent {
