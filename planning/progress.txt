@@ -1295,6 +1295,10 @@
   - **Worker thread pattern**: Use @work(thread=True) for database operations
     - Call app methods via `self.app.call_from_thread(method, args)`
     - Pattern: worker does DB work, calls app.notify() and app.pop_screen() via call_from_thread
+  - **notify() keyword arguments** (CRITICAL bugfix): App.notify() takes keyword-only arguments
+    - BAD: `self.app.call_from_thread(self.app.notify, "message", "error", 3)` ❌ (TypeError)
+    - GOOD: `self.app.call_from_thread(lambda: self.app.notify("message", severity="error", timeout=3))` ✅
+    - Use lambda wrapper to properly pass keyword arguments through call_from_thread()
   - **Balance display**: Show balance + basis after recording transactions
     - Pattern: `f"{balance:.8f} BTC @ ${basis:.2f}/BTC"`
   - **Error handling in workers**: Wrap DB operations in try/except, notify user via call_from_thread
