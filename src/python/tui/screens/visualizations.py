@@ -368,7 +368,8 @@ class VisualizationScreen(Screen[None]):
             from viz import BalanceChart, CustodyChart, OrangePlot, PDFReport, VizConfig
 
             output_path = Path(output_dir).expanduser()
-            chart_types_list = [chart_type] if chart_type != "all" else ["all"]
+            # PDF is not a valid chart_type for VizConfig - use 'all' for PDF reports
+            chart_types_list = ["all"] if (chart_type in ("all", "pdf")) else [chart_type]
 
             config = VizConfig(
                 date_range=date_range,

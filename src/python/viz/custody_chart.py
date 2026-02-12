@@ -106,6 +106,9 @@ class CustodyChart:
             min_date = datetime.fromisoformat(min_date_str.replace("Z", "+00:00"))
         else:
             min_date = min_date_str
+        # Strip timezone for consistent comparison with datetime.now()
+        if hasattr(min_date, 'tzinfo') and min_date.tzinfo is not None:
+            min_date = min_date.replace(tzinfo=None)
 
         max_date = datetime.now()
 
@@ -162,6 +165,8 @@ class CustodyChart:
             date = txn["date"]
             if isinstance(date, str):
                 date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                date = date.replace(tzinfo=None)
 
             # Skip transactions outside date range
             if date < start_date or date > end_date:

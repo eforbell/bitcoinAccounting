@@ -122,12 +122,14 @@ class OrangePlot:
             start = datetime(end.year - 1, 1, 1)
             return start, end
 
-        # Get min/max dates from trades
+        # Get min/max dates from trades (strip timezone for consistent comparison)
         dates = []
         for trade in trades:
             date = trade["date"]
             if isinstance(date, str):
                 date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                date = date.replace(tzinfo=None)
             dates.append(date)
 
         min_date = min(dates)
@@ -167,6 +169,8 @@ class OrangePlot:
             date = trade["date"]
             if isinstance(date, str):
                 date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                date = date.replace(tzinfo=None)
 
             if start_date <= date <= end_date:
                 filtered.append(trade)
@@ -211,6 +215,8 @@ class OrangePlot:
                 date = purchase["date"]
                 if isinstance(date, str):
                     date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+                if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                    date = date.replace(tzinfo=None)
 
                 running_basis.append({"date": date, "basis": avg_basis})
 
@@ -259,6 +265,8 @@ class OrangePlot:
                 date = p["date"]
                 if isinstance(date, str):
                     date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+                if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                    date = date.replace(tzinfo=None)
                 purchase_dates.append(date)
 
                 # Get BTC-USD price on purchase date
@@ -295,6 +303,8 @@ class OrangePlot:
                 date = s["date"]
                 if isinstance(date, str):
                     date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+                if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                    date = date.replace(tzinfo=None)
                 sale_dates.append(date)
 
                 # Get BTC-USD price on sale date

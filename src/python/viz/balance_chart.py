@@ -95,12 +95,14 @@ class BalanceChart:
         if isinstance(self.config.date_range, tuple):
             return self.config.date_range
 
-        # Get min/max dates from trades
+        # Get min/max dates from trades (strip timezone for consistent comparison)
         dates = []
         for trade in trades:
             date = trade["date"]
             if isinstance(date, str):
                 date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                date = date.replace(tzinfo=None)
             dates.append(date)
 
         min_date = min(dates)
@@ -155,6 +157,8 @@ class BalanceChart:
             date = trade["date"]
             if isinstance(date, str):
                 date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                date = date.replace(tzinfo=None)
 
             # Skip trades outside date range
             if date < start_date or date > end_date:
