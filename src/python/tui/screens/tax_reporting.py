@@ -48,39 +48,56 @@ class TaxReportingScreen(Screen[None]):
         height: 100%;
     }
 
-    /* TabbedContent and Tab styling */
+    /* TabbedContent and Tab styling - override defaults */
     TabbedContent {
         height: 1fr;
     }
 
-    Tabs {
+    TabbedContent > ContentTabs {
         background: #16213e;
         dock: top;
-        height: 3;
+        height: auto;
+        min-height: 3;
     }
 
-    Tab {
+    TabbedContent > ContentTabs #tabs-list {
+        min-height: 2;
+    }
+
+    TabbedContent > ContentTabs Tab {
         background: #16213e;
         color: #aaaaaa;
-        padding: 0 2;
+        padding: 0 3;
+        min-width: 16;
+        height: 2;
+        content-align: center middle;
     }
 
-    Tab:hover {
+    TabbedContent > ContentTabs Tab:hover {
         background: #0f3460;
         color: #e0e0e0;
     }
 
-    Tab.-active {
+    TabbedContent > ContentTabs Tab.-active {
         background: #1a1a2e;
         color: #f7931a;
         text-style: bold;
     }
 
-    ContentSwitcher {
+    TabbedContent > ContentTabs:focus Tab.-active {
+        color: #f7931a;
+        background: #0f3460;
+    }
+
+    TabbedContent > ContentTabs .underline--bar {
+        background: #f7931a;
+    }
+
+    TabbedContent ContentSwitcher {
         height: 1fr;
     }
 
-    TabPane {
+    TabbedContent TabPane {
         padding: 0;
         height: 1fr;
     }

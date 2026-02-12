@@ -260,28 +260,41 @@ ProgressBar > .bar--complete {
 
 
 /* =============================================================================
- * Tabs (for multi-panel screens)
+ * Tabs (for multi-panel screens like TabbedContent)
  * ============================================================================= */
-Tabs {
+ContentTabs {
     background: $surface;
+    height: auto;
+    min-height: 3;
 }
 
-Tab {
+ContentTabs Tab {
     color: $text-secondary;
     background: $surface;
-    border-bottom: solid $border;
+    padding: 0 3;
+    min-width: 14;
+    height: 2;
+    content-align: center middle;
 }
 
-Tab:hover {
+ContentTabs Tab:hover {
     background: $surface-lighter;
     color: $text-primary;
 }
 
-Tab.-active {
+ContentTabs Tab.-active {
     color: $accent;
     background: $background;
-    border-bottom: solid $accent;
     text-style: bold;
+}
+
+ContentTabs:focus Tab.-active {
+    color: $accent;
+    background: $surface-lighter;
+}
+
+ContentTabs .underline--bar {
+    background: $accent;
 }
 
 ContentSwitcher {
