@@ -2,6 +2,30 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-9: Interactive TUI Application - TUI-011
+
+### Visualization Screen with Chart Generation
+- Created `src/python/tui/screens/visualizations.py` with VisualizationScreen
+- Form-based UI: chart type selector, date range presets + custom dates, DPI, output dir, checkboxes
+- Uses `viz` package classes: `OrangePlot`, `BalanceChart`, `CustodyChart`, `PDFReport`, `VizConfig`
+- Accesses database via `app.crypto.backend` to pass `DatabaseBackend` to viz classes
+- Charts generated in `@work(thread=True)` worker to avoid blocking UI
+
+### Viz Package Integration Pattern
+- All viz classes take `(backend: DatabaseBackend, config: VizConfig)` and have `.generate() -> Path`
+- VizConfig dataclass: `date_range`, `output_dir`, `chart_types`, `include_cost_basis`, `log_scale`, `dpi`
+- Date range can be string preset ('ytd', '1y', '5y', 'all') or `tuple[datetime, datetime]`
+- PDFReport requires `reportlab` (optional dependency) - handle ImportError gracefully
+
+### Platform-Specific File Opening
+- Use `platform.system()` to detect OS: "Darwin" -> `open`, "Linux" -> `xdg-open`, "Windows" -> `start`
+- Launch via `subprocess.Popen()` (non-blocking) so app continues running
+
+### Textual Testing: Static Widget Content
+- `Static` widget has no `.renderable` attribute in current Textual version
+- Check status by verifying CSS classes: `status.has_class("error")`, `status.has_class("success")`
+- Use `btn.press()` instead of `pilot.click()` for buttons that may be off-screen
+
 ## Feature-9: Interactive TUI Application - TUI-010
 
 ### Tax Reporting Screen with TabbedContent

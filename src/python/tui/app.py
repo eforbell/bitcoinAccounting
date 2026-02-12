@@ -12,7 +12,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
 from cryptoAccounts import CryptoAccounts
-from tui.screens import DashboardScreen, ExportScreen, ImportWizardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TaxReportingScreen, TradesScreen
+from tui.screens import DashboardScreen, ExportScreen, ImportWizardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TaxReportingScreen, TradesScreen, VisualizationScreen
 
 
 class HelpScreen(ModalScreen[None]):
@@ -255,7 +255,8 @@ class CryptoApp(App[None]):
         self.push_screen(TaxReportingScreen())
 
     def action_menu_viz(self) -> None:
-        self.notify("Visualization screen coming in TUI-011", severity="information")
+        # TUI-011: Visualization screen with chart generation
+        self.push_screen(VisualizationScreen())
 
 
 def main() -> None:

@@ -1,5 +1,7 @@
 
 ## Codebase Patterns
+- Static widget content: No `.renderable` attribute - check status via CSS classes (`.has_class("error")`)
+- Viz package pattern: All viz classes take `(backend, config)` and return `Path` from `.generate()`
 - Textual Label API: Use `label.content` to read text (NOT `.renderable` - removed in v7.5+)
 - Textual test pattern: `async with app.run_test(notifications=True) as pilot:`
 - TUI entry point: mirrors _bootstrap.py pattern with sys.path.insert + dotenv loading
@@ -88,6 +90,49 @@
   - TestForecastTab: 3 tests (controls, summary labels, columns)
   - TestTaxReportingIntegration: 2 tests (load gains with data, forecast with data)
   - Zero regressions in related tests (54 tax-related tests passing)
+
+---
+
+## 2026-02-11 - TUI-011: Visualization screen with chart generation
+
+- What was implemented:
+  - Created `src/python/tui/screens/visualizations.py` with VisualizationScreen
+  - Chart type selector: Orange Plot, Balance Chart, Custody Chart, All Charts, PDF Report
+  - Date range controls: All Time, YTD, 1Y, 5Y presets + Custom with start/end date inputs
+  - Options: DPI selector (72/150/300/600), cost basis overlay checkbox, log scale checkbox
+  - Output directory input with default `output/viz/`
+  - Generate button with disabled state during generation, progress indication via status message
+  - Results section showing generated file paths after completion
+  - Open Files button using platform-specific commands (open/xdg-open/start)
+  - Handles missing optional dependencies (reportlab) gracefully with error messages
+  - Per-chart error tracking: individual chart failures don't prevent others from generating
+  - Updated app.py to import and wire up VisualizationScreen to V key
+  - Updated screens/__init__.py to export VisualizationScreen
+
+- Files changed:
+  - `src/python/tui/screens/visualizations.py` (new)
+  - `src/python/tui/screens/__init__.py` (added VisualizationScreen export)
+  - `src/python/tui/app.py` (wired up action_menu_viz to push VisualizationScreen)
+  - `tests/test_tui_visualizations.py` (new - 18 tests across 5 test classes)
+  - `AGENTS.md` (added TUI-011 learnings)
+  - `planning/features/feature-9-prd.json` (marked TUI-011 passes: true)
+  - `planning/current-feature.json` (marked TUI-011 completed)
+
+- **Learnings:**
+  - Viz package integration: all classes take `(backend, config)` and return `Path` from `.generate()`
+  - VizConfig dataclass handles validation of DPI range, chart types, and date ranges
+  - Static widget has no `.renderable` attribute - check CSS classes instead (`.has_class("error")`)
+  - Use `btn.press()` in tests instead of `pilot.click()` for off-screen buttons
+  - Platform detection via `platform.system()` for file opening
+
+- **Test Results:**
+  - 18 new TUI tests passing (100% pass rate)
+  - TestVisualizationScreenMount: 7 tests (mount, selectors, checkboxes, buttons)
+  - TestVisualizationScreenDefaults: 5 tests (default values, hidden sections)
+  - TestVisualizationScreenNavigation: 2 tests (cancel, escape)
+  - TestVisualizationScreenValidation: 2 tests (open without files, custom range validation)
+  - TestVisualizationScreenGeneration: 2 tests (button disable, results display)
+  - Zero regressions in related tests (27 export/tax tests passing)
 
 ---
 
