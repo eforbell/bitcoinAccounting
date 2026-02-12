@@ -2,22 +2,37 @@
 
 Lightweight bookkeeping and reporting for cryptocurrency with SQLite or PostgreSQL.
 
-This repository contains Python helper scripts and database abstraction layer to
-maintain a transaction ledger and produce balance, cost-basis reports, and
-visualizations. The ledger is database-backed and primarily focused on Bitcoin,
-with support for any cryptocurrency.
+Includes an interactive terminal UI and CLI scripts for maintaining a transaction
+ledger and producing balance, cost-basis reports, and visualizations. Database-backed
+and primarily focused on Bitcoin, with support for any cryptocurrency.
 
 ## Key Features
+- **Interactive Terminal UI** - Full-featured TUI for portfolio tracking, imports, tax reporting, and more
 - **Zero-config SQLite option** - Start tracking immediately with no database setup
 - **PostgreSQL support** - Use existing PostgreSQL infrastructure if preferred
 - Store transactions (deposits, withdrawals, trades, mining/interest)
 - Compute balances and cost-basis automatically
 - CLI helpers for common operations (buy, sell, transfer, export)
 - Tax reporting (1099-B exports, FIFO calculations)
-- Lightweight visualization helpers and example notebook
+- Chart generation and PDF reports
 - Bulk import from exchanges (Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini) and wallets (Ledger, Trezor, Sparrow, Coldcard) with auto-detection
 
-## Quick Start
+## Getting Started
+
+**New here?** The fastest way to get started is the interactive **Terminal UI (TUI)** -- install dependencies, run one command, and you're in. Fully keyboard-driven with excellent mouse support:
+
+```bash
+python -m pip install -r requirements.txt
+src/scripts/crypto_tui
+```
+
+See the **[Getting Started Guide](GETTING_STARTED.md)** for a walkthrough of the TUI, keyboard shortcuts, and common workflows.
+
+---
+
+## Quick Start (CLI Scripts)
+
+Prefer individual command-line scripts? Everything the TUI does is also available as standalone scripts.
 
 ### Option 1: SQLite (Recommended for Most Users)
 
