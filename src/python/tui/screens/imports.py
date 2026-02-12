@@ -31,6 +31,14 @@ from textual.widgets import (
 if TYPE_CHECKING:
     from textual.worker import Worker
 
+from tui.screens.record_transaction import NEW_WALLET_SENTINEL
+
+# Map select_id -> (new-wallet-row-id, new-wallet-input-id) for the wizard.
+_WIZARD_WALLET_MAP: dict[str, tuple[str, str]] = {
+    "select-withdraw-to": ("new-withdraw-to-row", "new-withdraw-to-input"),
+    "select-wallet-name": ("new-wallet-name-row", "new-wallet-name-input"),
+}
+
 
 class FilteredDirectoryTree(DirectoryTree):
     """DirectoryTree that only shows directories and CSV/TXT files."""
@@ -212,6 +220,7 @@ class ImportWizardScreen(Screen[None]):
         border: solid $error;
         color: $error;
     }
+
     """
 
     def __init__(self) -> None:
@@ -267,6 +276,14 @@ class ImportWizardScreen(Screen[None]):
         """Update wallet list (called from thread)."""
         self.wallet_names = wallet_names
 
+    def _load_wallet_choices(self) -> list[tuple[str, str]]:
+        """Build (label, value) choices from loaded wallet names + sentinel."""
+        choices: list[tuple[str, str]] = [
+            (name, name) for name in self.wallet_names
+        ]
+        choices.append(("+ New Wallet...", NEW_WALLET_SENTINEL))
+        return choices
+
     def show_step_1(self) -> None:
         """Show step 1: File selection."""
         self.current_step = 1
@@ -300,6 +317,46 @@ class ImportWizardScreen(Screen[None]):
         self.query_one("#btn-back", Button).disabled = True
         self.query_one("#btn-next", Button).disabled = True
 
+    def _mount_wizard_wallet_selector(
+        self,
+        container: Vertical,
+        label_text: str,
+        select_id: str,
+        *,
+        allow_blank: bool = False,
+    ) -> None:
+        """Mount a wallet Select dropdown with '+ New Wallet...' fallback Input.
+
+        Uses the same show/hide pattern as RecordTransactionScreen.
+        """
+        row_id, input_id = _WIZARD_WALLET_MAP[select_id]
+        choices = self._load_wallet_choices()
+        has_wallets = len(choices) > 1  # more than just the sentinel
+
+        if allow_blank:
+            default_value = Select.BLANK
+        else:
+            default_value = choices[0][1] if has_wallets else NEW_WALLET_SENTINEL
+
+        row = Horizontal(classes="form-row")
+        container.mount(row)
+        row.mount(Label(label_text, classes="form-label"))
+        row.mount(Select(choices, value=default_value, id=select_id,
+                         allow_blank=allow_blank))
+
+        placeholder = (
+            "No wallets yet - type a name below"
+            if not has_wallets
+            else "Enter wallet name"
+        )
+        new_row = Horizontal(classes="form-row new-wallet-row", id=row_id)
+        container.mount(new_row)
+        new_row.mount(Label("New Wallet:", classes="form-label"))
+        new_row.mount(Input(id=input_id, placeholder=placeholder))
+
+        # Hide by default, show only when sentinel is the default (DB empty).
+        new_row.display = (default_value == NEW_WALLET_SENTINEL)
+
     def show_step_2(self) -> None:
         """Show step 2: Configuration."""
         self.current_step = 2
@@ -318,42 +375,16 @@ class ImportWizardScreen(Screen[None]):
             )
             content.mount(info)
 
-        # Wallet name input (required for wallet imports)
+        # Wallet name selector (required for wallet imports)
         if self.parser and self.parser.source_type == 'wallet':
-            row = Horizontal(classes="form-row")
-            content.mount(row)
-            row.mount(Label("Wallet Name: *", classes="form-label"))
-            wallet_select = Select(
-                options=[(name, name) for name in self.wallet_names] if self.wallet_names else [("New Wallet", "")],
-                prompt="Select or enter wallet name",
-                id="select-wallet-name",
-                classes="form-input",
-                allow_blank=True
+            self._mount_wizard_wallet_selector(
+                content, "Wallet Name: *", "select-wallet-name"
             )
-            row.mount(wallet_select)
 
-            # Allow custom wallet name input
-            row2 = Horizontal(classes="form-row")
-            content.mount(row2)
-            row2.mount(Label("Or New Name:", classes="form-label"))
-            row2.mount(Input(
-                placeholder="Enter new wallet name",
-                id="input-wallet-name-custom",
-                classes="form-input"
-            ))
-
-        # Withdraw-to input (optional for all imports)
-        row3 = Horizontal(classes="form-row")
-        content.mount(row3)
-        row3.mount(Label("Withdraw To:", classes="form-label"))
-        withdraw_select = Select(
-            options=[(name, name) for name in self.wallet_names] if self.wallet_names else [("Select Wallet", "")],
-            prompt="Optional withdrawal destination",
-            id="select-withdraw-to",
-            classes="form-input",
-            allow_blank=True
+        # Withdraw-to selector (optional for all imports)
+        self._mount_wizard_wallet_selector(
+            content, "Withdraw To:", "select-withdraw-to", allow_blank=True
         )
-        row3.mount(withdraw_select)
 
         # Dry-run checkbox (checked by default for safety)
         row4 = Horizontal(classes="form-row")
@@ -368,6 +399,38 @@ class ImportWizardScreen(Screen[None]):
         # Update action buttons
         self.query_one("#btn-back", Button).disabled = False
         self.query_one("#btn-next", Button).disabled = False
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Toggle new-wallet input row visibility on Select change."""
+        select_id = event.select.id
+        if select_id in _WIZARD_WALLET_MAP:
+            row_id, _ = _WIZARD_WALLET_MAP[select_id]
+            try:
+                new_row = self.query_one(f"#{row_id}", Horizontal)
+                if event.value == NEW_WALLET_SENTINEL:
+                    new_row.display = True
+                elif event.value is not Select.BLANK:
+                    new_row.display = False
+            except Exception:
+                pass
+
+    def _get_wizard_wallet_value(self, select_id: str) -> str | None:
+        """Read the effective wallet name from a wizard wallet selector.
+
+        Returns stripped name from the Select, or from the fallback Input
+        if '+ New Wallet...' is selected.  Returns None if blank.
+        """
+        _, input_id = _WIZARD_WALLET_MAP[select_id]
+        try:
+            sel = self.query_one(f"#{select_id}", Select)
+            val = sel.value
+            if val == NEW_WALLET_SENTINEL or val is Select.BLANK:
+                inp = self.query_one(f"#{input_id}", Input)
+                text = inp.value.strip()
+                return text if text else None
+            return str(val).strip() or None
+        except Exception:
+            return None
 
     def show_step_3(self) -> None:
         """Show step 3: Preview and execute."""
@@ -602,22 +665,16 @@ class ImportWizardScreen(Screen[None]):
         # Validate wallet-name for wallet imports
         wallet_name = None
         if self.parser and self.parser.source_type == 'wallet':
-            wallet_select = self.query_one("#select-wallet-name", Select)
-            custom_input = self.query_one("#input-wallet-name-custom", Input)
-
-            wallet_name = custom_input.value.strip() or str(wallet_select.value)
-
-            # Check if wallet_name is empty or blank
-            if not wallet_name or wallet_name == "" or str(wallet_select.value) == "":
+            wallet_name = self._get_wizard_wallet_value("select-wallet-name")
+            if not wallet_name:
                 self.show_error("Wallet imports require a wallet name")
                 return
 
         # Get withdraw-to value
-        withdraw_select = self.query_one("#select-withdraw-to", Select)
-        withdraw_to = str(withdraw_select.value) if withdraw_select.value != Select.BLANK else None
+        withdraw_to = self._get_wizard_wallet_value("select-withdraw-to")
 
         # Re-parse with configuration
-        self.reparse_with_config(wallet_name if self.parser and self.parser.source_type == 'wallet' else None, withdraw_to)
+        self.reparse_with_config(wallet_name, withdraw_to)
 
     @work(thread=True)
     def reparse_with_config(self, wallet_name: str | None, withdraw_to: str | None) -> None:

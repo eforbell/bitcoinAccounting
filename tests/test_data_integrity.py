@@ -3,6 +3,7 @@
 DIF-001: Whitespace-padded exchange names are trimmed on storage and query.
 DIF-002: Buy form uses wallet selector dropdown instead of free-text input.
 DIF-003: Sell, Transfer, Interest forms use wallet selector dropdowns.
+DIF-004: Import Wizard wallet selectors for withdraw-to and wallet-name.
 """
 import sys
 import os
@@ -392,3 +393,109 @@ class TestInterestFormWalletSelector:
             await pilot.pause(0.3)
             new_row = screen.query_one("#new-wallet-row")
             assert new_row.has_class("visible")
+
+
+# --- DIF-004: Wallet selector on Import Wizard ---
+
+from tui.screens.imports import ImportWizardScreen, _WIZARD_WALLET_MAP
+from textual.containers import Horizontal
+
+
+class TestImportWizardWithdrawToSelector:
+    """DIF-004: Import Wizard step 2 uses wallet selector for withdraw-to."""
+
+    @pytest.mark.asyncio
+    async def test_wizard_step2_has_withdraw_to_select(self) -> None:
+        """Step 2 should have a Select for withdraw-to with sentinel option."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("i")
+            await pilot.pause(0.5)
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+            # Manually advance to step 2
+            screen.show_step_2()
+            await pilot.pause(0.3)
+            sel = screen.query_one("#select-withdraw-to", Select)
+            assert sel is not None
+            option_values = [opt[1] for opt in sel._options]
+            assert NEW_WALLET_SENTINEL in option_values
+
+    @pytest.mark.asyncio
+    async def test_wizard_withdraw_to_new_wallet_row_hidden_by_default(self) -> None:
+        """Withdraw-to new-wallet row should be hidden by default (allow_blank)."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("i")
+            await pilot.pause(0.5)
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+            screen.show_step_2()
+            await pilot.pause(0.3)
+            new_row = screen.query_one("#new-withdraw-to-row", Horizontal)
+            # allow_blank=True means default is BLANK; row hidden via CSS
+            assert not new_row.display
+
+    @pytest.mark.asyncio
+    async def test_wizard_withdraw_to_new_wallet_toggle(self) -> None:
+        """Selecting '+ New Wallet...' on withdraw-to shows the input row."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("i")
+            await pilot.pause(0.5)
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+            screen.show_step_2()
+            await pilot.pause(0.3)
+            sel = screen.query_one("#select-withdraw-to", Select)
+            sel.value = NEW_WALLET_SENTINEL
+            await pilot.pause(0.3)
+            new_row = screen.query_one("#new-withdraw-to-row", Horizontal)
+            assert new_row.display
+
+    @pytest.mark.asyncio
+    async def test_wizard_withdraw_to_input_strips_whitespace(self) -> None:
+        """New wallet input value should be stripped of whitespace."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("i")
+            await pilot.pause(0.5)
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+            screen.show_step_2()
+            await pilot.pause(0.3)
+            sel = screen.query_one("#select-withdraw-to", Select)
+            sel.value = NEW_WALLET_SENTINEL
+            await pilot.pause(0.3)
+            inp = screen.query_one("#new-withdraw-to-input", Input)
+            inp.value = "  My Cold Storage  "
+            val = screen._get_wizard_wallet_value("select-withdraw-to")
+            assert val == "My Cold Storage"
+
+
+class TestImportWizardWalletNameSelector:
+    """DIF-004: Import Wizard wallet-name selector for wallet imports."""
+
+    @pytest.mark.asyncio
+    async def test_wizard_wallet_name_empty_db_shows_new_wallet_row(self) -> None:
+        """With empty DB, wallet-name new-wallet row should be visible with placeholder."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("i")
+            await pilot.pause(0.5)
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+            # Simulate wallet import parser
+            from unittest.mock import MagicMock
+            screen.parser = MagicMock()
+            screen.parser.source_type = 'wallet'
+            screen.parser.name = 'Ledger Live'
+            screen.parsed_transactions = [{'trans_type': 'Deposit'}]
+            # Clear wallet list to simulate empty DB
+            screen.wallet_names = []
+            screen.show_step_2()
+            await pilot.pause(0.3)
+            new_row = screen.query_one("#new-wallet-name-row", Horizontal)
+            assert new_row.display
+            inp = screen.query_one("#new-wallet-name-input", Input)
+            assert "No wallets yet" in inp.placeholder
