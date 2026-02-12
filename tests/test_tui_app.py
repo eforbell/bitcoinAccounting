@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'python'
 
 from db import SqliteBackend
 from tui.app import CryptoApp, HelpScreen, MainMenu, MenuButton
+from tui.screens.ledger import LedgerScreen
 
 
 class TestAppLaunch:
@@ -324,3 +325,119 @@ class TestMenuButtonWidget:
             for btn in buttons:
                 method_name = f"action_menu_{btn._action}"
                 assert hasattr(app, method_name), f"Missing method: {method_name}"
+
+
+class TestLedgerSummaryPanel:
+    """Tests for ledger summary statistics panel."""
+
+    @pytest.mark.asyncio
+    async def test_summary_panel_exists(self) -> None:
+        """Ledger screen should have a summary panel."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("l")
+            await pilot.pause(0.2)
+
+            summary_panel = app.screen.query_one("#summary-panel")
+            assert summary_panel is not None
+
+    @pytest.mark.asyncio
+    async def test_summary_panel_visible_with_coin_filter(self) -> None:
+        """Summary panel should be visible when a coin filter is active."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("l")
+            await pilot.pause(0.2)
+
+            # Default coin is BTC, so panel should be visible
+            summary_panel = app.screen.query_one("#summary-panel")
+            assert summary_panel.display is True
+
+    @pytest.mark.asyncio
+    async def test_update_summary_with_btc_transactions(self) -> None:
+        """Summary should calculate stats correctly for BTC transactions."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("l")
+            await pilot.pause(0.2)
+
+            screen = app.screen
+            assert isinstance(screen, LedgerScreen)
+
+            # Inject test transactions
+            screen.current_coin = "BTC"
+            screen.filtered_transactions = [
+                {"Buy": 1.5, "Buy Cur.": "BTC", "Sell": None, "Sell Cur.": None, "Fee": 0.001, "Fee Cur.": "BTC"},
+                {"Buy": None, "Buy Cur.": None, "Sell": 0.5, "Sell Cur.": "BTC", "Fee": 0.0005, "Fee Cur.": "BTC"},
+                {"Buy": 2.0, "Buy Cur.": "BTC", "Sell": None, "Sell Cur.": None, "Fee": None, "Fee Cur.": None},
+            ]
+            screen._update_summary()
+
+            panel = screen.query_one("#summary-label")
+            content = panel.content
+            assert "3.50000000" in content
+            assert "0.50000000" in content
+            assert "0.00150000" in content
+            assert "3.00000000" in content
+            assert "3" in content
+
+    @pytest.mark.asyncio
+    async def test_update_summary_usd_format(self) -> None:
+        """Summary should use 2 decimal places for USD."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("l")
+            await pilot.pause(0.2)
+
+            screen = app.screen
+            assert isinstance(screen, LedgerScreen)
+
+            screen.current_coin = "USD"
+            screen.filtered_transactions = [
+                {"Buy": 100.50, "Buy Cur.": "USD", "Sell": None, "Sell Cur.": None, "Fee": 1.25, "Fee Cur.": "USD"},
+            ]
+            screen._update_summary()
+
+            panel = screen.query_one("#summary-label")
+            assert "100.50" in panel.content
+
+    @pytest.mark.asyncio
+    async def test_summary_hidden_when_all_coins(self) -> None:
+        """Summary panel should be hidden when 'All' coins is selected."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("l")
+            await pilot.pause(0.2)
+
+            screen = app.screen
+            assert isinstance(screen, LedgerScreen)
+
+            screen.current_coin = None
+            screen._update_summary()
+
+            summary_panel = screen.query_one("#summary-panel")
+            assert summary_panel.display is False
+
+    @pytest.mark.asyncio
+    async def test_summary_shows_all_stat_labels(self) -> None:
+        """Summary should display Credits, Debits, Fees, Balance, Count."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("l")
+            await pilot.pause(0.2)
+
+            screen = app.screen
+            assert isinstance(screen, LedgerScreen)
+
+            screen.current_coin = "BTC"
+            screen.filtered_transactions = [
+                {"Buy": 1.0, "Buy Cur.": "BTC", "Sell": None, "Sell Cur.": None, "Fee": None, "Fee Cur.": None},
+            ]
+            screen._update_summary()
+
+            panel = screen.query_one("#summary-label")
+            assert "Credits:" in panel.content
+            assert "Debits:" in panel.content
+            assert "Fees:" in panel.content
+            assert "Balance:" in panel.content
+            assert "Count:" in panel.content

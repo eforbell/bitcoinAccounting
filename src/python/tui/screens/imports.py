@@ -16,11 +16,12 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
-from textual.screen import Screen
+from textual.screen import ModalScreen, Screen
 from textual.widgets import (
     Button,
     Checkbox,
     DataTable,
+    DirectoryTree,
     Input,
     Label,
     Select,
@@ -29,6 +30,90 @@ from textual.widgets import (
 
 if TYPE_CHECKING:
     from textual.worker import Worker
+
+
+class FilteredDirectoryTree(DirectoryTree):
+    """DirectoryTree that only shows directories and CSV/TXT files."""
+
+    def filter_paths(self, paths: list[Path]) -> list[Path]:
+        """Filter to only show directories and .csv/.txt files."""
+        return [
+            p for p in paths
+            if p.is_dir() or p.suffix.lower() in (".csv", ".txt")
+        ]
+
+
+class FilePickerModal(ModalScreen[Path | None]):
+    """Modal dialog for browsing and selecting a CSV file."""
+
+    CSS = """
+    FilePickerModal {
+        align: center middle;
+    }
+
+    #file-picker-container {
+        width: 80%;
+        height: 80%;
+        background: $surface;
+        border: solid $accent;
+        padding: 1 2;
+    }
+
+    #file-picker-title {
+        height: auto;
+        text-align: center;
+        margin-bottom: 1;
+        color: $accent;
+        text-style: bold;
+    }
+
+    #file-picker-tree {
+        height: 1fr;
+        margin-bottom: 1;
+        border: solid $primary;
+    }
+
+    #file-picker-selected {
+        height: auto;
+        margin-bottom: 1;
+        color: $text-muted;
+    }
+
+    #file-picker-actions {
+        height: auto;
+        align: center middle;
+    }
+    """
+
+    def __init__(self) -> None:
+        """Initialize the file picker modal."""
+        super().__init__()
+        self.selected_path: Path | None = None
+
+    def compose(self) -> ComposeResult:
+        """Compose the file picker UI."""
+        with Container(id="file-picker-container"):
+            yield Label("Select a CSV File", id="file-picker-title")
+            yield FilteredDirectoryTree(Path.home(), id="file-picker-tree")
+            yield Label("No file selected", id="file-picker-selected")
+            with Horizontal(id="file-picker-actions"):
+                yield Button("Select", id="btn-fp-select", variant="primary", disabled=True)
+                yield Button("Cancel", id="btn-fp-cancel", variant="default")
+
+    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        """Handle file selection in the directory tree."""
+        self.selected_path = event.path
+        self.query_one("#file-picker-selected", Label).update(
+            f"Selected: [cyan]{event.path}[/cyan]"
+        )
+        self.query_one("#btn-fp-select", Button).disabled = False
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "btn-fp-select":
+            self.dismiss(self.selected_path)
+        elif event.button.id == "btn-fp-cancel":
+            self.dismiss(None)
 
 
 class ImportWizardScreen(Screen[None]):
@@ -191,7 +276,7 @@ class ImportWizardScreen(Screen[None]):
         content = self.query_one("#wizard-content", Vertical)
         content.remove_children()
 
-        # File path input
+        # File path input with Browse button
         row = Horizontal(classes="form-row")
         content.mount(row)
         row.mount(Label("File Path:", classes="form-label"))
@@ -200,6 +285,7 @@ class ImportWizardScreen(Screen[None]):
             id="input-file-path",
             classes="form-input"
         ))
+        row.mount(Button("Browse", id="btn-browse", variant="default"))
 
         # Detect button
         row2 = Horizontal(classes="form-row")
@@ -412,8 +498,20 @@ class ImportWizardScreen(Screen[None]):
                 # Step 3 -> Import: execute import
                 self.execute_import()
 
+        elif button_id == "btn-browse":
+            self.app.push_screen(FilePickerModal(), callback=self._on_file_selected)
+
         elif button_id == "btn-detect":
             self.detect_format()
+
+    def _on_file_selected(self, path: Path | None) -> None:
+        """Handle file selection from the file picker modal."""
+        if path is not None:
+            try:
+                file_input = self.query_one("#input-file-path", Input)
+                file_input.value = str(path)
+            except Exception:
+                pass
 
     def detect_format(self) -> None:
         """Detect file format and parse transactions."""

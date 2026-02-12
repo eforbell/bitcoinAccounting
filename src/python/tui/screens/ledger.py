@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from textual import work
@@ -87,6 +88,20 @@ class LedgerScreen(Screen[None]):
         color: #e0e0e0;
     }
 
+    LedgerScreen .summary-bar {
+        layout: horizontal;
+        height: 4;
+        padding: 1 2;
+        background: #0f3460;
+        border-top: solid #1a4a8a;
+    }
+
+    LedgerScreen #summary-label {
+        color: #e0e0e0;
+        text-align: center;
+        width: 1fr;
+    }
+
     LedgerScreen DataTable {
         height: 1fr;
         min-height: 15;
@@ -157,6 +172,10 @@ class LedgerScreen(Screen[None]):
         with Container(classes="status-bar"):
             yield Label("", id="status-label", classes="status-label")
 
+        # Summary statistics panel (hidden by default, shown when coin filter is active)
+        with Container(id="summary-panel", classes="summary-bar"):
+            yield Label("", id="summary-label")
+
         # Transaction table
         yield DataTable(id="transactions-table", cursor_type="row")
 
@@ -165,6 +184,8 @@ class LedgerScreen(Screen[None]):
     def on_mount(self) -> None:
         """Load initial data and populate wallet selector."""
         self.sub_title = "Transaction Ledger"
+        summary_panel = self.query_one("#summary-panel")
+        summary_panel.display = self.current_coin is not None
         self.load_wallets()
         self.load_transactions()
 
@@ -305,6 +326,57 @@ class LedgerScreen(Screen[None]):
             status.update(
                 f"Showing [cyan]{filtered}[/cyan] of [cyan]{total}[/cyan] transactions"
             )
+
+        self._update_summary()
+
+    def _update_summary(self) -> None:
+        """Update the summary statistics panel based on filtered transactions."""
+        summary_panel = self.query_one("#summary-panel")
+
+        if self.current_coin is None:
+            summary_panel.display = False
+            return
+
+        summary_panel.display = True
+        coin = self.current_coin
+
+        total_credits = Decimal("0")
+        total_debits = Decimal("0")
+        total_fees = Decimal("0")
+
+        for tx in self.filtered_transactions:
+            if tx.get("Buy Cur.") == coin:
+                try:
+                    total_credits += Decimal(str(tx.get("Buy") or 0))
+                except Exception:
+                    pass
+            if tx.get("Sell Cur.") == coin:
+                try:
+                    total_debits += Decimal(str(tx.get("Sell") or 0))
+                except Exception:
+                    pass
+            if tx.get("Fee Cur.") == coin:
+                try:
+                    total_fees += Decimal(str(tx.get("Fee") or 0))
+                except Exception:
+                    pass
+
+        net_balance = total_credits - total_debits
+
+        # Format: 8 decimal places for BTC, 2 for USD
+        decimals = 2 if coin == "USD" else 8
+        fmt = f",.{decimals}f"
+
+        balance_color = "green" if net_balance >= 0 else "red"
+        count = len(self.filtered_transactions)
+
+        self.query_one("#summary-label", Label).update(
+            f"Credits: [green]{total_credits:{fmt}}[/green]  |  "
+            f"Debits: [red]{total_debits:{fmt}}[/red]  |  "
+            f"Fees: [yellow]{total_fees:{fmt}}[/yellow]  |  "
+            f"Balance: [{balance_color}]{net_balance:{fmt}}[/{balance_color}]  |  "
+            f"Count: [cyan]{count}[/cyan]"
+        )
 
     def _show_empty_state(self) -> None:
         """Show empty state when no transactions exist."""

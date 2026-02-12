@@ -7,6 +7,7 @@ from pathlib import Path
 from textual.pilot import Pilot
 
 from tui.app import CryptoApp
+from tui.screens.imports import FilePickerModal, ImportWizardScreen
 
 
 @pytest.fixture
@@ -412,3 +413,112 @@ class TestImportWizardExecution:
             except Exception:
                 # Results might not be rendered yet
                 pass
+
+
+class TestFilePickerModal:
+    """Tests for the file picker modal dialog."""
+
+    @pytest.mark.asyncio
+    async def test_browse_button_exists(self) -> None:
+        """Step 1 should have a Browse button next to file input."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True, size=(120, 40)) as pilot:
+            await pilot.pause(0.1)
+
+            await pilot.press("i")
+            await pilot.pause(0.2)
+
+            browse_btn = app.screen.query_one("#btn-browse")
+            assert browse_btn is not None
+
+    @pytest.mark.asyncio
+    async def test_browse_opens_modal(self) -> None:
+        """Clicking Browse should open the file picker modal."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True, size=(120, 40)) as pilot:
+            await pilot.pause(0.1)
+
+            await pilot.press("i")
+            await pilot.pause(0.2)
+
+            # Programmatically press the browse button (avoids screen bounds issues)
+            browse_btn = app.screen.query_one("#btn-browse")
+            browse_btn.press()
+            await pilot.pause(0.3)
+
+            # File picker modal should now be the active screen
+            assert isinstance(app.screen, FilePickerModal)
+
+    @pytest.mark.asyncio
+    async def test_modal_has_directory_tree(self) -> None:
+        """File picker modal should contain a DirectoryTree widget."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True, size=(120, 40)) as pilot:
+            await pilot.pause(0.1)
+
+            await pilot.press("i")
+            await pilot.pause(0.2)
+
+            browse_btn = app.screen.query_one("#btn-browse")
+            browse_btn.press()
+            await pilot.pause(0.3)
+
+            tree = app.screen.query_one("#file-picker-tree")
+            assert tree is not None
+
+    @pytest.mark.asyncio
+    async def test_modal_select_disabled_initially(self) -> None:
+        """Select button should be disabled until a file is selected."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True, size=(120, 40)) as pilot:
+            await pilot.pause(0.1)
+
+            await pilot.press("i")
+            await pilot.pause(0.2)
+
+            browse_btn = app.screen.query_one("#btn-browse")
+            browse_btn.press()
+            await pilot.pause(0.3)
+
+            select_btn = app.screen.query_one("#btn-fp-select")
+            assert select_btn.disabled is True
+
+    @pytest.mark.asyncio
+    async def test_modal_cancel_closes(self) -> None:
+        """Cancel button should close the modal without selecting."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True, size=(120, 40)) as pilot:
+            await pilot.pause(0.1)
+
+            await pilot.press("i")
+            await pilot.pause(0.2)
+
+            browse_btn = app.screen.query_one("#btn-browse")
+            browse_btn.press()
+            await pilot.pause(0.3)
+
+            assert isinstance(app.screen, FilePickerModal)
+
+            cancel_btn = app.screen.query_one("#btn-fp-cancel")
+            cancel_btn.press()
+            await pilot.pause(0.3)
+
+            # Should be back to import wizard
+            assert isinstance(app.screen, ImportWizardScreen)
+
+    @pytest.mark.asyncio
+    async def test_modal_has_title(self) -> None:
+        """File picker modal should have a title label."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True, size=(120, 40)) as pilot:
+            await pilot.pause(0.1)
+
+            await pilot.press("i")
+            await pilot.pause(0.2)
+
+            browse_btn = app.screen.query_one("#btn-browse")
+            browse_btn.press()
+            await pilot.pause(0.3)
+
+            title = app.screen.query_one("#file-picker-title")
+            assert "CSV" in title.content or "File" in title.content
