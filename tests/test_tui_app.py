@@ -131,44 +131,49 @@ class TestKeyBindings:
             assert len(app.screen_stack) >= 1
 
     @pytest.mark.asyncio
-    async def test_ledger_key_triggers_notification(self) -> None:
-        """Pressing L should trigger ledger action."""
+    async def test_ledger_key_pushes_screen(self) -> None:
+        """Pressing L should push ledger screen."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
             await pilot.press("l")
-            assert len(app._notifications) > 0
+            await pilot.pause(0.1)
+            assert len(app.screen_stack) >= 2
 
     @pytest.mark.asyncio
-    async def test_record_key_triggers_notification(self) -> None:
-        """Pressing R should trigger record action."""
+    async def test_record_key_pushes_screen(self) -> None:
+        """Pressing R should push record transaction screen."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
             await pilot.press("r")
-            assert len(app._notifications) > 0
+            await pilot.pause(0.1)
+            assert len(app.screen_stack) >= 2
 
     @pytest.mark.asyncio
-    async def test_import_key_triggers_notification(self) -> None:
-        """Pressing I should trigger import action."""
+    async def test_import_key_pushes_screen(self) -> None:
+        """Pressing I should push import wizard screen."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
             await pilot.press("i")
-            assert len(app._notifications) > 0
+            await pilot.pause(0.1)
+            assert len(app.screen_stack) >= 2
 
     @pytest.mark.asyncio
-    async def test_tax_key_triggers_notification(self) -> None:
-        """Pressing T should trigger tax action."""
+    async def test_tax_key_pushes_screen(self) -> None:
+        """Pressing T should push tax reporting screen."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
             await pilot.press("t")
-            assert len(app._notifications) > 0
+            await pilot.pause(0.1)
+            assert len(app.screen_stack) >= 2
 
     @pytest.mark.asyncio
-    async def test_viz_key_triggers_notification(self) -> None:
-        """Pressing V should trigger viz action."""
+    async def test_viz_key_pushes_screen(self) -> None:
+        """Pressing V should push visualization screen."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
             await pilot.press("v")
-            assert len(app._notifications) > 0
+            await pilot.pause(0.1)
+            assert len(app.screen_stack) >= 2
 
 
 class TestHelpScreen:
@@ -196,6 +201,83 @@ class TestHelpScreen:
             assert "Portfolio" in combined
             assert "Import" in combined
             assert "Quit" in combined
+
+
+class TestTUI012HelpEnhancements:
+    """Tests for TUI-012 help system enhancements."""
+
+    @pytest.mark.asyncio
+    async def test_f1_opens_help(self) -> None:
+        """F1 key should open the help screen."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            await pilot.press("f1")
+            assert isinstance(app.screen, HelpScreen)
+
+    @pytest.mark.asyncio
+    async def test_help_shows_screen_descriptions(self) -> None:
+        """Help screen should show descriptions for each functional area."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            await pilot.press("question_mark")
+            labels = app.screen.query("Label")
+            combined = " ".join(label.content for label in labels)
+            # Check per-screen descriptions are present
+            assert "Wallet balances" in combined
+            assert "Transaction Ledger" in combined
+            assert "Record Transaction" in combined
+            assert "Import CSV" in combined
+            assert "Export" in combined
+            assert "Tax" in combined
+            assert "Visualizations" in combined
+
+    @pytest.mark.asyncio
+    async def test_help_has_about_section(self) -> None:
+        """Help screen should show About section with backend info."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            await pilot.pause(0.1)
+            await pilot.press("question_mark")
+            await pilot.pause(0.1)
+            labels = app.screen.query("Label")
+            combined = " ".join(label.content for label in labels)
+            # About section should show backend info
+            assert "About" in combined
+            assert "Backend" in combined
+
+    @pytest.mark.asyncio
+    async def test_help_shows_f1_shortcut(self) -> None:
+        """Help screen should mention F1 as a way to open help."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            await pilot.press("question_mark")
+            labels = app.screen.query("Label")
+            combined = " ".join(label.content for label in labels)
+            assert "F1" in combined
+
+    @pytest.mark.asyncio
+    async def test_help_has_scrollable_content(self) -> None:
+        """Help screen should have a scrollable container."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            await pilot.press("question_mark")
+            scroll = app.screen.query_one("#help-scroll")
+            assert scroll is not None
+
+    @pytest.mark.asyncio
+    async def test_about_info_without_db(self) -> None:
+        """About info should handle no database gracefully."""
+        app = CryptoApp()
+        # Directly test the method without DB
+        app.crypto = None
+        info = app._get_about_info()
+        assert "Not connected" in info
+
+    @pytest.mark.asyncio
+    async def test_global_error_handler_exists(self) -> None:
+        """App should have on_worker_state_changed for global error handling."""
+        app = CryptoApp()
+        assert hasattr(app, "on_worker_state_changed")
 
 
 class TestDatabaseLifecycle:

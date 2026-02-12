@@ -18,7 +18,7 @@
     {"id": "TUI-009", "title": "Export transactions screen", "status": "completed"},
     {"id": "TUI-010", "title": "Tax reporting screen (gains tracker, 1099-B, forecast)", "status": "completed"},
     {"id": "TUI-011", "title": "Visualization screen with chart generation", "status": "completed"},
-    {"id": "TUI-012", "title": "Help system, keyboard shortcuts, and error handling polish", "status": "pending"}
+    {"id": "TUI-012", "title": "Help system, keyboard shortcuts, and error handling polish", "status": "completed"}
   ],
   "completedFeatures": [
     {

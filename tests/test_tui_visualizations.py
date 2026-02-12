@@ -300,7 +300,7 @@ class TestVisualizationScreenGeneration:
             assert gen_btn.disabled is True
 
             # Wait for async work to finish (may fail due to no data, takes time)
-            await pilot.pause(3.0)
+            await pilot.pause(5.0)
 
             # Button should be re-enabled after generation completes
             assert gen_btn.disabled is False

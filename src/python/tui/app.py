@@ -6,7 +6,7 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, Container, Horizontal, Vertical
+from textual.containers import Center, Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
@@ -23,11 +23,15 @@ class HelpScreen(ModalScreen[None]):
         align: center middle;
     }
     #help-dialog {
-        width: 64;
-        max-height: 80%;
+        width: 70;
+        max-height: 85%;
         border: double #f7931a;
         background: #1a1a2e;
         padding: 1 2;
+    }
+    #help-scroll {
+        height: auto;
+        max-height: 100%;
     }
     #help-dialog Label {
         width: 100%;
@@ -46,9 +50,16 @@ class HelpScreen(ModalScreen[None]):
     .help-line {
         color: #aaaaaa;
     }
+    .help-desc {
+        color: #777777;
+        margin-left: 6;
+    }
     .help-dim {
         color: #666666;
         text-align: center;
+    }
+    .help-about {
+        color: #888888;
     }
     """
 
@@ -57,27 +68,53 @@ class HelpScreen(ModalScreen[None]):
         Binding("question_mark", "dismiss", "Close"),
     ]
 
+    def __init__(self, about_info: str = "") -> None:
+        super().__init__()
+        self._about_info = about_info
+
     def compose(self) -> ComposeResult:
         with Container(id="help-dialog"):
-            yield Label("Crypto Accounting TUI", classes="help-header")
-            yield Label("")
-            yield Label("Navigation", classes="help-section")
-            yield Label("  P   Portfolio & Balances", classes="help-line")
-            yield Label("  L   Transaction Ledger", classes="help-line")
-            yield Label("  X   Trade History & Liquidity", classes="help-line")
-            yield Label("  R   Record Transaction (Buy/Sell/Transfer/Interest)", classes="help-line")
-            yield Label("  I   Import CSV", classes="help-line")
-            yield Label("  E   Export Transactions", classes="help-line")
-            yield Label("  T   Tax & Reporting", classes="help-line")
-            yield Label("  V   Visualizations", classes="help-line")
-            yield Label("")
-            yield Label("General", classes="help-section")
-            yield Label("  ?       Show this help", classes="help-line")
-            yield Label("  Esc     Back / Close", classes="help-line")
-            yield Label("  Tab     Next widget", classes="help-line")
-            yield Label("  Q       Quit", classes="help-line")
-            yield Label("")
-            yield Label("Press Esc to close", classes="help-dim")
+            with VerticalScroll(id="help-scroll"):
+                yield Label("Crypto Accounting TUI", classes="help-header")
+                yield Label("")
+
+                yield Label("Navigation", classes="help-section")
+                yield Label("  P   Portfolio & Balances", classes="help-line")
+                yield Label("      Wallet balances, custody breakdown, wallet detail", classes="help-desc")
+                yield Label("  L   Transaction Ledger", classes="help-line")
+                yield Label("      Full transaction history with filtering by coin/wallet/date", classes="help-desc")
+                yield Label("  X   Trade History & Liquidity", classes="help-line")
+                yield Label("      Trade cost basis and exchange purchase summary", classes="help-desc")
+                yield Label("  R   Record Transaction", classes="help-line")
+                yield Label("      Buy, sell, transfer, or earn interest flows", classes="help-desc")
+                yield Label("  I   Import CSV", classes="help-line")
+                yield Label("      Import from exchanges and wallets with preview", classes="help-desc")
+                yield Label("  E   Export Transactions", classes="help-line")
+                yield Label("      Export filtered ledger to CSV", classes="help-desc")
+                yield Label("  T   Tax & Reporting", classes="help-line")
+                yield Label("      Capital gains tracker, 1099-B export, sale forecast", classes="help-desc")
+                yield Label("  V   Visualizations", classes="help-line")
+                yield Label("      Generate Orange Plot, Balance, Custody charts, PDF report", classes="help-desc")
+                yield Label("")
+
+                yield Label("Within Screens", classes="help-section")
+                yield Label("  Esc       Back to previous screen", classes="help-line")
+                yield Label("  Tab       Cycle through widgets", classes="help-line")
+                yield Label("  Enter     Activate focused button/control", classes="help-line")
+                yield Label("  Arrows    Navigate within tables and selectors", classes="help-line")
+                yield Label("")
+
+                yield Label("General", classes="help-section")
+                yield Label("  ? / F1    Show this help", classes="help-line")
+                yield Label("  Q         Quit application", classes="help-line")
+                yield Label("")
+
+                if self._about_info:
+                    yield Label("About", classes="help-section")
+                    yield Label(self._about_info, classes="help-about")
+                    yield Label("")
+
+                yield Label("Press Esc to close", classes="help-dim")
 
 
 class MenuButton(Static):
@@ -184,6 +221,7 @@ class CryptoApp(App[None]):
         Binding("t", "menu_tax", "Tax/Report", show=False),
         Binding("v", "menu_viz", "Visualize", show=False),
         Binding("question_mark", "show_help", "Help"),
+        Binding("f1", "show_help", "Help", show=False),
     ]
 
     def __init__(self) -> None:
@@ -201,14 +239,32 @@ class CryptoApp(App[None]):
             # Push dashboard as default screen (TUI-002)
             self.push_screen(DashboardScreen())
         except Exception as e:
-            self.notify(f"Database connection failed: {e}", severity="error")
+            self.notify(
+                f"Database connection failed: {e}\n"
+                "Check your .env file or database configuration and restart.",
+                severity="error",
+                timeout=10,
+            )
 
     def on_unmount(self) -> None:
         if self.crypto is not None:
             self.crypto.close()  # type: ignore[no-untyped-call]
 
+    def _get_about_info(self) -> str:
+        """Build about section text with version, database path, and backend type."""
+        lines = []
+        if self.crypto is not None:
+            backend = self.crypto.backend
+            backend_type = type(backend).__name__
+            lines.append(f"  Backend:  {backend_type}")
+            if hasattr(backend, 'db_path'):
+                lines.append(f"  Database: {backend.db_path}")
+        else:
+            lines.append("  Backend:  Not connected")
+        return "\n".join(lines)
+
     def action_show_help(self) -> None:
-        self.push_screen(HelpScreen())
+        self.push_screen(HelpScreen(about_info=self._get_about_info()))
 
     def action_from_menu(self, action: str) -> None:
         """Route menu button clicks to the correct action."""
@@ -257,6 +313,30 @@ class CryptoApp(App[None]):
     def action_menu_viz(self) -> None:
         # TUI-011: Visualization screen with chart generation
         self.push_screen(VisualizationScreen())
+
+    def on_worker_state_changed(self, event: object) -> None:
+        """Handle worker errors globally to show user-friendly notifications."""
+        # Textual Worker.StateChanged carries the worker reference
+        worker = getattr(event, 'worker', None)
+        if worker is None:
+            return
+        state = getattr(worker, 'state', None)
+        error = getattr(worker, 'error', None)
+        if state is not None and str(state) == "ERROR" and error is not None:
+            error_msg = str(error)
+            if "connection" in error_msg.lower() or "database" in error_msg.lower():
+                self.notify(
+                    f"Database error: {error_msg}\n"
+                    "Check connection settings and try again.",
+                    severity="error",
+                    timeout=8,
+                )
+            else:
+                self.notify(
+                    f"An error occurred: {error_msg}",
+                    severity="error",
+                    timeout=6,
+                )
 
 
 def main() -> None:

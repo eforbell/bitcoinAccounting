@@ -136,6 +136,31 @@
 
 ---
 
+## 2026-02-11 - TUI-012: Help system, keyboard shortcuts, and error handling polish
+
+- What was implemented:
+  - Expanded HelpScreen with per-screen descriptions (what each functional area does)
+  - Added F1 key binding as alternative to ? for opening help
+  - Added About section showing backend type and database path
+  - Added scrollable VerticalScroll container for help content
+  - Added global error handler (on_worker_state_changed) for worker errors
+  - Enhanced DB connection error message with reconnection guidance
+  - Updated stale keybinding tests (notification→push_screen assertions)
+  - 7 new TUI-012 specific tests
+
+- Files modified:
+  - `src/python/tui/app.py` (HelpScreen expansion, F1 binding, about info, global error handler)
+  - `tests/test_tui_app.py` (7 new TUI-012 tests, 5 updated keybinding tests)
+  - `planning/features/feature-9-prd.json` (marked TUI-012 passes: true)
+  - `planning/current-feature.json` (marked TUI-012 completed)
+
+- **Test Results:**
+  - 7 new TUI-012 tests passing: F1 opens help, screen descriptions, about section, F1 shortcut in help, scrollable content, about without DB, global error handler
+  - 5 updated keybinding tests passing (push screen assertions)
+  - 18 TUI-011 visualization tests still passing
+
+---
+
 ## 2026-02-11 - TUI-001: Application shell, entry point, and main menu
 
 - What was implemented:

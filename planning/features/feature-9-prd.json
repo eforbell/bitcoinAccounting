@@ -245,7 +245,7 @@
       "priority": 12,
       "estimatedLines": 200,
       "testStrategy": "Textual pilot - verify help opens, keybindings listed, error handling catches exceptions",
-      "passes": false
+      "passes": true
     }
   ],
   "riskAssessment": {
