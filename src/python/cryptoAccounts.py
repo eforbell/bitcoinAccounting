@@ -162,6 +162,9 @@ class CryptoAccounts(object):
 
         for transaction in transactions:
             trans_type = transaction.get('trans_type', '')
+            # Normalize wallet name: strip whitespace at import boundary
+            if 'exchange' in transaction and isinstance(transaction['exchange'], str):
+                transaction['exchange'] = transaction['exchange'].strip()
 
             try:
                 # Normalize Interest/Staking aliases to Interest Income

@@ -49,6 +49,7 @@ class LedgerWriter:
             comment: Optional transaction comment
             commit: Whether to commit immediately (default True)
         """
+        exchange = exchange.strip()
         query = """insert into ledger (createddate, trans_type, buy, buy_curr, exchange, "group", comment)
                    values (:createddate, 'Deposit', :buy, :buy_curr, :exchange, :group, :comment)"""
 
@@ -88,6 +89,7 @@ class LedgerWriter:
             comment: Optional transaction comment
             commit: Whether to commit immediately (default True)
         """
+        exchange = exchange.strip()
         query = """insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, "group", comment)
                    values (:createddate, 'Withdrawal', :sell, :sell_curr, :fee, :fee_curr, :exchange, :group, :comment)"""
 
@@ -129,6 +131,7 @@ class LedgerWriter:
             comment: Optional transaction comment
             commit: Whether to commit immediately (default True)
         """
+        exchange = exchange.strip()
         query = """insert into ledger (createddate, trans_type, sell, sell_curr, fee, fee_curr, exchange, "group", comment)
                    values (:createddate, 'Spend', :sell, :sell_curr, :fee, :fee_curr, :exchange, :group, :comment)"""
 
@@ -174,6 +177,7 @@ class LedgerWriter:
             comment: Optional transaction comment
             commit: Whether to commit immediately (default True)
         """
+        exchange = exchange.strip()
         query = """insert into ledger (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, "group", comment)
                    values (:createddate, 'Trade', :buy, :buy_curr, :sell, :sell_curr, :fee, :fee_curr, :exchange, :group, :comment)"""
 
@@ -215,6 +219,7 @@ class LedgerWriter:
             transactionid: Optional transaction ID/hash
             commit: Whether to commit immediately (default True)
         """
+        exchange = exchange.strip()
         query = """insert into ledger (createddate, trans_type, buy, buy_curr, exchange, "group", comment, transactionid)
                    values (:createddate, 'Mining', :buy, :buy_curr, :exchange, :group, :comment, :transactionid)"""
 
@@ -251,6 +256,7 @@ class LedgerWriter:
             comment: Optional transaction comment
             commit: Whether to commit immediately (default True)
         """
+        exchange = exchange.strip()
         query = """insert into ledger (createddate, trans_type, buy, buy_curr, exchange, "group", comment)
                    values (:createddate, 'Interest Income', :buy, :buy_curr, :exchange, :group, :comment)"""
 

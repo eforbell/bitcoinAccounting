@@ -40,6 +40,7 @@ class WalletQuery:
         Returns:
             float: Account balance
         """
+        account = account.strip()
         query = """
             SELECT
                 COALESCE(SUM(CASE WHEN buy_curr = :coin AND trans_type != 'Stake' THEN buy ELSE 0 END), 0) -
