@@ -2,6 +2,27 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-10: Data Integrity Foundations - DIF-006
+
+### CLI Input Validation with Re-Prompting
+- Added `prompt_float()` and `prompt_int()` helper functions to all CLI recording scripts (buySats, sell, transfer, earnInterest)
+- Helpers use infinite retry loops with try/except around float()/int() conversions
+- On ValueError, print user-friendly error message and re-prompt (instead of crashing)
+- Pattern: `while True: try: return float(session.prompt(...)) except ValueError: print("Invalid...")`
+- Strip whitespace from all wallet/exchange name inputs: `session.prompt(...).strip()`
+
+### Interactive Script Testing Strategy
+- Interactive prompt_toolkit scripts are not easily unit-testable (require user input simulation)
+- Test strategy: Manual verification by running scripts and entering invalid inputs
+- Verify scripts re-prompt on bad input instead of crashing with ValueError/TypeError
+- Document this pattern in PRD acceptance criteria as "Test: manual verification"
+
+### Pattern: Input Validation Helpers
+- Define helper functions at module level (after imports, before main loop)
+- Each helper takes `prompt_text` and optional `default` parameter
+- Helpers handle the prompt loop internally, caller gets validated value
+- Better UX than catching exceptions at call site - separation of concerns
+
 ## Feature-10: Data Integrity Foundations - DIF-005
 
 ### Duplicate Detection in Import Wizard

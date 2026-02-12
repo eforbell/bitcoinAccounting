@@ -6,6 +6,21 @@
 - Import Wizard wallet selector: Use `_mount_wizard_wallet_selector()` with `_WIZARD_WALLET_MAP`; `_get_wizard_wallet_value(select_id)` reads effective value; display toggled via `new_row.display` (not CSS classes)
 - Textual CSS class gotcha: CSS `.new-wallet-row { display: none }` overrides `widget.display = True` set programmatically; use `display` property without conflicting CSS rules
 - Duplicate detection in Import Wizard: Call `detect_duplicates(transactions, app.crypto.backend)` in `show_step_3()`; store results in instance var; show warning banner with Static widget; mark duplicates with ⚠ prefix
+- CLI input validation: Use `prompt_float()/prompt_int()` helpers with try/except around conversions; re-prompt on ValueError; strip() all wallet/exchange name inputs
+
+## 2026-02-12 - DIF-006
+- What was implemented: Input validation with re-prompting for all CLI recording scripts (buySats, sell, transfer, earnInterest); whitespace stripping on wallet/exchange inputs
+- Files changed:
+  - `src/scripts/buySats` (added prompt_float/prompt_int helpers; validate quantity, total_cost, fee, withdraw_delay; strip exchange, withdraw_wallet)
+  - `src/scripts/sell` (added prompt_float/prompt_int helpers; validate quantity, total_proceeds, fee, withdraw_delay; strip wallet_source, exchange)
+  - `src/scripts/transfer` (added prompt_float helper; validate amount, fee; strip from_wallet, to_wallet)
+  - `src/scripts/earnInterest` (added prompt_float helper; validate amount; strip exchange)
+- **Learnings:**
+  - Interactive prompt scripts should have validation at input time, not at conversion time
+  - Helper functions with infinite retry loops provide better UX than script crash on invalid input
+  - Strip whitespace immediately after prompting: `session.prompt(...).strip()` for wallet/exchange names
+  - Test strategy: Manual verification (these scripts use prompt_toolkit for interactive input, not easily unit-testable)
+---
 
 ## 2026-02-12 - DIF-005
 - What was implemented: Duplicate detection in TUI Import Wizard step 3 (preview); warning banner when duplicates found; duplicate transactions marked with ⚠ prefix in preview table; duplicate count shown in dry-run results

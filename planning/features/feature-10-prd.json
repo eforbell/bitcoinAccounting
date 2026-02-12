@@ -108,7 +108,8 @@
       ],
       "priority": 6,
       "estimatedLines": "+40 (error handling wrappers in 4 scripts)",
-      "testStrategy": "Manual: run each script, enter invalid input, verify re-prompt instead of crash"
+      "testStrategy": "Manual: run each script, enter invalid input, verify re-prompt instead of crash",
+      "passes": true
     }
   ],
   "riskAssessment": {

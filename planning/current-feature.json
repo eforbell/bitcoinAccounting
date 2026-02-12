@@ -11,7 +11,7 @@
     {"id": "DIF-003", "title": "Add wallet selector to Record Transaction screen (Sell, Transfer, Interest forms)", "status": "completed"},
     {"id": "DIF-004", "title": "Add wallet selector to Import Wizard withdraw-to field", "status": "completed"},
     {"id": "DIF-005", "title": "Add duplicate detection to TUI Import Wizard", "status": "completed"},
-    {"id": "DIF-006", "title": "Add input validation to CLI recording scripts", "status": "pending"}
+    {"id": "DIF-006", "title": "Add input validation to CLI recording scripts", "status": "completed"}
   ],
   "completedFeatures": [
     {
