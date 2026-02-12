@@ -79,12 +79,19 @@ class CustodyBreakdown(Static):
     }
     """
 
-    def __init__(self) -> None:
+    def __init__(self, custody_data: dict[str, float] | None = None) -> None:
         super().__init__(id="custody-breakdown")
+        self._pending_data = custody_data
 
     def compose(self) -> ComposeResult:
         yield Label("Custody Breakdown", classes="section-title")
         yield Container(id="custody-content")
+
+    def on_mount(self) -> None:
+        """Populate with initial data once children are mounted."""
+        if self._pending_data is not None:
+            self.update_custody(self._pending_data)
+            self._pending_data = None
 
     def update_custody(self, custody_data: dict[str, float]) -> None:
         """Update custody breakdown display."""
@@ -133,12 +140,25 @@ class RecentTransactions(Static):
     }
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        headers: list[str] | None = None,
+        transactions: list[dict[str, Any]] | None = None,
+    ) -> None:
         super().__init__(id="recent-transactions")
+        self._pending_headers = headers
+        self._pending_transactions = transactions
 
     def compose(self) -> ComposeResult:
         yield Label("Recent Transactions (Last 5)", classes="section-title")
         yield DataTable(id="tx-table")
+
+    def on_mount(self) -> None:
+        """Populate with initial data once children are mounted."""
+        if self._pending_headers is not None and self._pending_transactions is not None:
+            self.update_transactions(self._pending_headers, self._pending_transactions)
+            self._pending_headers = None
+            self._pending_transactions = None
 
     def update_transactions(self, headers: list[str], transactions: list[dict[str, Any]]) -> None:
         """Update transaction table with recent data."""
@@ -388,17 +408,15 @@ Press [bold]?[/bold] for help anytime."""
         actions_row.mount(Button("Tax/Report [T]", id="btn-tax"))
         actions_row.mount(Button("Visualize [V]", id="btn-viz"))
 
-        # Custody breakdown - mount first, then update
-        custody_widget = CustodyBreakdown()
+        # Custody breakdown - pass data to constructor, on_mount populates
+        custody_widget = CustodyBreakdown(custody_data=self._data.get("custody", {}))
         container.mount(custody_widget)
-        custody_widget.update_custody(self._data.get("custody", {}))
 
-        # Recent transactions - mount first, then update
-        tx_widget = RecentTransactions()
-        container.mount(tx_widget)
+        # Recent transactions - pass data to constructor, on_mount populates
         headers = self._data.get("tx_headers", [])
         transactions = self._data.get("transactions", [])
-        tx_widget.update_transactions(headers, transactions)
+        tx_widget = RecentTransactions(headers=headers, transactions=transactions)
+        container.mount(tx_widget)
 
     @work(thread=True)
     def load_dashboard_data(self, refresh_only: bool = False) -> None:
