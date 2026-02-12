@@ -1,5 +1,84 @@
-
 ## Codebase Patterns
+- Whitespace normalization: LedgerWriter.strip() on exchange param at top of each method; guard None with isinstance check in import_transactions
+- Wallet selector pattern: Use `_mount_wallet_selector(container, label, select_id)` shared helper; IDs from `_WALLET_SELECT_MAP`; `_get_exchange_value(select_id)` reads from Select or Input
+- Textual Select._options: Stored as list of (prompt, value) tuples, not objects with .value attribute
+- Textual remove_children() is async: IDs not deregistered immediately; use `_sync_clear_children()` when mounting new widgets with same IDs in same handler
+- Import Wizard wallet selector: Use `_mount_wizard_wallet_selector()` with `_WIZARD_WALLET_MAP`; `_get_wizard_wallet_value(select_id)` reads effective value; display toggled via `new_row.display` (not CSS classes)
+- Textual CSS class gotcha: CSS `.new-wallet-row { display: none }` overrides `widget.display = True` set programmatically; use `display` property without conflicting CSS rules
+- Duplicate detection in Import Wizard: Call `detect_duplicates(transactions, app.crypto.backend)` in `show_step_3()`; store results in instance var; show warning banner with Static widget; mark duplicates with ⚠ prefix
+- CLI input validation: Use `prompt_float()/prompt_int()` helpers with try/except around conversions; re-prompt on ValueError; strip() all wallet/exchange name inputs
+
+## 2026-02-12 - DIF-006
+- What was implemented: Input validation with re-prompting for all CLI recording scripts (buySats, sell, transfer, earnInterest); whitespace stripping on wallet/exchange inputs
+- Files changed:
+  - `src/scripts/buySats` (added prompt_float/prompt_int helpers; validate quantity, total_cost, fee, withdraw_delay; strip exchange, withdraw_wallet)
+  - `src/scripts/sell` (added prompt_float/prompt_int helpers; validate quantity, total_proceeds, fee, withdraw_delay; strip wallet_source, exchange)
+  - `src/scripts/transfer` (added prompt_float helper; validate amount, fee; strip from_wallet, to_wallet)
+  - `src/scripts/earnInterest` (added prompt_float helper; validate amount; strip exchange)
+- **Learnings:**
+  - Interactive prompt scripts should have validation at input time, not at conversion time
+  - Helper functions with infinite retry loops provide better UX than script crash on invalid input
+  - Strip whitespace immediately after prompting: `session.prompt(...).strip()` for wallet/exchange names
+  - Test strategy: Manual verification (these scripts use prompt_toolkit for interactive input, not easily unit-testable)
+---
+
+## 2026-02-12 - DIF-005
+- What was implemented: Duplicate detection in TUI Import Wizard step 3 (preview); warning banner when duplicates found; duplicate transactions marked with ⚠ prefix in preview table; duplicate count shown in dry-run results
+- Files changed:
+  - `src/python/tui/screens/imports.py` (imported `detect_duplicates` from validation; added `duplicate_transactions` instance var; modified `show_step_3()` to call detection and show warning banner; modified `show_results()` to include duplicate count)
+  - `tests/test_tui_imports.py` (added 5 tests in TestImportWizardDuplicateDetection class with mocked detect_duplicates)
+- **Learnings:**
+  - Access database backend via `app.crypto.backend` when screen needs to query database
+  - Use `id(tx)` for quick lookup in set when marking duplicates (faster than comparing dict contents)
+  - Mock imports validation functions with `patch('tui.screens.imports.detect_duplicates', return_value=[...])` in tests
+  - Static widget has no `.renderable` attribute - just verify widget exists in tests, don't try to read content
+---
+
+## 2026-02-12 - DIF-004
+- What was implemented: Wallet selector dropdowns on Import Wizard step 2 (withdraw-to and wallet-name) replacing plain Select widgets; shared `_mount_wizard_wallet_selector()` helper; `_get_wizard_wallet_value()` for reading effective wallet name
+- Files changed:
+  - `src/python/tui/screens/imports.py` (added `_WIZARD_WALLET_MAP`, `_load_wallet_choices`, `_mount_wizard_wallet_selector`, `on_select_changed`, `_get_wizard_wallet_value`; refactored `show_step_2` and `prepare_preview`)
+  - `tests/test_data_integrity.py` (added 5 async TUI tests across 2 new test classes)
+- **Learnings:**
+  - Textual CSS `display: none` on a class overrides programmatic `widget.display = True` - avoid conflicting CSS rules; use `display` property directly instead
+  - `load_wallets()` @work(thread=True) completes during `pilot.pause()` - tests must clear `screen.wallet_names = []` to simulate empty DB
+  - Textual Select value is `Select.BLANK` after construction even when `value=X` is passed - don't rely on constructor value in tests
+---
+
+## 2026-02-12 - DIF-003
+- What was implemented: Wallet selector dropdowns on Sell, Transfer, Interest forms; shared `_mount_wallet_selector()` helper; `_sync_clear_children()` for form switching
+- Files changed:
+  - `src/python/tui/screens/record_transaction.py` (extracted `_mount_wallet_selector`, `_sync_clear_children`, `_WALLET_SELECT_MAP`; refactored all 4 forms + toggle helpers to use shared wallet selector)
+  - `tests/test_data_integrity.py` (added 9 async TUI tests across 3 new test classes)
+- **Learnings:**
+  - Textual `remove_children()` defers ID deregistration to async message loop; mounting widgets with same IDs in same sync handler causes `DuplicateIds`
+  - Fix: manually call `widget._parent._nodes._remove(widget)` + `app._registry.discard(widget)` after `remove_children()` for immediate sync deregistration
+  - `_WALLET_SELECT_MAP` dict centralizes select_id → (row_id, input_id) mapping; makes `on_select_changed` and `_get_exchange_value` generic
+---
+
+## 2026-02-12 - DIF-002
+- What was implemented: Wallet selector dropdown on Buy form replacing free-text Input
+- Files changed:
+  - `src/python/tui/screens/record_transaction.py` (added `_load_wallet_choices`, `_get_exchange_value`, `on_select_changed`, replaced Buy form exchange Input with Select + new-wallet-row)
+  - `tests/test_data_integrity.py` (added 4 async TUI tests for wallet selector)
+- **Learnings:**
+  - Textual `Select._options` is a list of (prompt, value) tuples, not objects
+  - CSS class toggling (`add_class`/`remove_class`) is the cleanest way to show/hide rows
+  - `_get_exchange_value()` helper encapsulates Select vs Input logic for reuse
+---
+
+## 2026-02-12 - DIF-001
+- What was implemented: Whitespace stripping on wallet/exchange names at the storage layer
+- Files changed:
+  - `src/python/db/queries/ledger.py` (added `exchange = exchange.strip()` to all 6 methods)
+  - `src/python/db/queries/wallet.py` (added `account = account.strip()` to get_balance_by_account)
+  - `src/python/cryptoAccounts.py` (strip exchange in import_transactions loop with None guard)
+  - `tests/test_data_integrity.py` (new - 11 tests across 3 classes)
+- **Learnings:**
+  - Must guard `.strip()` with `isinstance(x, str)` when the field could be None (error handling test passes None)
+  - Normalization at storage layer is purely additive — zero regressions on 26 existing tests
+---
+
 - Static widget content: No `.renderable` attribute - check status via CSS classes (`.has_class("error")`)
 - Viz package pattern: All viz classes take `(backend, config)` and return `Path` from `.generate()`
 - Textual Label API: Use `label.content` to read text (NOT `.renderable` - removed in v7.5+)

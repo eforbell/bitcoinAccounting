@@ -2,6 +2,48 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-10: Data Integrity Foundations - DIF-006
+
+### CLI Input Validation with Re-Prompting
+- Added `prompt_float()` and `prompt_int()` helper functions to all CLI recording scripts (buySats, sell, transfer, earnInterest)
+- Helpers use infinite retry loops with try/except around float()/int() conversions
+- On ValueError, print user-friendly error message and re-prompt (instead of crashing)
+- Pattern: `while True: try: return float(session.prompt(...)) except ValueError: print("Invalid...")`
+- Strip whitespace from all wallet/exchange name inputs: `session.prompt(...).strip()`
+
+### Interactive Script Testing Strategy
+- Interactive prompt_toolkit scripts are not easily unit-testable (require user input simulation)
+- Test strategy: Manual verification by running scripts and entering invalid inputs
+- Verify scripts re-prompt on bad input instead of crashing with ValueError/TypeError
+- Document this pattern in PRD acceptance criteria as "Test: manual verification"
+
+### Pattern: Input Validation Helpers
+- Define helper functions at module level (after imports, before main loop)
+- Each helper takes `prompt_text` and optional `default` parameter
+- Helpers handle the prompt loop internally, caller gets validated value
+- Better UX than catching exceptions at call site - separation of concerns
+
+## Feature-10: Data Integrity Foundations - DIF-005
+
+### Duplicate Detection in Import Wizard
+- Added duplicate detection to Import Wizard step 3 (preview) using existing `detect_duplicates()` from `imports/validation.py`
+- Access database backend via `app.crypto.backend` when screen needs DatabaseBackend reference
+- Show warning banner with `Static` widget when duplicates detected (yellow styling with `[yellow]...`[/yellow] Rich markup)
+- Mark duplicate transactions in preview table with ⚠ prefix by checking `id(tx)` against set of duplicate IDs
+- Display duplicate count in dry-run results footer
+- Warning is non-blocking - user can still proceed with import (matches CLI behavior)
+
+### Testing Duplicate Detection
+- Use `unittest.mock.patch()` to mock `detect_duplicates` in tests: `patch('tui.screens.imports.detect_duplicates', return_value=[...])`
+- Create sample duplicate dict with minimal fields: `trans_type`, `created_date`, `exchange`, `buy`/`sell`, `buy_curr`/`sell_curr`
+- Test existence of warning widget with `query_one("#duplicate-warning")` - don't try to read `.renderable` on Static (removed in Textual 7.5+)
+- 5 test cases: warning shown, no warning when empty, table marks duplicates, dry-run shows count, import proceeds despite duplicates
+
+### Pattern: Quick Duplicate Lookup
+- Store duplicates in set using `id(tx)` for O(1) lookup: `duplicate_set = {id(tx) for tx in duplicates}`
+- Check membership when rendering table rows: `if id(tx) in duplicate_set: trans_type = f"⚠ {trans_type}"`
+- This is faster than comparing full dict contents for each transaction
+
 ## Feature-9: Interactive TUI Application - TUI-011
 
 ### Visualization Screen with Chart Generation
