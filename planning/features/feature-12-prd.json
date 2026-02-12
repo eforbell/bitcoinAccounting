@@ -1,0 +1,150 @@
+{
+  "branchName": "feature/transaction-editor",
+  "projectName": "Transaction Editor",
+  "description": "Add the ability to view, edit, and delete individual ledger transactions from the TUI. Currently transactions are permanent once committed -- there is no edit, delete, or undo capability anywhere in the system. This feature adds a transaction detail view, inline editing with confirmation, and soft-delete with an audit trail.",
+  "principles": [
+    "Confirm Before Destroy - All destructive operations require explicit confirmation showing what will change",
+    "Audit Trail - Deleted transactions are soft-deleted (marked inactive) with a timestamp, not physically removed",
+    "Edit in Context - Transaction editing happens from the Ledger screen where the user is already viewing their data",
+    "Minimal Schema Changes - Prefer adding columns to the existing ledger table over creating new tables",
+    "Transfer Pair Awareness - Editing/deleting one side of a transfer pair warns about the other side"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest",
+    "tui": "Textual (ModalScreen, DataTable row selection)",
+    "database": "SQLite + PostgreSQL (via DatabaseBackend abstraction)",
+    "pattern": "Query Object Pattern - extend LedgerWriter with update/delete operations"
+  },
+  "userStories": [
+    {
+      "id": "TXE-001",
+      "title": "Add soft-delete column to ledger schema",
+      "acceptanceCriteria": [
+        "schema.py adds 'deleted INTEGER DEFAULT 0' and 'deleted_date TEXT' columns to ledger table via ALTER TABLE IF NOT EXISTS (backward compatible)",
+        "SQLite backend initialization runs ALTER TABLE to add columns if they don't exist (handles existing databases)",
+        "All existing queries that read from ledger add 'WHERE deleted = 0' filter (or 'WHERE deleted IS NULL OR deleted = 0' for safety)",
+        "TransactionQuery.get_transactions() excludes deleted rows by default, with optional include_deleted=True parameter",
+        "Existing tests pass unchanged (new columns default to 0/NULL)",
+        "New test: verify deleted rows excluded from get_transactions(), included when include_deleted=True"
+      ],
+      "priority": 1,
+      "estimatedLines": "+80 (schema migration + query filters + tests)",
+      "testStrategy": "pytest tests/test_db_backend.py tests/test_refactored_integration.py -v"
+    },
+    {
+      "id": "TXE-002",
+      "title": "Add transaction update and delete methods to LedgerWriter",
+      "acceptanceCriteria": [
+        "LedgerWriter.update_transaction(tx_id, **kwargs) updates specified fields on a ledger row by id",
+        "Updatable fields: createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, group, comment",
+        "LedgerWriter.soft_delete_transaction(tx_id) sets deleted=1 and deleted_date=now on a ledger row",
+        "LedgerWriter.restore_transaction(tx_id) sets deleted=0 and deleted_date=NULL",
+        "All methods validate that tx_id exists before operating",
+        "All methods return the updated row (or raise ValueError for missing tx_id)",
+        "Unit tests for update, soft-delete, restore, and missing tx_id error"
+      ],
+      "priority": 2,
+      "estimatedLines": "+150 (query methods + comprehensive tests)",
+      "testStrategy": "pytest tests/test_transaction_editor.py -v"
+    },
+    {
+      "id": "TXE-003",
+      "title": "Transaction detail modal from Ledger screen",
+      "acceptanceCriteria": [
+        "Pressing Enter on a selected row in the Ledger DataTable opens a TransactionDetailModal",
+        "Modal displays all transaction fields in a readable layout (field name: value pairs)",
+        "Modal shows transaction ID, date, type, buy amount/currency, sell amount/currency, fee, wallet, group, comment",
+        "Modal has action buttons: [Edit] [Delete] [Close]",
+        "Close dismisses modal with no changes",
+        "Test: pressing Enter opens modal with correct transaction data"
+      ],
+      "priority": 3,
+      "estimatedLines": "+180 (modal screen + CSS + tests)",
+      "testStrategy": "pytest tests/test_tui_app.py -k ledger -v"
+    },
+    {
+      "id": "TXE-004",
+      "title": "Edit Transaction modal",
+      "acceptanceCriteria": [
+        "Clicking [Edit] in detail modal opens EditTransactionModal with pre-populated Input fields for all editable columns",
+        "Date field uses text input with format validation (YYYY-MM-DD HH:MM:SS)",
+        "Numeric fields (buy, sell, fee) use Input with Number validator",
+        "Currency fields use text input (short, uppercase)",
+        "Wallet/exchange field uses wallet Select dropdown (same pattern as Feature-10)",
+        "Trans_type field uses Select dropdown (Deposit, Withdrawal, Trade, Spend, Mining, Interest Income)",
+        "Shows diff preview: 'Changes: exchange Strike → Coinbase, buy 0.5 → 5.0'",
+        "Confirm button applies changes via LedgerWriter.update_transaction()",
+        "Cancel returns to detail modal without changes",
+        "Test: edit modal saves changes, diff preview shows correct fields"
+      ],
+      "priority": 4,
+      "estimatedLines": "+250 (edit modal + diff logic + validation + tests)",
+      "testStrategy": "pytest tests/test_transaction_editor.py tests/test_tui_app.py -k edit -v"
+    },
+    {
+      "id": "TXE-005",
+      "title": "Delete Transaction with confirmation",
+      "acceptanceCriteria": [
+        "Clicking [Delete] in detail modal opens confirmation dialog",
+        "Dialog shows full transaction summary and 'Are you sure?' prompt",
+        "If transaction is part of a transfer pair (matching withdrawal+deposit within 72hrs, similar amount), shows warning: 'This transaction appears to be part of a transfer pair. The matching [deposit/withdrawal] will NOT be automatically deleted.'",
+        "Confirm calls LedgerWriter.soft_delete_transaction() and closes both modals, returning to Ledger with refreshed data",
+        "Cancel returns to detail modal",
+        "Deleted transactions no longer appear in Ledger (filtered by default)",
+        "Test: delete removes row from visible ledger, soft-delete flag set in database"
+      ],
+      "priority": 5,
+      "estimatedLines": "+120 (confirmation dialog + transfer detection + tests)",
+      "testStrategy": "pytest tests/test_transaction_editor.py -k delete -v"
+    },
+    {
+      "id": "TXE-006",
+      "title": "Show deleted transactions toggle in Ledger",
+      "acceptanceCriteria": [
+        "Ledger screen filter panel gets a 'Show Deleted' checkbox (default: unchecked)",
+        "When checked, deleted transactions appear in the table with strikethrough or dim styling and a 'DELETED' indicator",
+        "Pressing Enter on a deleted transaction opens detail modal with [Restore] button instead of [Edit] [Delete]",
+        "Restore calls LedgerWriter.restore_transaction() and refreshes the table",
+        "Status bar shows: 'Showing X transactions (Y deleted hidden)' when toggle is off",
+        "Test: toggle shows/hides deleted rows, restore makes transaction visible again"
+      ],
+      "priority": 6,
+      "estimatedLines": "+100 (toggle + styling + restore flow + tests)",
+      "testStrategy": "pytest tests/test_tui_app.py -k ledger -v"
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Schema migration (adding columns) must handle existing databases gracefully - ALTER TABLE can fail if column already exists",
+      "Adding WHERE deleted=0 to all queries is a wide-reaching change - must audit every query that reads from ledger",
+      "Editing buy/sell amounts directly impacts balance calculations and tax reports - user must understand the downstream effects"
+    ],
+    "medium": [
+      "Soft-delete adds a column read to every query - negligible performance impact but must be indexed if databases are large",
+      "Transfer pair detection for delete warning is heuristic-based (amount + timing) - may produce false positives"
+    ],
+    "low": [
+      "Modal patterns well-established in Feature-9 (Import Wizard) and Feature-11 (Wallet Management)",
+      "LedgerWriter extension follows Query Object pattern from Feature-8"
+    ]
+  },
+  "metrics": {
+    "estimatedTotalLines": "+880",
+    "storiesCount": 6,
+    "filesModified": [
+      "src/python/db/schema.py",
+      "src/python/db/queries/ledger.py",
+      "src/python/db/queries/transaction.py",
+      "src/python/db/queries/wallet.py",
+      "src/python/db/queries/balance.py",
+      "src/python/db/queries/trades.py",
+      "src/python/db/queries/income.py",
+      "src/python/db/queries/capital_gains.py",
+      "src/python/tui/screens/ledger.py"
+    ],
+    "filesCreated": [
+      "tests/test_transaction_editor.py"
+    ]
+  }
+}

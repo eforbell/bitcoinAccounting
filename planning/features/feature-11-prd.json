@@ -1,0 +1,153 @@
+{
+  "branchName": "feature/wallet-management",
+  "projectName": "Wallet Management Screen",
+  "description": "Add a dedicated TUI screen for managing wallet metadata -- create wallets explicitly, edit custody type and description, rename wallets (updating all ledger references), toggle active/inactive status, and merge duplicate wallets. Surfaces the wallets table that exists in the schema but has no management interface.",
+  "principles": [
+    "Explicit over Implicit - Wallets should be first-class entities users can manage, not just strings extracted from transactions",
+    "Safe Renames - Renaming a wallet updates all ledger rows atomically in a single transaction",
+    "No Data Loss - Merge and rename operations preserve all transaction history",
+    "Progressive Disclosure - Basic operations (create, edit) are prominent; advanced operations (merge, rename) are accessible but not in the way",
+    "Consistent Patterns - Follow established TUI screen patterns (Header, Container, DataTable, Footer)"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest",
+    "tui": "Textual (ModalScreen, DataTable, Select, Input)",
+    "database": "SQLite + PostgreSQL (via DatabaseBackend abstraction)",
+    "pattern": "Query Object Pattern - extend WalletQuery with write operations"
+  },
+  "userStories": [
+    {
+      "id": "WM-001",
+      "title": "Add wallet CRUD methods to WalletQuery",
+      "acceptanceCriteria": [
+        "WalletQuery.add_wallet(wallet_id, wallet_type, custody, description=None, notes=None) inserts into wallets table",
+        "WalletQuery.update_wallet(wallet_id, **kwargs) updates any combination of wallet_type, custody, description, active, notes",
+        "WalletQuery.rename_wallet(old_id, new_id) updates wallets.wallet_id AND all ledger.exchange references in a single database transaction",
+        "WalletQuery.merge_wallets(source_id, target_id) updates all ledger rows with source_id to target_id, then deletes the source wallet record",
+        "WalletQuery.sync_wallets_from_ledger() creates wallet records for any exchange values in ledger that don't exist in wallets table, using infer_custody_type() for defaults",
+        "All methods include appropriate error handling (duplicate wallet_id, missing wallet, etc.)",
+        "Unit tests for each method using in-memory SQLite"
+      ],
+      "priority": 1,
+      "estimatedLines": "+200 (query methods + tests)",
+      "testStrategy": "pytest tests/test_wallet_management.py -v"
+    },
+    {
+      "id": "WM-002",
+      "title": "Wallet Management TUI screen - wallet list with DataTable",
+      "acceptanceCriteria": [
+        "New WalletManagementScreen accessible from main menu via 'W' keybinding",
+        "Displays all wallets in a DataTable with columns: Name, Type, Custody, Description, Active, Tx Count",
+        "Tx Count column shows number of ledger rows referencing each wallet",
+        "Calls sync_wallets_from_ledger() on mount to ensure all transaction-referenced wallets appear",
+        "Wallet rows color-coded by custody type (green=self-custodied, yellow=custodial, blue=multisig)",
+        "Keybinding 'n' to create new wallet, 'e' to edit selected, 'd' to toggle active/inactive",
+        "Test: screen renders with wallet data, correct column count"
+      ],
+      "priority": 2,
+      "estimatedLines": "+200 (screen + CSS + tests)",
+      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v"
+    },
+    {
+      "id": "WM-003",
+      "title": "Create Wallet modal",
+      "acceptanceCriteria": [
+        "ModalScreen with form fields: Name (Input, required), Type (Select: exchange/hardware/software/mobile/paper/other), Custody (Select: self-custodied/custodial/multisig), Description (Input, optional), Notes (Input, optional)",
+        "Name field validates: not empty, not already existing (checks wallets table)",
+        "On submit, calls WalletQuery.add_wallet() and refreshes the wallet list",
+        "On cancel, dismisses without changes",
+        "Test: modal creates wallet, validation rejects duplicate name"
+      ],
+      "priority": 3,
+      "estimatedLines": "+150 (modal + CSS + tests)",
+      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v"
+    },
+    {
+      "id": "WM-004",
+      "title": "Edit Wallet modal",
+      "acceptanceCriteria": [
+        "ModalScreen pre-populated with selected wallet's current values",
+        "All fields editable except Name (shown as read-only label)",
+        "On submit, calls WalletQuery.update_wallet() with changed fields only",
+        "Refreshes wallet list on dismiss",
+        "Test: modal pre-fills values, update persists to database"
+      ],
+      "priority": 4,
+      "estimatedLines": "+100 (modal reuses Create pattern + tests)",
+      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v"
+    },
+    {
+      "id": "WM-005",
+      "title": "Rename Wallet with confirmation",
+      "acceptanceCriteria": [
+        "Keybinding 'r' on selected wallet opens rename modal with Input for new name",
+        "Shows warning: 'This will update X transactions in the ledger' (shows actual count)",
+        "Confirmation required: user must type the new name twice or click explicit Confirm button",
+        "On confirm, calls WalletQuery.rename_wallet() which updates wallets table and all ledger.exchange references atomically",
+        "Refreshes wallet list on completion",
+        "Test: rename updates wallet_id and all matching ledger.exchange rows"
+      ],
+      "priority": 5,
+      "estimatedLines": "+120 (modal + confirmation + tests)",
+      "testStrategy": "pytest tests/test_wallet_management.py -k rename -v"
+    },
+    {
+      "id": "WM-006",
+      "title": "Merge Wallets with confirmation",
+      "acceptanceCriteria": [
+        "Keybinding 'm' on selected wallet opens merge modal",
+        "Shows Select dropdown of other wallets to merge INTO (target wallet keeps its name)",
+        "Shows summary: 'Merge X transactions from [source] into [target]'",
+        "Confirmation required before proceeding",
+        "On confirm, calls WalletQuery.merge_wallets() - all source transactions reassigned to target, source wallet record deleted",
+        "Refreshes wallet list on completion",
+        "Test: merge reassigns all transactions, source wallet removed"
+      ],
+      "priority": 6,
+      "estimatedLines": "+120 (modal + confirmation + tests)",
+      "testStrategy": "pytest tests/test_wallet_management.py -k merge -v"
+    },
+    {
+      "id": "WM-007",
+      "title": "Update Getting Started guide and keyboard navigation",
+      "acceptanceCriteria": [
+        "GETTING_STARTED.md keyboard table includes 'W' for Wallet Management",
+        "Main menu includes Wallet Management option",
+        "Help screen includes wallet management keybindings",
+        "Feature-11 summary document completed"
+      ],
+      "priority": 7,
+      "estimatedLines": "+20 (documentation updates)",
+      "testStrategy": "Manual review"
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "rename_wallet() and merge_wallets() modify ledger data - must be atomic transactions with rollback on failure",
+      "Renaming a wallet used by many transactions could be slow on large databases - consider batch UPDATE"
+    ],
+    "medium": [
+      "sync_wallets_from_ledger() on screen mount adds a query on every open - should be fast but monitor",
+      "Merge operation deletes a wallet record - must confirm source wallet has no special significance"
+    ],
+    "low": [
+      "New screen follows established TUI patterns",
+      "WalletQuery extension follows Query Object pattern from Feature-8",
+      "All modal patterns proven in Import Wizard (Feature-9)"
+    ]
+  },
+  "metrics": {
+    "estimatedTotalLines": "+910",
+    "storiesCount": 7,
+    "filesModified": [
+      "src/python/db/queries/wallet.py",
+      "src/python/tui/app.py",
+      "GETTING_STARTED.md"
+    ],
+    "filesCreated": [
+      "src/python/tui/screens/wallet_management.py",
+      "tests/test_wallet_management.py"
+    ]
+  }
+}

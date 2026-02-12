@@ -1,0 +1,139 @@
+{
+  "branchName": "feature/data-integrity-foundations",
+  "projectName": "Data Integrity Foundations",
+  "description": "Prevent bad data from entering the system by replacing free-text wallet inputs with smart dropdowns, normalizing wallet names, adding duplicate detection to TUI imports, and trimming/validating all user inputs. These are quick wins that protect new users from the most common data entry mistakes.",
+  "principles": [
+    "Prevent over Repair - Stop bad data at the boundary, not after the fact",
+    "Existing Wallets First - Always offer known wallets before allowing free-text entry",
+    "Normalize at Storage Layer - Trim whitespace and enforce consistent casing at the lowest level",
+    "Non-Breaking - All changes must be backward compatible with existing databases",
+    "Incremental Delivery - Each story is independently shippable and testable"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest",
+    "tui": "Textual",
+    "database": "SQLite + PostgreSQL (via DatabaseBackend abstraction)",
+    "pattern": "Query Object Pattern (established in Feature-8)"
+  },
+  "userStories": [
+    {
+      "id": "DIF-001",
+      "title": "Normalize wallet names at the storage layer",
+      "acceptanceCriteria": [
+        "LedgerWriter methods (deposit, withdraw, trade, spend, mining, interest_income) strip leading/trailing whitespace from the exchange parameter before storing",
+        "CryptoAccounts.import_transactions() strips whitespace from exchange field on each transaction dict before passing to LedgerWriter",
+        "WalletQuery.get_balance_by_account() strips the account parameter before querying",
+        "Existing tests continue to pass with no changes (names already clean in test fixtures)",
+        "New unit tests: whitespace-padded exchange names are trimmed on storage and query"
+      ],
+      "priority": 1,
+      "estimatedLines": "+40 (normalization logic + tests)",
+      "testStrategy": "pytest tests/test_import_transactions.py tests/test_refactored_integration.py -v"
+    },
+    {
+      "id": "DIF-002",
+      "title": "Add wallet selector to Record Transaction screen (Buy form)",
+      "acceptanceCriteria": [
+        "Buy form replaces free-text Input for exchange with a Select dropdown populated from WalletQuery.get_wallets()",
+        "Dropdown includes all existing wallet names plus a '+ New Wallet...' option at the end",
+        "When '+ New Wallet...' is selected, an Input widget appears for typing a new name",
+        "New wallet names are stripped of whitespace before use",
+        "Default selection is first existing wallet (or '+ New Wallet...' if database is empty)",
+        "Existing preview and confirmation flow unchanged",
+        "Test: wallet selector populated from database, new wallet input appears on selection"
+      ],
+      "priority": 2,
+      "estimatedLines": "+80 (selector logic, dynamic show/hide, tests)",
+      "testStrategy": "pytest tests/test_tui_app.py -k record -v"
+    },
+    {
+      "id": "DIF-003",
+      "title": "Add wallet selector to Record Transaction screen (Sell, Transfer, Interest forms)",
+      "acceptanceCriteria": [
+        "Sell form: exchange field uses same wallet Select pattern as Buy form",
+        "Transfer form: both from-wallet and to-wallet fields use wallet Select with '+ New Wallet...' option",
+        "Interest form: exchange field uses same wallet Select pattern",
+        "All four forms share a common helper method for building the wallet selector widget",
+        "Test: each form type shows wallet dropdown, new wallet input, and strips whitespace"
+      ],
+      "priority": 3,
+      "estimatedLines": "+60 (reuse pattern from DIF-002, extend to 3 forms)",
+      "testStrategy": "pytest tests/test_tui_app.py -k record -v"
+    },
+    {
+      "id": "DIF-004",
+      "title": "Add wallet selector to Import Wizard withdraw-to field",
+      "acceptanceCriteria": [
+        "Import Wizard step 2: withdraw-to Select is populated from WalletQuery.get_wallets() (currently shows empty list for new users)",
+        "Includes '+ New Wallet...' option with Input fallback, same pattern as Record screen",
+        "For wallet imports: wallet-name selector also uses the same pattern",
+        "When database is empty, shows helpful placeholder text: 'No wallets yet - type a name below'",
+        "Test: wizard step 2 shows populated wallet dropdowns"
+      ],
+      "priority": 4,
+      "estimatedLines": "+50 (import wizard wallet selector updates + tests)",
+      "testStrategy": "pytest tests/test_tui_imports.py -v"
+    },
+    {
+      "id": "DIF-005",
+      "title": "Add duplicate detection to TUI Import Wizard",
+      "acceptanceCriteria": [
+        "Import Wizard step 3 (preview) calls detect_duplicates() from imports/validation.py on the parsed transactions",
+        "If duplicates found, shows warning banner: 'X potential duplicate(s) detected' with yellow styling",
+        "Duplicate transactions are marked in the preview table (e.g., row highlighted or prefixed with warning icon)",
+        "User can still proceed with import (warning, not blocker) - matches CLI behavior",
+        "Dry-run results also show duplicate count",
+        "Test: mock detect_duplicates returning results, verify warning shown in preview"
+      ],
+      "priority": 5,
+      "estimatedLines": "+60 (duplicate detection integration + warning UI + tests)",
+      "testStrategy": "pytest tests/test_tui_imports.py -v"
+    },
+    {
+      "id": "DIF-006",
+      "title": "Add input validation to CLI recording scripts",
+      "acceptanceCriteria": [
+        "buySats: wrap float() conversions for quantity, total_cost, fee in try/except with user-friendly error message and re-prompt",
+        "sell: same float() guarding for quantity, total_proceeds, fee",
+        "transfer: same float() guarding for amount, fee",
+        "earnInterest: same float() guarding for amount",
+        "All scripts: strip whitespace from exchange/wallet name inputs",
+        "Test: manual verification (scripts use interactive prompts, not easily unit-testable)"
+      ],
+      "priority": 6,
+      "estimatedLines": "+40 (error handling wrappers in 4 scripts)",
+      "testStrategy": "Manual: run each script, enter invalid input, verify re-prompt instead of crash"
+    }
+  ],
+  "riskAssessment": {
+    "high": [],
+    "medium": [
+      "Wallet selector on Record screen changes compose() layout - must verify existing form logic still works",
+      "Duplicate detection adds a database query during import preview - could slow down large imports"
+    ],
+    "low": [
+      "Whitespace trimming is additive and backward compatible",
+      "CLI script changes are isolated to input handling, not business logic",
+      "Import wizard already has wallet loading infrastructure (load_wallets method)"
+    ]
+  },
+  "metrics": {
+    "estimatedTotalLines": "+330",
+    "storiesCount": 6,
+    "filesModified": [
+      "src/python/db/queries/ledger.py",
+      "src/python/db/queries/wallet.py",
+      "src/python/cryptoAccounts.py",
+      "src/python/tui/screens/record_transaction.py",
+      "src/python/tui/screens/imports.py",
+      "src/scripts/buySats",
+      "src/scripts/sell",
+      "src/scripts/transfer",
+      "src/scripts/earnInterest"
+    ],
+    "filesCreated": [
+      "tests/test_data_integrity.py"
+    ]
+  }
+}

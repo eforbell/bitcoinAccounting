@@ -1,24 +1,17 @@
 {
-  "currentFeature": "feature-9",
-  "featureName": "Interactive TUI Application",
-  "prdPath": "planning/features/feature-9-prd.json",
-  "summaryPath": "planning/features/feature-9-summary.md",
-  "analysisPath": "planning/features/feature-9-analysis.md",
-  "branch": "feature/tui-application",
-  "status": "in_progress",
+  "currentFeature": "feature-10",
+  "featureName": "Data Integrity Foundations",
+  "prdPath": "planning/features/feature-10-prd.json",
+  "summaryPath": "planning/features/feature-10-summary.md",
+  "branch": "feature/data-integrity-foundations",
+  "status": "not_started",
   "stories": [
-    {"id": "TUI-001", "title": "Application shell, entry point, and main menu", "status": "completed"},
-    {"id": "TUI-002", "title": "Dashboard screen with portfolio summary", "status": "completed"},
-    {"id": "TUI-003", "title": "Textual CSS theme and styling", "status": "completed"},
-    {"id": "TUI-004", "title": "Portfolio screen with balances and wallet breakdown", "status": "completed"},
-    {"id": "TUI-005", "title": "Transaction ledger screen with filtering", "status": "completed"},
-    {"id": "TUI-006", "title": "Trade history and exchange liquidity screens", "status": "completed"},
-    {"id": "TUI-007", "title": "Record transaction screen (buy/sell/transfer/interest)", "status": "completed"},
-    {"id": "TUI-008", "title": "Import wizard screen with file picker and preview", "status": "completed"},
-    {"id": "TUI-009", "title": "Export transactions screen", "status": "completed"},
-    {"id": "TUI-010", "title": "Tax reporting screen (gains tracker, 1099-B, forecast)", "status": "completed"},
-    {"id": "TUI-011", "title": "Visualization screen with chart generation", "status": "completed"},
-    {"id": "TUI-012", "title": "Help system, keyboard shortcuts, and error handling polish", "status": "completed"}
+    {"id": "DIF-001", "title": "Normalize wallet names at the storage layer", "status": "pending"},
+    {"id": "DIF-002", "title": "Add wallet selector to Record Transaction screen (Buy form)", "status": "pending"},
+    {"id": "DIF-003", "title": "Add wallet selector to Record Transaction screen (Sell, Transfer, Interest forms)", "status": "pending"},
+    {"id": "DIF-004", "title": "Add wallet selector to Import Wizard withdraw-to field", "status": "pending"},
+    {"id": "DIF-005", "title": "Add duplicate detection to TUI Import Wizard", "status": "pending"},
+    {"id": "DIF-006", "title": "Add input validation to CLI recording scripts", "status": "pending"}
   ],
   "completedFeatures": [
     {
@@ -84,12 +77,23 @@
       "mergedDate": "2026-02-11",
       "stories": 10,
       "notes": "Refactored cryptoAccounts.py from 918-line monolithic class into 4 specialized query classes (TransactionQuery, LedgerWriter, CapitalGainCalculator, WalletQuery) using Query Object pattern with dependency injection. 54% reduction in main class size, 1,264 lines of new tests, zero regressions."
+    },
+    {
+      "featureId": "feature-9",
+      "featureName": "Interactive TUI Application",
+      "branch": "feature/tui-application",
+      "mergedDate": "2026-02-12",
+      "stories": 12,
+      "notes": "Full-featured terminal UI with Textual: dashboard, portfolio, ledger with summary stats, trade history, record transaction, import wizard with file browser, export, tax reporting (gains/1099-B/forecast), visualizations, and help system. Keyboard and mouse driven."
     }
   ],
   "futureEnhancements": [
-    "Feature #10: Multi-coin support (ETH, other assets)",
-    "Feature #11: Web UI layer (Flask/FastAPI)",
-    "Feature #12: Tax optimization tools",
-    "Feature #13: Pair price management (import/export)"
+    "Feature #10: Data Integrity Foundations (smart wallet inputs, whitespace normalization, TUI duplicate detection, CLI input guarding)",
+    "Feature #11: Wallet Management Screen (create, edit, rename, merge, deactivate wallets)",
+    "Feature #12: Transaction Editor (view, edit, soft-delete, restore transactions from Ledger screen)",
+    "Feature #13: Multi-coin support (ETH, other assets)",
+    "Feature #14: Web UI layer (Flask/FastAPI)",
+    "Feature #15: Tax optimization tools",
+    "Feature #16: Pair price management (import/export)"
   ]
 }
