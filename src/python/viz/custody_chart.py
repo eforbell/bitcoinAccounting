@@ -14,14 +14,8 @@ import matplotlib.pyplot as plt
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
-try:
-    # When imported from tests
-    from src.python.db.backend import DatabaseBackend
-    from src.python.viz.config import VizConfig
-except ModuleNotFoundError:
-    # When running from CLI with sys.path manipulation
-    from db.backend import DatabaseBackend  # type: ignore[import]
-    from viz.config import VizConfig  # type: ignore[import]
+from db.backend import DatabaseBackend
+from viz.config import VizConfig
 
 
 class CustodyChart:

@@ -15,18 +15,10 @@ import pandas as pd
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
-try:
-    # When imported from tests
-    from src.python.db.backend import DatabaseBackend
-    from src.python.viz.config import VizConfig
-    from src.python.db.queries import TradeQuery
-    from src.python.viz.data_fetcher import PriceDataFetcher
-except ModuleNotFoundError:
-    # When running from CLI with sys.path manipulation
-    from db.backend import DatabaseBackend  # type: ignore[import]
-    from viz.config import VizConfig  # type: ignore[import]
-    from db.queries import TradeQuery  # type: ignore[import]
-    from viz.data_fetcher import PriceDataFetcher  # type: ignore[import]
+from db.backend import DatabaseBackend
+from viz.config import VizConfig
+from db.queries import TradeQuery
+from viz.data_fetcher import PriceDataFetcher
 
 
 class OrangePlot:
@@ -192,14 +184,17 @@ class OrangePlot:
         cumulative_cost = 0.0
         cumulative_btc = 0.0
 
-        # Sort purchases by date
+        # Sort purchases by date (strip timezone for consistent comparison)
+        def _to_naive(d: Any) -> datetime:
+            if isinstance(d, str):
+                d = datetime.fromisoformat(d.replace("Z", "+00:00"))
+            if hasattr(d, 'tzinfo') and d.tzinfo is not None:
+                d = d.replace(tzinfo=None)
+            return d
+
         sorted_purchases = sorted(
             purchases,
-            key=lambda t: (
-                t["date"]
-                if isinstance(t["date"], datetime)
-                else datetime.fromisoformat(t["date"].replace("Z", "+00:00"))
-            ),
+            key=lambda t: _to_naive(t["date"]),
         )
 
         for purchase in sorted_purchases:

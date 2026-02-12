@@ -9,22 +9,12 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from reportlab.pdfgen.canvas import Canvas
 
-try:
-    # When imported from tests
-    from src.python.db.backend import DatabaseBackend
-    from src.python.viz.config import VizConfig
-    from src.python.viz.orange_plot import OrangePlot
-    from src.python.viz.balance_chart import BalanceChart
-    from src.python.viz.custody_chart import CustodyChart
-    from src.python.db.queries import TradeQuery, BalanceCalculator
-except ModuleNotFoundError:
-    # When running from CLI with sys.path manipulation
-    from db.backend import DatabaseBackend  # type: ignore[import]
-    from viz.config import VizConfig  # type: ignore[import]
-    from viz.orange_plot import OrangePlot  # type: ignore[import]
-    from viz.balance_chart import BalanceChart  # type: ignore[import]
-    from viz.custody_chart import CustodyChart  # type: ignore[import]
-    from db.queries import TradeQuery, BalanceCalculator  # type: ignore[import]
+from db.backend import DatabaseBackend
+from viz.config import VizConfig
+from viz.orange_plot import OrangePlot
+from viz.balance_chart import BalanceChart
+from viz.custody_chart import CustodyChart
+from db.queries import TradeQuery, BalanceCalculator
 
 # Optional dependencies - only needed when actually generating PDFs
 try:
