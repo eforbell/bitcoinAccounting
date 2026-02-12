@@ -2,6 +2,27 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-10: Data Integrity Foundations - DIF-005
+
+### Duplicate Detection in Import Wizard
+- Added duplicate detection to Import Wizard step 3 (preview) using existing `detect_duplicates()` from `imports/validation.py`
+- Access database backend via `app.crypto.backend` when screen needs DatabaseBackend reference
+- Show warning banner with `Static` widget when duplicates detected (yellow styling with `[yellow]...`[/yellow] Rich markup)
+- Mark duplicate transactions in preview table with ⚠ prefix by checking `id(tx)` against set of duplicate IDs
+- Display duplicate count in dry-run results footer
+- Warning is non-blocking - user can still proceed with import (matches CLI behavior)
+
+### Testing Duplicate Detection
+- Use `unittest.mock.patch()` to mock `detect_duplicates` in tests: `patch('tui.screens.imports.detect_duplicates', return_value=[...])`
+- Create sample duplicate dict with minimal fields: `trans_type`, `created_date`, `exchange`, `buy`/`sell`, `buy_curr`/`sell_curr`
+- Test existence of warning widget with `query_one("#duplicate-warning")` - don't try to read `.renderable` on Static (removed in Textual 7.5+)
+- 5 test cases: warning shown, no warning when empty, table marks duplicates, dry-run shows count, import proceeds despite duplicates
+
+### Pattern: Quick Duplicate Lookup
+- Store duplicates in set using `id(tx)` for O(1) lookup: `duplicate_set = {id(tx) for tx in duplicates}`
+- Check membership when rendering table rows: `if id(tx) in duplicate_set: trans_type = f"⚠ {trans_type}"`
+- This is faster than comparing full dict contents for each transaction
+
 ## Feature-9: Interactive TUI Application - TUI-011
 
 ### Visualization Screen with Chart Generation

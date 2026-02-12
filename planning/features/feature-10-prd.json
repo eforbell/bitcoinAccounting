@@ -76,7 +76,8 @@
       ],
       "priority": 4,
       "estimatedLines": "+50 (import wizard wallet selector updates + tests)",
-      "testStrategy": "pytest tests/test_tui_imports.py -v"
+      "testStrategy": "pytest tests/test_tui_imports.py -v",
+      "passes": true
     },
     {
       "id": "DIF-005",
@@ -91,7 +92,8 @@
       ],
       "priority": 5,
       "estimatedLines": "+60 (duplicate detection integration + warning UI + tests)",
-      "testStrategy": "pytest tests/test_tui_imports.py -v"
+      "testStrategy": "pytest tests/test_tui_imports.py -v",
+      "passes": true
     },
     {
       "id": "DIF-006",
