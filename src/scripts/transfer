@@ -12,12 +12,22 @@ from datetime import datetime, timedelta
 from prompt_toolkit.shortcuts import yes_no_dialog
 now = datetime.now()
 session = PromptSession()
+
+def prompt_float(prompt_text: str, default: str = "") -> float:
+	"""Prompt for a float value with validation and re-prompting on error."""
+	while True:
+		try:
+			value = session.prompt(prompt_text, default=default)
+			return float(value)
+		except ValueError:
+			print(f"Invalid number. Please enter a valid numeric value.")
+
 while True:
 	try:
-		from_wallet = session.prompt("From wallet: ", default="Ledger-2")
-		to_wallet = session.prompt("To wallet: ", default="Vault")
-		amount = session.prompt("Received amount (after fee):")
-		fee = session.prompt("Fee: ", default="0.00001500")
+		from_wallet = session.prompt("From wallet: ", default="Ledger-2").strip()
+		to_wallet = session.prompt("To wallet: ", default="Vault").strip()
+		amount = prompt_float("Received amount (after fee):")
+		fee = prompt_float("Fee: ", default="0.00001500")
 		tx_date = None
 		while tx_date is None:
 			tx_data_raw = session.prompt("Enter tx time: ", validator=None, default=now.strftime("%Y-%m-%d %H:%M:%S"))
@@ -32,7 +42,7 @@ while True:
 		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
 		if record_tx == 'Y' or record_tx == 'y':
 			crypto = CryptoAccounts()
-			crypto.transfer_funds(withdraw_date=tx_date, deposit_date=None, from_account=from_wallet, tx_coin='BTC', tx_amount=float(amount), to_account=to_wallet, fee_coin='BTC', fee_amount=float(fee))
+			crypto.transfer_funds(withdraw_date=tx_date, deposit_date=None, from_account=from_wallet, tx_coin='BTC', tx_amount=amount, to_account=to_wallet, fee_coin='BTC', fee_amount=fee)
 			print("Recorded transaction.")
 			print("New balance (Destination): " + str(crypto.get_balance_by_account("BTC", to_wallet)))
 			print("New balance (Source): " + str(crypto.get_balance_by_account("BTC", from_wallet)))

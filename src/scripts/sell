@@ -11,15 +11,33 @@ from datetime import datetime, timedelta
 now = datetime.now()
 session = PromptSession()
 
+def prompt_float(prompt_text: str, default: str = "") -> float:
+	"""Prompt for a float value with validation and re-prompting on error."""
+	while True:
+		try:
+			value = session.prompt(prompt_text, default=default)
+			return float(value)
+		except ValueError:
+			print(f"Invalid number. Please enter a valid numeric value.")
+
+def prompt_int(prompt_text: str, default: str = "") -> int:
+	"""Prompt for an integer value with validation and re-prompting on error."""
+	while True:
+		try:
+			value = session.prompt(prompt_text, default=default)
+			return int(value)
+		except ValueError:
+			print(f"Invalid number. Please enter a valid integer.")
+
 while True:
 	try:
-		wallet_source = session.prompt("Bitcoin wallet source: ", default="CC")
-		exchange = session.prompt("Exchange: ", default="Strike")
-		quantity = session.prompt("Quantity (BTC) sold: ")
+		wallet_source = session.prompt("Bitcoin wallet source: ", default="CC").strip()
+		exchange = session.prompt("Exchange: ", default="Strike").strip()
+		quantity = prompt_float("Quantity (BTC) sold: ")
 		# Prompt for total proceeds in USD rather than per-BTC price. The
 		# per-BTC price is computed for informational/display purposes.
-		total_usd_input = session.prompt("Total proceeds (USD): ")
-		fee = session.prompt("Fee (USD): ", default="0")
+		total_usd = prompt_float("Total proceeds (USD): ")
+		fee_usd = prompt_float("Fee (USD): ", default="0")
 
 		tx_date = None
 		while tx_date is None:
@@ -29,18 +47,16 @@ while True:
 			except ValueError:
 				print("Invalid date format. Use YYYY-MM-DD HH:MM:SS")
 
-		quantity_f = float(quantity)
-		total_usd = float(total_usd_input)
 		# Compute per-BTC price for display if quantity non-zero
-		computed_price = (total_usd / quantity_f) if quantity_f != 0 else None
+		computed_price = (total_usd / quantity) if quantity != 0 else None
 		print(f"Wallet source: {wallet_source}")
 		print(f"Exchange: {exchange}")
 		print(f"Quantity: {quantity} BTC")
 		if computed_price is not None:
 			print(f"Price (computed): ${computed_price:.2f}/BTC")
 		print(f"Total: ${total_usd:.2f}")
-		print(f"Fee: ${fee}")
-		print(f"Net: ${total_usd - float(fee):.2f}")
+		print(f"Fee: ${fee_usd}")
+		print(f"Net: ${total_usd - fee_usd:.2f}")
 		print(f"Date: {tx_date}")
 
 		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
@@ -57,33 +73,33 @@ while True:
 						to_account=exchange,
 					withdraw_date=withdraw_date,
 					deposit_date=deposit_date,
-					tx_amount=float(quantity),
+					tx_amount=quantity,
 					tx_coin="BTC"
 				)
-				
+
 				# Step 2: Execute trade (BTC -> USD)
 				crypto.execute_trade(
 					exchange=exchange,
 					trade_date=tx_date,
 					buy=total_usd,
 					buy_curr="USD",
-					sell=float(quantity),
+					sell=quantity,
 					sell_curr="BTC",
-					fee=float(fee),
+					fee=fee_usd,
 					fee_curr="USD"
 				)
 				tx_date = tx_date + timedelta(seconds=30)
-				
+
 				# Step 3: Optional withdrawal of USD back to wallet
 				withdrawing = session.prompt("Do you want to withdraw USD? (Y/N) ")
 				if withdrawing == 'Y' or withdrawing == 'y':
-					withdraw_delay_minutes = session.prompt("Withdraw delay (min): ", default="0")
-					withdraw_date = tx_date + timedelta(minutes=int(withdraw_delay_minutes))
+					withdraw_delay_minutes = prompt_int("Withdraw delay (min): ", default="0")
+					withdraw_date = tx_date + timedelta(minutes=withdraw_delay_minutes)
 					crypto.withdraw(
 						withdraw_date=withdraw_date,
 						sell=total_usd,
 						sell_curr="USD",
-						fee=float(fee),
+						fee=fee_usd,
 						fee_curr="USD",
 						exchange=wallet_source
 					)

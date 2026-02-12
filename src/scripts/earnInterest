@@ -13,11 +13,20 @@ from datetime import datetime
 now = datetime.now()
 session = PromptSession()
 
+def prompt_float(prompt_text: str, default: str = "") -> float:
+    """Prompt for a float value with validation and re-prompting on error."""
+    while True:
+        try:
+            value = session.prompt(prompt_text, default=default)
+            return float(value)
+        except ValueError:
+            print(f"Invalid number. Please enter a valid numeric value.")
+
 while True:
     try:
-        exchange = session.prompt("Exchange/Source: ", default="River")
+        exchange = session.prompt("Exchange/Source: ", default="River").strip()
         currency = session.prompt("Currency: ", default="BTC")
-        amount = session.prompt(f"Amount ({currency}): ")
+        amount = prompt_float(f"Amount ({currency}): ")
         interest_type = session.prompt("Type (Interest/Staking/Yield): ", default="Interest Income")
         
         tx_date = None
@@ -41,7 +50,7 @@ while True:
             try:
                 crypto.interest(
                     interest_date=tx_date,
-                    buy=float(amount),
+                    buy=amount,
                     buy_curr=currency,
                     exchange=exchange,
                     group=""
