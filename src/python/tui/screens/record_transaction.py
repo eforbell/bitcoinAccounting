@@ -31,6 +31,15 @@ if TYPE_CHECKING:
 
 NEW_WALLET_SENTINEL = "__new_wallet__"
 
+# Mapping of Select widget IDs to their (new-wallet-row-id, new-wallet-input-id) pairs.
+_WALLET_SELECT_MAP: dict[str, tuple[str, str]] = {
+    "exchange": ("new-wallet-row", "new-wallet-input"),
+    "from_wallet": ("new-from-wallet-row", "new-from-wallet-input"),
+    "to_wallet": ("new-to-wallet-row", "new-to-wallet-input"),
+    "withdraw_wallet": ("new-withdraw-wallet-row", "new-withdraw-wallet-input"),
+    "wallet_source": ("new-wallet-source-row", "new-wallet-source-input"),
+}
+
 
 class RecordTransactionScreen(Screen[None]):
     """Screen for recording transactions manually."""
@@ -188,12 +197,14 @@ class RecordTransactionScreen(Screen[None]):
         choices.append(("+ New Wallet...", NEW_WALLET_SENTINEL))
         return choices
 
-    def _get_exchange_value(self, select_id: str = "exchange", input_id: str = "new-wallet-input") -> str:
+    def _get_exchange_value(self, select_id: str = "exchange", input_id: str | None = None) -> str:
         """Get the effective exchange/wallet name from Select or new-wallet Input.
 
         Returns stripped wallet name from the Select, or from the new-wallet
         Input if '+ New Wallet...' is selected.
         """
+        if input_id is None:
+            input_id = _WALLET_SELECT_MAP.get(select_id, ("", "new-wallet-input"))[1]
         try:
             sel = self.query_one(f"#{select_id}", Select)
             val = sel.value
@@ -203,6 +214,59 @@ class RecordTransactionScreen(Screen[None]):
             return str(val).strip()
         except Exception:
             return ""
+
+    def _sync_clear_children(self, container: Container | Vertical) -> None:
+        """Remove all children, immediately deregistering widget IDs.
+
+        Textual's ``remove_children()`` defers ID cleanup to the async
+        message loop, causing ``DuplicateIds`` when new widgets with the
+        same IDs are mounted in the same handler.  This method triggers the
+        normal async cleanup *and* forces synchronous deregistration so IDs
+        can be reused immediately.
+        """
+        children = list(container.children)
+        if not children:
+            return
+        # Collect the full subtree before mutating anything
+        all_widgets: list[Any] = []
+        for child in children:
+            all_widgets.append(child)
+            all_widgets.extend(child.walk_children(with_self=False))
+        # Start normal async cleanup (timers, message-loop shutdown)
+        container.remove_children()
+        # Force synchronous removal from NodeLists and app registry
+        for widget in reversed(all_widgets):
+            if widget._parent is not None:
+                widget._parent._nodes._remove(widget)
+            self.app._registry.discard(widget)
+
+    def _mount_wallet_selector(
+        self,
+        container: Container | Vertical,
+        label_text: str,
+        select_id: str,
+    ) -> None:
+        """Mount a wallet Select dropdown with '+ New Wallet...' fallback Input.
+
+        This is the shared helper used by Buy, Sell, Transfer, and Interest
+        forms.  IDs for the new-wallet row and input are derived from
+        ``_WALLET_SELECT_MAP[select_id]``.
+        """
+        row_id, input_id = _WALLET_SELECT_MAP[select_id]
+        choices = self._load_wallet_choices()
+        default_value = choices[0][1] if len(choices) > 1 else NEW_WALLET_SENTINEL
+
+        row = Horizontal(classes="form-row")
+        container.mount(row)
+        row.mount(Label(label_text, classes="form-label"))
+        row.mount(Select(choices, value=default_value, id=select_id))
+
+        new_row = Horizontal(classes="form-row new-wallet-row", id=row_id)
+        container.mount(new_row)
+        new_row.mount(Label("New Wallet Name:", classes="form-label"))
+        new_row.mount(Input(id=input_id, placeholder="Enter wallet name"))
+        if default_value == NEW_WALLET_SENTINEL:
+            new_row.add_class("visible")
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
@@ -269,18 +333,11 @@ class RecordTransactionScreen(Screen[None]):
 
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle Select widget changes (wallet selector, currency, etc.)."""
-        if event.select.id == "exchange":
+        select_id = event.select.id
+        if select_id in _WALLET_SELECT_MAP:
+            row_id, _ = _WALLET_SELECT_MAP[select_id]
             try:
-                new_row = self.query_one("#new-wallet-row", Horizontal)
-                if event.value == NEW_WALLET_SENTINEL:
-                    new_row.add_class("visible")
-                else:
-                    new_row.remove_class("visible")
-            except Exception:
-                pass
-        elif event.select.id == "withdraw_wallet":
-            try:
-                new_row = self.query_one("#new-withdraw-wallet-row", Horizontal)
+                new_row = self.query_one(f"#{row_id}", Horizontal)
                 if event.value == NEW_WALLET_SENTINEL:
                     new_row.add_class("visible")
                 else:
@@ -300,23 +357,10 @@ class RecordTransactionScreen(Screen[None]):
     def _show_buy_form(self) -> None:
         """Show the buy transaction form."""
         form_container = self.query_one("#form-container", Container)
-        form_container.remove_children()
+        self._sync_clear_children(form_container)
 
         # Exchange (wallet selector)
-        choices = self._load_wallet_choices()
-        default_value = choices[0][1] if len(choices) > 1 else NEW_WALLET_SENTINEL
-        row = Horizontal(classes="form-row")
-        form_container.mount(row)
-        row.mount(Label("Exchange:", classes="form-label"))
-        row.mount(Select(choices, value=default_value, id="exchange"))
-
-        # New wallet input (hidden unless '+ New Wallet...' selected)
-        new_row = Horizontal(classes="form-row new-wallet-row", id="new-wallet-row")
-        form_container.mount(new_row)
-        new_row.mount(Label("New Wallet Name:", classes="form-label"))
-        new_row.mount(Input(id="new-wallet-input", placeholder="Enter wallet name"))
-        if default_value == NEW_WALLET_SENTINEL:
-            new_row.add_class("visible")
+        self._mount_wallet_selector(form_container, "Exchange:", "exchange")
 
         # Quantity
         row = Horizontal(classes="form-row")
@@ -359,7 +403,7 @@ class RecordTransactionScreen(Screen[None]):
     def _show_sell_form(self) -> None:
         """Show the sell transaction form."""
         form_container = self.query_one("#form-container", Container)
-        form_container.remove_children()
+        self._sync_clear_children(form_container)
 
         # Transfer from wallet checkbox
         form_container.mount(Checkbox("Transfer from wallet to exchange first", id="transfer-check"))
@@ -368,12 +412,8 @@ class RecordTransactionScreen(Screen[None]):
         transfer_container = Container(id="transfer-fields")
         form_container.mount(transfer_container)
 
-        # Wallet source (shown if transfer checkbox checked)
-        # Exchange
-        row = Horizontal(classes="form-row")
-        form_container.mount(row)
-        row.mount(Label("Exchange:", classes="form-label"))
-        row.mount(Input(value="Strike", id="exchange", placeholder="Exchange name"))
+        # Exchange (wallet selector)
+        self._mount_wallet_selector(form_container, "Exchange:", "exchange")
 
         # Quantity
         row = Horizontal(classes="form-row")
@@ -403,19 +443,13 @@ class RecordTransactionScreen(Screen[None]):
     def _show_transfer_form(self) -> None:
         """Show the transfer transaction form."""
         form_container = self.query_one("#form-container", Container)
-        form_container.remove_children()
+        self._sync_clear_children(form_container)
 
-        # From wallet
-        row = Horizontal(classes="form-row")
-        form_container.mount(row)
-        row.mount(Label("From Wallet:", classes="form-label"))
-        row.mount(Input(value="Ledger", id="from_wallet", placeholder="Source wallet"))
+        # From wallet (wallet selector)
+        self._mount_wallet_selector(form_container, "From Wallet:", "from_wallet")
 
-        # To wallet
-        row = Horizontal(classes="form-row")
-        form_container.mount(row)
-        row.mount(Label("To Wallet:", classes="form-label"))
-        row.mount(Input(value="Coldcard", id="to_wallet", placeholder="Destination wallet"))
+        # To wallet (wallet selector)
+        self._mount_wallet_selector(form_container, "To Wallet:", "to_wallet")
 
         # Amount (received after fee)
         row = Horizontal(classes="form-row")
@@ -439,13 +473,10 @@ class RecordTransactionScreen(Screen[None]):
     def _show_interest_form(self) -> None:
         """Show the earn interest transaction form."""
         form_container = self.query_one("#form-container", Container)
-        form_container.remove_children()
+        self._sync_clear_children(form_container)
 
-        # Exchange
-        row = Horizontal(classes="form-row")
-        form_container.mount(row)
-        row.mount(Label("Exchange/Account:", classes="form-label"))
-        row.mount(Input(value="River", id="exchange", placeholder="Exchange or account name"))
+        # Exchange/Account (wallet selector)
+        self._mount_wallet_selector(form_container, "Exchange/Account:", "exchange")
 
         # Amount
         row = Horizontal(classes="form-row")
@@ -475,24 +506,11 @@ class RecordTransactionScreen(Screen[None]):
     def _toggle_withdraw_fields(self, show: bool) -> None:
         """Show/hide withdraw to cold storage fields."""
         withdraw_container = self.query_one("#withdraw-fields", Container)
-        withdraw_container.remove_children()
+        self._sync_clear_children(withdraw_container)
 
         if show:
             # Withdraw wallet (wallet selector)
-            choices = self._load_wallet_choices()
-            default_value = choices[0][1] if len(choices) > 1 else NEW_WALLET_SENTINEL
-            row = Horizontal(classes="form-row")
-            withdraw_container.mount(row)
-            row.mount(Label("Withdraw To:", classes="form-label"))
-            row.mount(Select(choices, value=default_value, id="withdraw_wallet"))
-
-            # New withdraw wallet input (hidden unless '+ New Wallet...' selected)
-            new_row = Horizontal(classes="form-row new-wallet-row", id="new-withdraw-wallet-row")
-            withdraw_container.mount(new_row)
-            new_row.mount(Label("New Wallet Name:", classes="form-label"))
-            new_row.mount(Input(id="new-withdraw-wallet-input", placeholder="Enter wallet name"))
-            if default_value == NEW_WALLET_SENTINEL:
-                new_row.add_class("visible")
+            self._mount_wallet_selector(withdraw_container, "Withdraw To:", "withdraw_wallet")
 
             # Withdraw delay
             row = Horizontal(classes="form-row")
@@ -503,14 +521,11 @@ class RecordTransactionScreen(Screen[None]):
     def _toggle_transfer_fields(self, show: bool) -> None:
         """Show/hide transfer from wallet fields."""
         transfer_container = self.query_one("#transfer-fields", Container)
-        transfer_container.remove_children()
+        self._sync_clear_children(transfer_container)
 
         if show:
-            # Source wallet
-            row = Horizontal(classes="form-row")
-            transfer_container.mount(row)
-            row.mount(Label("Source Wallet:", classes="form-label"))
-            row.mount(Input(value="Coldcard", id="wallet_source", placeholder="Wallet to transfer from"))
+            # Source wallet (wallet selector)
+            self._mount_wallet_selector(transfer_container, "Source Wallet:", "wallet_source")
 
     def _update_preview(self) -> None:
         """Update the preview panel with current form values."""
@@ -543,7 +558,7 @@ class RecordTransactionScreen(Screen[None]):
                 preview.update(preview_text)
 
             elif self._current_type == "sell":
-                exchange = self.query_one("#exchange", Input).value
+                exchange = self._get_exchange_value("exchange")
                 quantity = self.query_one("#quantity", Input).value
                 total_proceeds = self.query_one("#total_proceeds", Input).value
                 fee = self.query_one("#fee", Input).value
@@ -568,8 +583,8 @@ class RecordTransactionScreen(Screen[None]):
                 preview.update(preview_text)
 
             elif self._current_type == "transfer":
-                from_wallet = self.query_one("#from_wallet", Input).value
-                to_wallet = self.query_one("#to_wallet", Input).value
+                from_wallet = self._get_exchange_value("from_wallet")
+                to_wallet = self._get_exchange_value("to_wallet")
                 amount = self.query_one("#amount", Input).value
                 fee = self.query_one("#fee", Input).value
                 tx_date = self.query_one("#tx_date", Input).value
@@ -582,7 +597,7 @@ class RecordTransactionScreen(Screen[None]):
                 preview.update(preview_text)
 
             elif self._current_type == "interest":
-                exchange = self.query_one("#exchange", Input).value
+                exchange = self._get_exchange_value("exchange")
                 amount = self.query_one("#amount", Input).value
                 currency = self.query_one("#currency", Select).value
                 tx_date = self.query_one("#tx_date", Input).value
@@ -663,7 +678,7 @@ class RecordTransactionScreen(Screen[None]):
             try:
                 withdraw_check = self.query_one("#withdraw-check", Checkbox)
                 if withdraw_check.value:
-                    withdraw_wallet = self._get_exchange_value("withdraw_wallet", "new-withdraw-wallet-input")
+                    withdraw_wallet = self._get_exchange_value("withdraw_wallet")
                     withdraw_delay_str = self.query_one("#withdraw_delay", Input).value or "700"
                     withdraw_delay = int(withdraw_delay_str)
                     withdraw_date = tx_date + timedelta(minutes=withdraw_delay)
@@ -717,7 +732,7 @@ class RecordTransactionScreen(Screen[None]):
 
         try:
             # Get form values
-            exchange = self.query_one("#exchange", Input).value
+            exchange = self._get_exchange_value("exchange")
             quantity_str = self.query_one("#quantity", Input).value
             total_proceeds_str = self.query_one("#total_proceeds", Input).value
             fee_str = self.query_one("#fee", Input).value or "0"
@@ -737,7 +752,7 @@ class RecordTransactionScreen(Screen[None]):
             try:
                 transfer_check = self.query_one("#transfer-check", Checkbox)
                 if transfer_check.value:
-                    wallet_source = self.query_one("#wallet_source", Input).value
+                    wallet_source = self._get_exchange_value("wallet_source")
                     if wallet_source and wallet_source != exchange:
                         withdraw_date = tx_date - timedelta(minutes=70)
                         deposit_date = tx_date - timedelta(minutes=10)
@@ -803,8 +818,8 @@ class RecordTransactionScreen(Screen[None]):
 
         try:
             # Get form values
-            from_wallet = self.query_one("#from_wallet", Input).value
-            to_wallet = self.query_one("#to_wallet", Input).value
+            from_wallet = self._get_exchange_value("from_wallet")
+            to_wallet = self._get_exchange_value("to_wallet")
             amount_str = self.query_one("#amount", Input).value
             fee_str = self.query_one("#fee", Input).value or "0"
             tx_date_str = self.query_one("#tx_date", Input).value
@@ -867,7 +882,7 @@ class RecordTransactionScreen(Screen[None]):
 
         try:
             # Get form values
-            exchange = self.query_one("#exchange", Input).value
+            exchange = self._get_exchange_value("exchange")
             amount_str = self.query_one("#amount", Input).value
             currency = str(self.query_one("#currency", Select).value)
             tx_date_str = self.query_one("#tx_date", Input).value

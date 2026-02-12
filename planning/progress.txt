@@ -1,5 +1,43 @@
-
 ## Codebase Patterns
+- Whitespace normalization: LedgerWriter.strip() on exchange param at top of each method; guard None with isinstance check in import_transactions
+- Wallet selector pattern: Use `_mount_wallet_selector(container, label, select_id)` shared helper; IDs from `_WALLET_SELECT_MAP`; `_get_exchange_value(select_id)` reads from Select or Input
+- Textual Select._options: Stored as list of (prompt, value) tuples, not objects with .value attribute
+- Textual remove_children() is async: IDs not deregistered immediately; use `_sync_clear_children()` when mounting new widgets with same IDs in same handler
+
+## 2026-02-12 - DIF-003
+- What was implemented: Wallet selector dropdowns on Sell, Transfer, Interest forms; shared `_mount_wallet_selector()` helper; `_sync_clear_children()` for form switching
+- Files changed:
+  - `src/python/tui/screens/record_transaction.py` (extracted `_mount_wallet_selector`, `_sync_clear_children`, `_WALLET_SELECT_MAP`; refactored all 4 forms + toggle helpers to use shared wallet selector)
+  - `tests/test_data_integrity.py` (added 9 async TUI tests across 3 new test classes)
+- **Learnings:**
+  - Textual `remove_children()` defers ID deregistration to async message loop; mounting widgets with same IDs in same sync handler causes `DuplicateIds`
+  - Fix: manually call `widget._parent._nodes._remove(widget)` + `app._registry.discard(widget)` after `remove_children()` for immediate sync deregistration
+  - `_WALLET_SELECT_MAP` dict centralizes select_id → (row_id, input_id) mapping; makes `on_select_changed` and `_get_exchange_value` generic
+---
+
+## 2026-02-12 - DIF-002
+- What was implemented: Wallet selector dropdown on Buy form replacing free-text Input
+- Files changed:
+  - `src/python/tui/screens/record_transaction.py` (added `_load_wallet_choices`, `_get_exchange_value`, `on_select_changed`, replaced Buy form exchange Input with Select + new-wallet-row)
+  - `tests/test_data_integrity.py` (added 4 async TUI tests for wallet selector)
+- **Learnings:**
+  - Textual `Select._options` is a list of (prompt, value) tuples, not objects
+  - CSS class toggling (`add_class`/`remove_class`) is the cleanest way to show/hide rows
+  - `_get_exchange_value()` helper encapsulates Select vs Input logic for reuse
+---
+
+## 2026-02-12 - DIF-001
+- What was implemented: Whitespace stripping on wallet/exchange names at the storage layer
+- Files changed:
+  - `src/python/db/queries/ledger.py` (added `exchange = exchange.strip()` to all 6 methods)
+  - `src/python/db/queries/wallet.py` (added `account = account.strip()` to get_balance_by_account)
+  - `src/python/cryptoAccounts.py` (strip exchange in import_transactions loop with None guard)
+  - `tests/test_data_integrity.py` (new - 11 tests across 3 classes)
+- **Learnings:**
+  - Must guard `.strip()` with `isinstance(x, str)` when the field could be None (error handling test passes None)
+  - Normalization at storage layer is purely additive — zero regressions on 26 existing tests
+---
+
 - Static widget content: No `.renderable` attribute - check status via CSS classes (`.has_class("error")`)
 - Viz package pattern: All viz classes take `(backend, config)` and return `Path` from `.generate()`
 - Textual Label API: Use `label.content` to read text (NOT `.renderable` - removed in v7.5+)

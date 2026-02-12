@@ -2,6 +2,7 @@
 
 DIF-001: Whitespace-padded exchange names are trimmed on storage and query.
 DIF-002: Buy form uses wallet selector dropdown instead of free-text input.
+DIF-003: Sell, Transfer, Interest forms use wallet selector dropdowns.
 """
 import sys
 import os
@@ -218,6 +219,174 @@ class TestBuyFormWalletSelector:
             await pilot.pause(0.5)
             screen = app.screen
             # Programmatically set the select to new wallet
+            sel = screen.query_one("#exchange", Select)
+            sel.value = NEW_WALLET_SENTINEL
+            await pilot.pause(0.3)
+            new_row = screen.query_one("#new-wallet-row")
+            assert new_row.has_class("visible")
+
+
+# --- DIF-003: Wallet selector on Sell, Transfer, Interest forms ---
+
+
+class TestSellFormWalletSelector:
+    """DIF-003: Sell form uses Select dropdown for exchange."""
+
+    @pytest.mark.asyncio
+    async def test_sell_form_has_select_widget(self) -> None:
+        """Sell form should have a Select widget for exchange."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            assert isinstance(screen, RecordTransactionScreen)
+            screen._current_type = "sell"
+            screen._show_sell_form()
+            await pilot.pause(0.3)
+            sel = screen.query_one("#exchange", Select)
+            assert sel is not None
+
+    @pytest.mark.asyncio
+    async def test_sell_form_select_has_new_wallet_option(self) -> None:
+        """Sell form exchange Select should include '+ New Wallet...'."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            screen._current_type = "sell"
+            screen._show_sell_form()
+            await pilot.pause(0.3)
+            sel = screen.query_one("#exchange", Select)
+            option_values = [opt[1] for opt in sel._options]
+            assert NEW_WALLET_SENTINEL in option_values
+
+    @pytest.mark.asyncio
+    async def test_sell_form_new_wallet_toggle(self) -> None:
+        """Selecting '+ New Wallet...' on sell form shows new wallet input."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            screen._current_type = "sell"
+            screen._show_sell_form()
+            await pilot.pause(0.3)
+            sel = screen.query_one("#exchange", Select)
+            sel.value = NEW_WALLET_SENTINEL
+            await pilot.pause(0.3)
+            new_row = screen.query_one("#new-wallet-row")
+            assert new_row.has_class("visible")
+
+
+class TestTransferFormWalletSelector:
+    """DIF-003: Transfer form uses Select dropdowns for from/to wallets."""
+
+    @pytest.mark.asyncio
+    async def test_transfer_form_has_from_wallet_select(self) -> None:
+        """Transfer form should have a Select widget for from_wallet."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            assert isinstance(screen, RecordTransactionScreen)
+            screen._current_type = "transfer"
+            screen._show_transfer_form()
+            await pilot.pause(0.3)
+            sel = screen.query_one("#from_wallet", Select)
+            assert sel is not None
+            option_values = [opt[1] for opt in sel._options]
+            assert NEW_WALLET_SENTINEL in option_values
+
+    @pytest.mark.asyncio
+    async def test_transfer_form_has_to_wallet_select(self) -> None:
+        """Transfer form should have a Select widget for to_wallet."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            screen._current_type = "transfer"
+            screen._show_transfer_form()
+            await pilot.pause(0.3)
+            sel = screen.query_one("#to_wallet", Select)
+            assert sel is not None
+            option_values = [opt[1] for opt in sel._options]
+            assert NEW_WALLET_SENTINEL in option_values
+
+    @pytest.mark.asyncio
+    async def test_transfer_form_new_wallet_toggles(self) -> None:
+        """Both from_wallet and to_wallet show new wallet input on sentinel."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            screen._current_type = "transfer"
+            screen._show_transfer_form()
+            await pilot.pause(0.3)
+
+            # Toggle from_wallet
+            from_sel = screen.query_one("#from_wallet", Select)
+            from_sel.value = NEW_WALLET_SENTINEL
+            await pilot.pause(0.3)
+            from_row = screen.query_one("#new-from-wallet-row")
+            assert from_row.has_class("visible")
+
+            # Toggle to_wallet
+            to_sel = screen.query_one("#to_wallet", Select)
+            to_sel.value = NEW_WALLET_SENTINEL
+            await pilot.pause(0.3)
+            to_row = screen.query_one("#new-to-wallet-row")
+            assert to_row.has_class("visible")
+
+
+class TestInterestFormWalletSelector:
+    """DIF-003: Interest form uses Select dropdown for exchange."""
+
+    @pytest.mark.asyncio
+    async def test_interest_form_has_select_widget(self) -> None:
+        """Interest form should have a Select widget for exchange."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            assert isinstance(screen, RecordTransactionScreen)
+            screen._current_type = "interest"
+            screen._show_interest_form()
+            await pilot.pause(0.3)
+            sel = screen.query_one("#exchange", Select)
+            assert sel is not None
+
+    @pytest.mark.asyncio
+    async def test_interest_form_select_has_new_wallet_option(self) -> None:
+        """Interest form exchange Select should include '+ New Wallet...'."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            screen._current_type = "interest"
+            screen._show_interest_form()
+            await pilot.pause(0.3)
+            sel = screen.query_one("#exchange", Select)
+            option_values = [opt[1] for opt in sel._options]
+            assert NEW_WALLET_SENTINEL in option_values
+
+    @pytest.mark.asyncio
+    async def test_interest_form_new_wallet_toggle(self) -> None:
+        """Selecting '+ New Wallet...' on interest form shows new wallet input."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            screen._current_type = "interest"
+            screen._show_interest_form()
+            await pilot.pause(0.3)
             sel = screen.query_one("#exchange", Select)
             sel.value = NEW_WALLET_SENTINEL
             await pilot.pause(0.3)

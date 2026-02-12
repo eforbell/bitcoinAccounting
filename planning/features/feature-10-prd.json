@@ -29,7 +29,8 @@
       ],
       "priority": 1,
       "estimatedLines": "+40 (normalization logic + tests)",
-      "testStrategy": "pytest tests/test_import_transactions.py tests/test_refactored_integration.py -v"
+      "testStrategy": "pytest tests/test_import_transactions.py tests/test_refactored_integration.py -v",
+      "passes": true
     },
     {
       "id": "DIF-002",
@@ -45,7 +46,8 @@
       ],
       "priority": 2,
       "estimatedLines": "+80 (selector logic, dynamic show/hide, tests)",
-      "testStrategy": "pytest tests/test_tui_app.py -k record -v"
+      "testStrategy": "pytest tests/test_tui_app.py -k record -v",
+      "passes": true
     },
     {
       "id": "DIF-003",
@@ -59,7 +61,8 @@
       ],
       "priority": 3,
       "estimatedLines": "+60 (reuse pattern from DIF-002, extend to 3 forms)",
-      "testStrategy": "pytest tests/test_tui_app.py -k record -v"
+      "testStrategy": "pytest tests/test_tui_app.py -k record -v",
+      "passes": true
     },
     {
       "id": "DIF-004",
