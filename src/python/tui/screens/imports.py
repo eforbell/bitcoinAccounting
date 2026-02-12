@@ -31,6 +31,7 @@ from textual.widgets import (
 if TYPE_CHECKING:
     from textual.worker import Worker
 
+from imports.validation import detect_duplicates
 from tui.screens.record_transaction import NEW_WALLET_SENTINEL
 
 # Map select_id -> (new-wallet-row-id, new-wallet-input-id) for the wizard.
@@ -230,6 +231,7 @@ class ImportWizardScreen(Screen[None]):
         self.file_path: str | None = None
         self.parser: Any = None  # BaseImporter instance
         self.parsed_transactions: list[dict[str, Any]] = []
+        self.duplicate_transactions: list[dict[str, Any]] = []
         self.wallet_names: list[str] = []
         self.dry_run_enabled = True  # Store dry-run state (default True for safety)
 
@@ -441,6 +443,29 @@ class ImportWizardScreen(Screen[None]):
         content = self.query_one("#wizard-content", Vertical)
         content.remove_children()
 
+        # Detect duplicates
+        from tui.app import CryptoApp
+        app = self.app
+        assert isinstance(app, CryptoApp)
+
+        if app.crypto is not None:
+            self.duplicate_transactions = detect_duplicates(
+                self.parsed_transactions,
+                app.crypto.backend
+            )
+        else:
+            self.duplicate_transactions = []
+
+        # Show duplicate warning banner if any found
+        if self.duplicate_transactions:
+            warning_text = (
+                f"[yellow]⚠ Warning: {len(self.duplicate_transactions)} potential "
+                f"duplicate(s) detected[/yellow]\n"
+                f"These transactions may already exist in the database. "
+                f"You can still proceed with import."
+            )
+            content.mount(Static(warning_text, id="duplicate-warning"))
+
         # Show preview table with first 10 transactions
         preview_txs = self.parsed_transactions[:10]
 
@@ -454,6 +479,9 @@ class ImportWizardScreen(Screen[None]):
         table.add_column("Currency", key="currency")
         table.add_column("Exchange", key="exchange")
         table.add_column("Fee", key="fee")
+
+        # Create a set of duplicate transactions for quick lookup
+        duplicate_set = {id(tx) for tx in self.duplicate_transactions}
 
         # Add rows
         for tx in preview_txs:
@@ -470,6 +498,10 @@ class ImportWizardScreen(Screen[None]):
 
             exchange = tx.get('exchange', '')
             fee = f"{tx.get('fee', 0):.4f}" if tx.get('fee') else ""
+
+            # Mark duplicate transactions with warning icon
+            if id(tx) in duplicate_set:
+                trans_type = f"⚠ {trans_type}"
 
             table.add_row(trans_type, date, amount, curr, exchange, fee)
 
@@ -502,12 +534,16 @@ class ImportWizardScreen(Screen[None]):
                 f"Would import: {result['imported']} transactions\n"
                 f"Would skip: {result.get('skipped', 0)} transactions"
             )
+            if self.duplicate_transactions:
+                results_text += f"\n[yellow]Duplicates detected: {len(self.duplicate_transactions)}[/yellow]"
         else:
             results_text = (
                 f"[green]Import Successful[/green]\n\n"
                 f"Imported: {result['imported']} transactions\n"
                 f"Skipped: {result.get('skipped', 0)} transactions"
             )
+            if self.duplicate_transactions:
+                results_text += f"\n[yellow]Duplicates detected: {len(self.duplicate_transactions)}[/yellow]"
 
         results_panel = Static(results_text, id="results-panel")
         content.mount(results_panel)
