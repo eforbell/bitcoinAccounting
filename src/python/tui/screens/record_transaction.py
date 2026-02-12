@@ -278,6 +278,15 @@ class RecordTransactionScreen(Screen[None]):
                     new_row.remove_class("visible")
             except Exception:
                 pass
+        elif event.select.id == "withdraw_wallet":
+            try:
+                new_row = self.query_one("#new-withdraw-wallet-row", Horizontal)
+                if event.value == NEW_WALLET_SENTINEL:
+                    new_row.add_class("visible")
+                else:
+                    new_row.remove_class("visible")
+            except Exception:
+                pass
         self._update_preview()
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
@@ -469,11 +478,21 @@ class RecordTransactionScreen(Screen[None]):
         withdraw_container.remove_children()
 
         if show:
-            # Withdraw wallet
+            # Withdraw wallet (wallet selector)
+            choices = self._load_wallet_choices()
+            default_value = choices[0][1] if len(choices) > 1 else NEW_WALLET_SENTINEL
             row = Horizontal(classes="form-row")
             withdraw_container.mount(row)
             row.mount(Label("Withdraw To:", classes="form-label"))
-            row.mount(Input(value="Ledger", id="withdraw_wallet", placeholder="Destination wallet"))
+            row.mount(Select(choices, value=default_value, id="withdraw_wallet"))
+
+            # New withdraw wallet input (hidden unless '+ New Wallet...' selected)
+            new_row = Horizontal(classes="form-row new-wallet-row", id="new-withdraw-wallet-row")
+            withdraw_container.mount(new_row)
+            new_row.mount(Label("New Wallet Name:", classes="form-label"))
+            new_row.mount(Input(id="new-withdraw-wallet-input", placeholder="Enter wallet name"))
+            if default_value == NEW_WALLET_SENTINEL:
+                new_row.add_class("visible")
 
             # Withdraw delay
             row = Horizontal(classes="form-row")
@@ -644,7 +663,7 @@ class RecordTransactionScreen(Screen[None]):
             try:
                 withdraw_check = self.query_one("#withdraw-check", Checkbox)
                 if withdraw_check.value:
-                    withdraw_wallet = self.query_one("#withdraw_wallet", Input).value
+                    withdraw_wallet = self._get_exchange_value("withdraw_wallet", "new-withdraw-wallet-input")
                     withdraw_delay_str = self.query_one("#withdraw_delay", Input).value or "700"
                     withdraw_delay = int(withdraw_delay_str)
                     withdraw_date = tx_date + timedelta(minutes=withdraw_delay)
