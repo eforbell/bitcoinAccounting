@@ -8,3 +8,5 @@ yfinance
 pyarrow
 reportlab
 openpyxl
+textual>=0.47.0
+pytest-asyncio

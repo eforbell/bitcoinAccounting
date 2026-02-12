@@ -2,6 +2,151 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-9: Interactive TUI Application - TUI-011
+
+### Visualization Screen with Chart Generation
+- Created `src/python/tui/screens/visualizations.py` with VisualizationScreen
+- Form-based UI: chart type selector, date range presets + custom dates, DPI, output dir, checkboxes
+- Uses `viz` package classes: `OrangePlot`, `BalanceChart`, `CustodyChart`, `PDFReport`, `VizConfig`
+- Accesses database via `app.crypto.backend` to pass `DatabaseBackend` to viz classes
+- Charts generated in `@work(thread=True)` worker to avoid blocking UI
+
+### Viz Package Integration Pattern
+- All viz classes take `(backend: DatabaseBackend, config: VizConfig)` and have `.generate() -> Path`
+- VizConfig dataclass: `date_range`, `output_dir`, `chart_types`, `include_cost_basis`, `log_scale`, `dpi`
+- Date range can be string preset ('ytd', '1y', '5y', 'all') or `tuple[datetime, datetime]`
+- PDFReport requires `reportlab` (optional dependency) - handle ImportError gracefully
+
+### Platform-Specific File Opening
+- Use `platform.system()` to detect OS: "Darwin" -> `open`, "Linux" -> `xdg-open`, "Windows" -> `start`
+- Launch via `subprocess.Popen()` (non-blocking) so app continues running
+
+### Textual Testing: Static Widget Content
+- `Static` widget has no `.renderable` attribute in current Textual version
+- Check status by verifying CSS classes: `status.has_class("error")`, `status.has_class("success")`
+- Use `btn.press()` instead of `pilot.click()` for buttons that may be off-screen
+
+## Feature-9: Interactive TUI Application - TUI-010
+
+### Tax Reporting Screen with TabbedContent
+- Created `src/python/tui/screens/tax_reporting.py` with three-tab TaxReportingScreen
+- TabbedContent with TabPane children: "Gains Tracker", "1099-B Export", "Forecast Sale"
+- Each TabPane has unique id for switching: `tabbed.active = "tab-1099b"`
+- Container with id for warning visibility toggle: `warning.display = False/True`
+
+### Tax Data Integration
+- Uses `app.crypto.get_sales_for_1099b(coin, year, wallet)` → (sales_list, worksheet_list)
+- Uses `app.crypto.forecast_capital_gains_fifo(coin, qty, price, wallet)` → (lots_list, summary_dict)
+- Summary dict includes short/long term breakdown, proceeds, cost basis, missing basis flags
+
+### IRS 2025+ Per-Wallet Warning
+- Dynamic warning based on tax year input: hide for pre-2025, show for 2025+
+- Uses `on_input_changed()` to trigger `_update_irs_warning()` when year changes
+- Container display property for visibility control
+
+### Form Validation Pattern
+- Validate inputs before calling async methods
+- Show status errors in dedicated Static widget per tab
+- Use color classes: `.success`, `.error`, `.warning` for status messages
+
+### DataTable Column Setup
+- Call `_setup_tables()` in `on_mount()` to add columns once
+- Use key parameter: `table.add_column("Sale Date", key="sale_date")`
+- Clear with `table.clear()` before repopulating (preserves columns)
+
+### Testing TabbedContent Screens
+- Don't use pilot.click() for buttons on tabbed screens (off-screen issues)
+- Call screen methods directly: `screen.load_gains_data()` instead of clicking button
+- Use `tabbed.active = "tab-id"` to switch tabs programmatically
+- Add `await pilot.pause(0.3)` after async operations to let workers complete
+
+## Feature-9: Interactive TUI Application - TUI-003
+
+### Textual CSS Theme File
+- Created `src/python/tui/styles/app.tcss` with comprehensive theme (355 lines)
+- Use CSS_PATH with Path object: `CSS_PATH = Path(__file__).parent / "styles" / "app.tcss"`
+- CSS variables for consistency: `$background`, `$accent`, `$success`, `$error`, etc.
+- Bitcoin orange (#F7931A) accent on dark navy (#1a1a2e) background
+
+### Theme Structure
+- Color palette section with CSS variables
+- Global screen styles
+- Header/Footer styling
+- DataTable with alternating row colors
+- Input/Button/Select consistent styling
+- Notification colors (info=blue, success=green, warning=orange, error=red)
+- Modal screens, loading indicators, tabs, scrollbars
+- Utility classes (.text-success, .text-accent, .bg-surface, etc.)
+
+### Testing Theme
+- Verify CSS_PATH attribute exists and points to .tcss file
+- Test that theme file exists and is not empty
+- Test app loads without CSS errors
+- Test notifications use correct severity colors
+- Test theme applied consistently across main menu, dashboard, help screen
+
+## Feature-9: Interactive TUI Application - TUI-002
+
+### Textual Async Data Loading Pattern
+- `@work` decorator is imported from `textual` module (NOT `textual.worker`)
+- Worker functions run in thread pool - need runtime imports inside @work functions
+- Pattern: `from tui.app import CryptoApp` inside @work function to avoid NameError
+- Use `self.app.call_from_thread(method, args)` to update UI from worker thread
+- Test with `await pilot.pause(0.2)` to give worker threads time to complete
+
+### Widget Mounting Pattern
+- Container.mount() returns AwaitMount, cannot use `with` statement
+- Pattern: Create widget → mount children to it → mount to parent
+- Example: `stats_row = Horizontal(); stats_row.mount(child); container.mount(stats_row)`
+
+### Dashboard State Machine
+- Four states: empty, loading, success, error
+- Private methods: _show_loading(), _show_empty(), _show_error(), _show_success()
+- Each state method: remove_children() then mount appropriate widgets
+- Empty state shows onboarding message with helpful instructions
+
+### Type Annotations for Textual
+- tuple needs type params: `list[tuple[Any, ...]]` not `list[tuple]`
+- Legacy untyped methods: `# type: ignore[no-untyped-call]`
+- Dynamic app methods: `# type: ignore[attr-defined]`
+
+## Feature-9: Interactive TUI Application - TUI-001
+
+### Textual App Setup Pattern
+- Main app class extends `App[None]` with embedded CSS in `CSS` class variable
+- Use `BINDINGS` list for keyboard shortcuts: `Binding("key", "action_name", "Label")`
+- Set `show=False` on bindings that are context-specific (not shown in footer)
+- `on_mount()` initializes CryptoAccounts; `on_unmount()` closes it
+- Entry point script mirrors `_bootstrap.py` pattern: add src/python to sys.path, load .env
+
+### Textual Widget API (v7.5+)
+- `Label.content` returns the text content (NOT `.renderable` which doesn't exist in v7.5)
+- `Static` is the base for custom display widgets; pass content to `super().__init__(markup_string)`
+- `ModalScreen[None]` for overlay screens (help, dialogs)
+- `app.push_screen(screen)` to navigate forward; `action_dismiss()` or Escape to go back
+- `app.notify(message, severity="information"|"warning"|"error")` for toast notifications
+- `app._notifications` list available in tests (via `run_test(notifications=True)`)
+
+### Textual Testing Pattern
+- Use `pytest-asyncio` with `@pytest.mark.asyncio` decorator
+- `async with app.run_test() as pilot:` creates test harness
+- `await pilot.press("key_name")` simulates keyboard input
+- `app.query(WidgetClass)` returns all matching widgets
+- `app.query_one("#id", WidgetClass)` returns single widget by CSS id
+- `app.screen` returns current screen (check `isinstance` for screen type)
+- `app.is_running` confirms app mounted successfully
+
+### Menu Pattern
+- Custom `MenuButton(Static)` widget stores action string, posts to app on click
+- `action_from_menu(action)` routes menu clicks to `action_menu_{name}()` methods
+- Stub actions use `self.notify()` for "coming soon" placeholders
+- Six categories: Portfolio, Ledger, Record Tx, Import, Tax/Report, Visualize
+
+### Navigation Design
+- Arrow keys + Tab for widget navigation (NOT vim j/k) - user preference
+- Letter keys (P, L, R, I, T, V) for menu shortcuts from main screen
+- ? for help overlay, Q for quit, Escape for back/close
+
 ## Feature-8: CryptoAccounts Refactoring - REFACTOR-008
 
 ### Integration Testing Patterns
@@ -1793,3 +1938,34 @@ def deposit(self, ...):
 def deposit(self, ...):
     self.ledger_writer.deposit(...)
 ```
+
+## TUI-005: Transaction Ledger Screen
+
+**Textual Label API change (Textual v7.5+)**:
+- Use `label.content` to read text, NOT `.renderable` (removed in v7.5+)
+- Pattern: `status_text = label.content` (works in v7.5+)
+- Applies to all Label widgets throughout TUI
+
+**import_transactions() API format**:
+- Uses lowercase dictionary keys: `trans_type`, `created_date`, `buy`, `sell`, `buy_curr`, `sell_curr`, `fee_curr`
+- NOT Title Case: Don't use `Type`, `Date`, `Buy Currency` etc.
+- Fee convention: Fees included in sell amounts for Withdrawal/Spend
+  - Example: Withdraw 0.5 BTC with 0.0001 fee requires `sell=0.5001`
+
+**CryptoAccounts test fixture pattern**:
+```python
+backend = SqliteBackend(':memory:', auto_create_tables=True)
+crypto = CryptoAccounts(backend=backend)
+# NOT: CryptoAccounts(db_path='...', backend='sqlite')
+```
+
+**Filter and sort patterns**:
+- Store filter state in screen instance variables
+- Reload data when filters change (don't modify in-place)
+- Sort pattern: Store `sort_column` and `sort_reverse`, toggle on header click
+- Date validation: Use `datetime.strptime()` with try/except for YYYY-MM-DD format
+
+**Empty state UX**:
+- Always show helpful guidance when no data exists
+- Example: "No transactions found. Import data to get started."
+- Check if `crypto is None` in workers before accessing

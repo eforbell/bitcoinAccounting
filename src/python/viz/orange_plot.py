@@ -15,18 +15,10 @@ import pandas as pd
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
-try:
-    # When imported from tests
-    from src.python.db.backend import DatabaseBackend
-    from src.python.viz.config import VizConfig
-    from src.python.db.queries import TradeQuery
-    from src.python.viz.data_fetcher import PriceDataFetcher
-except ModuleNotFoundError:
-    # When running from CLI with sys.path manipulation
-    from db.backend import DatabaseBackend  # type: ignore[import]
-    from viz.config import VizConfig  # type: ignore[import]
-    from db.queries import TradeQuery  # type: ignore[import]
-    from viz.data_fetcher import PriceDataFetcher  # type: ignore[import]
+from db.backend import DatabaseBackend
+from viz.config import VizConfig
+from db.queries import TradeQuery
+from viz.data_fetcher import PriceDataFetcher
 
 
 class OrangePlot:
@@ -122,12 +114,14 @@ class OrangePlot:
             start = datetime(end.year - 1, 1, 1)
             return start, end
 
-        # Get min/max dates from trades
+        # Get min/max dates from trades (strip timezone for consistent comparison)
         dates = []
         for trade in trades:
             date = trade["date"]
             if isinstance(date, str):
                 date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                date = date.replace(tzinfo=None)
             dates.append(date)
 
         min_date = min(dates)
@@ -167,6 +161,8 @@ class OrangePlot:
             date = trade["date"]
             if isinstance(date, str):
                 date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                date = date.replace(tzinfo=None)
 
             if start_date <= date <= end_date:
                 filtered.append(trade)
@@ -188,14 +184,17 @@ class OrangePlot:
         cumulative_cost = 0.0
         cumulative_btc = 0.0
 
-        # Sort purchases by date
+        # Sort purchases by date (strip timezone for consistent comparison)
+        def _to_naive(d: Any) -> datetime:
+            if isinstance(d, str):
+                d = datetime.fromisoformat(d.replace("Z", "+00:00"))
+            if hasattr(d, 'tzinfo') and d.tzinfo is not None:
+                d = d.replace(tzinfo=None)
+            return d
+
         sorted_purchases = sorted(
             purchases,
-            key=lambda t: (
-                t["date"]
-                if isinstance(t["date"], datetime)
-                else datetime.fromisoformat(t["date"].replace("Z", "+00:00"))
-            ),
+            key=lambda t: _to_naive(t["date"]),
         )
 
         for purchase in sorted_purchases:
@@ -211,6 +210,8 @@ class OrangePlot:
                 date = purchase["date"]
                 if isinstance(date, str):
                     date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+                if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                    date = date.replace(tzinfo=None)
 
                 running_basis.append({"date": date, "basis": avg_basis})
 
@@ -259,6 +260,8 @@ class OrangePlot:
                 date = p["date"]
                 if isinstance(date, str):
                     date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+                if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                    date = date.replace(tzinfo=None)
                 purchase_dates.append(date)
 
                 # Get BTC-USD price on purchase date
@@ -295,6 +298,8 @@ class OrangePlot:
                 date = s["date"]
                 if isinstance(date, str):
                     date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+                if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                    date = date.replace(tzinfo=None)
                 sale_dates.append(date)
 
                 # Get BTC-USD price on sale date

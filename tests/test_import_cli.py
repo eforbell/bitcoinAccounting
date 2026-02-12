@@ -1,5 +1,6 @@
 """Tests for CLI entry point and import workflow (IMP-003)."""
 
+import sys
 import pytest
 import tempfile
 import os
@@ -644,7 +645,7 @@ class TestWalletImportRequirements:
             
             # Run import_csv without --wallet-name
             result = subprocess.run(
-                ["python", str(SCRIPT_PATH), "--source", "ledger", csv_path],
+                [sys.executable, str(SCRIPT_PATH), "--source", "ledger", csv_path],
                 capture_output=True,
                 text=True,
             )

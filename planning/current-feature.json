@@ -1,21 +1,24 @@
 {
-  "currentFeature": "feature-8",
-  "featureName": "CryptoAccounts Refactoring",
-  "prdPath": "planning/features/feature-8-prd.json",
-  "summaryPath": "planning/features/feature-8-summary.md",
-  "branch": "feature/cryptoaccounts-refactoring",
+  "currentFeature": "feature-9",
+  "featureName": "Interactive TUI Application",
+  "prdPath": "planning/features/feature-9-prd.json",
+  "summaryPath": "planning/features/feature-9-summary.md",
+  "analysisPath": "planning/features/feature-9-analysis.md",
+  "branch": "feature/tui-application",
   "status": "in_progress",
   "stories": [
-    {"id": "REFACTOR-001", "title": "Update feature tracking", "status": "completed"},
-    {"id": "REFACTOR-002", "title": "Create TransactionQuery class", "status": "completed"},
-    {"id": "REFACTOR-003", "title": "Create LedgerWriter class", "status": "completed"},
-    {"id": "REFACTOR-004", "title": "Extract CapitalGainCalculator", "status": "completed"},
-    {"id": "REFACTOR-005", "title": "Create WalletQuery class", "status": "completed"},
-    {"id": "REFACTOR-006", "title": "Refactor import_transactions()", "status": "completed"},
-    {"id": "REFACTOR-007", "title": "Add test coverage for import_transactions", "status": "completed"},
-    {"id": "REFACTOR-008", "title": "Add integration tests", "status": "completed"},
-    {"id": "REFACTOR-009", "title": "Update module exports", "status": "completed"},
-    {"id": "REFACTOR-010", "title": "Update documentation", "status": "completed"}
+    {"id": "TUI-001", "title": "Application shell, entry point, and main menu", "status": "completed"},
+    {"id": "TUI-002", "title": "Dashboard screen with portfolio summary", "status": "completed"},
+    {"id": "TUI-003", "title": "Textual CSS theme and styling", "status": "completed"},
+    {"id": "TUI-004", "title": "Portfolio screen with balances and wallet breakdown", "status": "completed"},
+    {"id": "TUI-005", "title": "Transaction ledger screen with filtering", "status": "completed"},
+    {"id": "TUI-006", "title": "Trade history and exchange liquidity screens", "status": "completed"},
+    {"id": "TUI-007", "title": "Record transaction screen (buy/sell/transfer/interest)", "status": "completed"},
+    {"id": "TUI-008", "title": "Import wizard screen with file picker and preview", "status": "completed"},
+    {"id": "TUI-009", "title": "Export transactions screen", "status": "completed"},
+    {"id": "TUI-010", "title": "Tax reporting screen (gains tracker, 1099-B, forecast)", "status": "completed"},
+    {"id": "TUI-011", "title": "Visualization screen with chart generation", "status": "completed"},
+    {"id": "TUI-012", "title": "Help system, keyboard shortcuts, and error handling polish", "status": "completed"}
   ],
   "completedFeatures": [
     {
@@ -54,7 +57,7 @@
       "featureId": "feature-5",
       "featureName": "Wallet Import Integration",
       "branch": "feature/wallet-import-integration",
-      "mergedDate": null,
+      "mergedDate": "2026-02-06",
       "stories": 7,
       "notes": "Wallet import parsers (Ledger Live, Trezor Suite, Sparrow, Coldcard) integrated into CLI import system with --wallet-name support"
     },
@@ -73,11 +76,20 @@
       "mergedDate": "2026-02-06",
       "stories": 6,
       "notes": "Modernized export_tx with argparse, added wallet/date filtering, --wallets for multiple wallets, dry-run preview, Spend transaction type support, PostgreSQL compatibility"
+    },
+    {
+      "featureId": "feature-8",
+      "featureName": "CryptoAccounts Refactoring",
+      "branch": "feature/cryptoaccounts-refactoring",
+      "mergedDate": "2026-02-11",
+      "stories": 10,
+      "notes": "Refactored cryptoAccounts.py from 918-line monolithic class into 4 specialized query classes (TransactionQuery, LedgerWriter, CapitalGainCalculator, WalletQuery) using Query Object pattern with dependency injection. 54% reduction in main class size, 1,264 lines of new tests, zero regressions."
     }
   ],
   "futureEnhancements": [
-    "Feature #7: TUI Import Wizard with Textual",
-    "Feature #8: Multi-coin support (ETH, other assets)",
-    "Feature #9: Tax optimization tools"
+    "Feature #10: Multi-coin support (ETH, other assets)",
+    "Feature #11: Web UI layer (Flask/FastAPI)",
+    "Feature #12: Tax optimization tools",
+    "Feature #13: Pair price management (import/export)"
   ]
 }

@@ -1,0 +1,358 @@
+/* Crypto Accounting TUI Theme
+ * Bitcoin orange (#F7931A) accent on dark navy background
+ * Optimized for terminal readability with good contrast ratios
+ */
+
+/* =============================================================================
+ * Color Palette
+ * ============================================================================= */
+/* Primary colors */
+$background: #1a1a2e;           /* Dark navy background */
+$surface: #16213e;              /* Slightly lighter surface */
+$surface-lighter: #0f3460;      /* Hover/active states */
+$accent: #f7931a;               /* Bitcoin orange */
+$accent-dim: #cc7a15;           /* Dimmed orange */
+
+/* Text colors */
+$text-primary: #e0e0e0;         /* High contrast white */
+$text-secondary: #aaaaaa;       /* Medium gray */
+$text-dim: #666666;             /* Dim gray */
+$text-muted: #555555;           /* Very dim gray */
+
+/* Status colors */
+$success: #00d26a;              /* Green */
+$warning: #f39c12;              /* Orange-yellow */
+$error: #e74c3c;                /* Red */
+$info: #3498db;                 /* Blue */
+
+/* Border colors */
+$border: #444444;               /* Default border */
+$border-focus: #f7931a;         /* Focused border */
+
+
+/* =============================================================================
+ * Global Screen Styles
+ * ============================================================================= */
+Screen {
+    background: $background;
+    color: $text-primary;
+}
+
+
+/* =============================================================================
+ * Header & Footer
+ * ============================================================================= */
+Header {
+    background: $surface-lighter;
+    color: $accent;
+    text-style: bold;
+}
+
+HeaderTitle {
+    color: $accent;
+    text-style: bold;
+}
+
+HeaderClock {
+    color: $text-secondary;
+}
+
+Footer {
+    background: $surface-lighter;
+    color: $text-secondary;
+}
+
+FooterKey {
+    background: $surface;
+    color: $accent;
+}
+
+
+/* =============================================================================
+ * DataTable - Transaction ledgers, lists, etc.
+ * ============================================================================= */
+DataTable {
+    height: auto;
+    background: $surface;
+    border: solid $border;
+}
+
+DataTable > .datatable--header {
+    background: $surface-lighter;
+    color: $accent;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: $surface-lighter;
+}
+
+DataTable > .datatable--odd-row {
+    background: $background;
+}
+
+DataTable > .datatable--even-row {
+    background: $surface;
+}
+
+DataTable:focus > .datatable--cursor {
+    background: $accent-dim;
+    color: $background;
+}
+
+
+/* =============================================================================
+ * Input Fields, Buttons, Selects
+ * ============================================================================= */
+Input {
+    border: solid $border;
+    background: $surface;
+    color: $text-primary;
+    padding: 0 1;
+}
+
+Input:focus {
+    border: solid $border-focus;
+    background: $surface-lighter;
+}
+
+Input.-invalid {
+    border: solid $error;
+}
+
+Button {
+    background: $surface;
+    color: $text-primary;
+    border: solid $border;
+    text-style: bold;
+}
+
+Button:hover {
+    background: $surface-lighter;
+    border: solid $accent;
+}
+
+Button:focus {
+    background: $accent-dim;
+    color: $background;
+    border: solid $accent;
+}
+
+Button.-primary {
+    background: $accent;
+    color: $background;
+    border: solid $accent;
+}
+
+Button.-primary:hover {
+    background: $accent-dim;
+}
+
+Select {
+    border: solid $border;
+    background: $surface;
+    color: $text-primary;
+}
+
+Select:focus {
+    border: solid $border-focus;
+    background: $surface-lighter;
+}
+
+OptionList {
+    background: $surface;
+    border: solid $border;
+}
+
+OptionList > .option-list--option-highlighted {
+    background: $surface-lighter;
+    color: $accent;
+}
+
+
+/* =============================================================================
+ * Containers & Layout
+ * ============================================================================= */
+Container {
+    background: transparent;
+}
+
+Vertical {
+    background: transparent;
+}
+
+Horizontal {
+    background: transparent;
+}
+
+
+/* =============================================================================
+ * Labels & Static Text
+ * ============================================================================= */
+Label {
+    color: $text-primary;
+}
+
+Static {
+    color: $text-primary;
+}
+
+
+/* =============================================================================
+ * Notifications (Toast Messages)
+ * ============================================================================= */
+Toast {
+    padding: 1 2;
+    border: solid $border;
+}
+
+Toast.-information {
+    background: $info;
+    color: $background;
+    border: solid $info;
+}
+
+Toast.-success {
+    background: $success;
+    color: $background;
+    border: solid $success;
+}
+
+Toast.-warning {
+    background: $warning;
+    color: $background;
+    border: solid $warning;
+}
+
+Toast.-error {
+    background: $error;
+    color: $text-primary;
+    border: solid $error;
+}
+
+
+/* =============================================================================
+ * Modal Screens (Help, Dialogs)
+ * ============================================================================= */
+ModalScreen {
+    align: center middle;
+}
+
+
+/* =============================================================================
+ * Loading & Progress
+ * ============================================================================= */
+LoadingIndicator {
+    color: $accent;
+}
+
+ProgressBar {
+    background: $surface;
+}
+
+ProgressBar > .bar--bar {
+    color: $accent;
+}
+
+ProgressBar > .bar--complete {
+    color: $success;
+}
+
+
+/* =============================================================================
+ * Tabs (for multi-panel screens like TabbedContent)
+ * ============================================================================= */
+ContentTabs {
+    background: $surface;
+    height: auto;
+    min-height: 3;
+}
+
+ContentTabs Tab {
+    color: $text-secondary;
+    background: $surface;
+    padding: 0 3;
+    min-width: 14;
+    height: 2;
+    content-align: center middle;
+}
+
+ContentTabs Tab:hover {
+    background: $surface-lighter;
+    color: $text-primary;
+}
+
+ContentTabs Tab.-active {
+    color: $accent;
+    background: $background;
+    text-style: bold;
+}
+
+ContentTabs:focus Tab.-active {
+    color: $accent;
+    background: $surface-lighter;
+}
+
+ContentTabs .underline--bar {
+    background: $accent;
+}
+
+ContentSwitcher {
+    background: $background;
+}
+
+
+/* =============================================================================
+ * Scrollbars
+ * ============================================================================= */
+Scrollbar {
+    background: $surface;
+}
+
+ScrollbarCorner {
+    background: $surface;
+}
+
+
+/* =============================================================================
+ * Custom Utility Classes
+ * ============================================================================= */
+.text-success {
+    color: $success;
+}
+
+.text-warning {
+    color: $warning;
+}
+
+.text-error {
+    color: $error;
+}
+
+.text-info {
+    color: $info;
+}
+
+.text-accent {
+    color: $accent;
+}
+
+.text-dim {
+    color: $text-dim;
+}
+
+.text-muted {
+    color: $text-muted;
+}
+
+.border-accent {
+    border: solid $accent;
+}
+
+.bg-surface {
+    background: $surface;
+}
+
+.bg-surface-lighter {
+    background: $surface-lighter;
+}

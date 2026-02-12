@@ -16,16 +16,9 @@ import pandas as pd
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
-try:
-    # When imported from tests
-    from src.python.db.backend import DatabaseBackend
-    from src.python.viz.config import VizConfig
-    from src.python.db.queries import BalanceCalculator, TradeQuery
-except ModuleNotFoundError:
-    # When running from CLI with sys.path manipulation
-    from db.backend import DatabaseBackend  # type: ignore[import]
-    from viz.config import VizConfig  # type: ignore[import]
-    from db.queries import BalanceCalculator, TradeQuery  # type: ignore[import]
+from db.backend import DatabaseBackend
+from viz.config import VizConfig
+from db.queries import BalanceCalculator, TradeQuery
 
 
 class BalanceChart:
@@ -95,12 +88,14 @@ class BalanceChart:
         if isinstance(self.config.date_range, tuple):
             return self.config.date_range
 
-        # Get min/max dates from trades
+        # Get min/max dates from trades (strip timezone for consistent comparison)
         dates = []
         for trade in trades:
             date = trade["date"]
             if isinstance(date, str):
                 date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                date = date.replace(tzinfo=None)
             dates.append(date)
 
         min_date = min(dates)
@@ -139,13 +134,16 @@ class BalanceChart:
         cumulative_balance = 0.0
 
         # Sort trades by date
+        def _parse_date_naive(d: Any) -> datetime:
+            if isinstance(d, str):
+                d = datetime.fromisoformat(d.replace("Z", "+00:00"))
+            if hasattr(d, 'tzinfo') and d.tzinfo is not None:
+                d = d.replace(tzinfo=None)
+            return d
+
         sorted_trades = sorted(
             trades,
-            key=lambda t: (
-                t["date"]
-                if isinstance(t["date"], datetime)
-                else datetime.fromisoformat(t["date"].replace("Z", "+00:00"))
-            ),
+            key=lambda t: _parse_date_naive(t["date"]),
         )
 
         # Add starting point at balance 0
@@ -155,6 +153,8 @@ class BalanceChart:
             date = trade["date"]
             if isinstance(date, str):
                 date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            if hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                date = date.replace(tzinfo=None)
 
             # Skip trades outside date range
             if date < start_date or date > end_date:
