@@ -56,12 +56,7 @@ class TaxReportingScreen(Screen[None]):
     TabbedContent > ContentTabs {
         background: #16213e;
         dock: top;
-        height: auto;
-        min-height: 3;
-    }
-
-    TabbedContent > ContentTabs #tabs-list {
-        min-height: 2;
+        height: 3;
     }
 
     TabbedContent > ContentTabs Tab {
