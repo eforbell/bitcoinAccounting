@@ -29,6 +29,9 @@ if TYPE_CHECKING:
     from cryptoAccounts import CryptoAccounts
 
 
+NEW_WALLET_SENTINEL = "__new_wallet__"
+
+
 class RecordTransactionScreen(Screen[None]):
     """Screen for recording transactions manually."""
 
@@ -147,6 +150,14 @@ class RecordTransactionScreen(Screen[None]):
         color: $success;
         text-style: bold;
     }
+
+    RecordTransactionScreen .new-wallet-row {
+        display: none;
+    }
+
+    RecordTransactionScreen .new-wallet-row.visible {
+        display: block;
+    }
     """
 
     BINDINGS = [
@@ -156,6 +167,42 @@ class RecordTransactionScreen(Screen[None]):
     def __init__(self) -> None:
         super().__init__()
         self._current_type = "buy"
+
+    def _load_wallet_choices(self) -> list[tuple[str, str]]:
+        """Load wallet names from the database for Select dropdowns.
+
+        Returns list of (display_label, value) tuples, with '+ New Wallet...'
+        appended at the end.
+        """
+        from tui.app import CryptoApp
+        choices: list[tuple[str, str]] = []
+        app = self.app
+        if isinstance(app, CryptoApp) and app.crypto is not None:
+            try:
+                wallets = app.crypto.get_wallets()
+                for w in wallets:
+                    wid = w['wallet_id']
+                    choices.append((wid, wid))
+            except Exception:
+                pass
+        choices.append(("+ New Wallet...", NEW_WALLET_SENTINEL))
+        return choices
+
+    def _get_exchange_value(self, select_id: str = "exchange", input_id: str = "new-wallet-input") -> str:
+        """Get the effective exchange/wallet name from Select or new-wallet Input.
+
+        Returns stripped wallet name from the Select, or from the new-wallet
+        Input if '+ New Wallet...' is selected.
+        """
+        try:
+            sel = self.query_one(f"#{select_id}", Select)
+            val = sel.value
+            if val == NEW_WALLET_SENTINEL or val is Select.BLANK:
+                inp = self.query_one(f"#{input_id}", Input)
+                return inp.value.strip()
+            return str(val).strip()
+        except Exception:
+            return ""
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
@@ -220,6 +267,19 @@ class RecordTransactionScreen(Screen[None]):
         """Handle input changes to update preview."""
         self._update_preview()
 
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Handle Select widget changes (wallet selector, currency, etc.)."""
+        if event.select.id == "exchange":
+            try:
+                new_row = self.query_one("#new-wallet-row", Horizontal)
+                if event.value == NEW_WALLET_SENTINEL:
+                    new_row.add_class("visible")
+                else:
+                    new_row.remove_class("visible")
+            except Exception:
+                pass
+        self._update_preview()
+
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         """Handle checkbox changes."""
         # Show/hide conditional fields based on checkboxes
@@ -233,11 +293,21 @@ class RecordTransactionScreen(Screen[None]):
         form_container = self.query_one("#form-container", Container)
         form_container.remove_children()
 
-        # Exchange
+        # Exchange (wallet selector)
+        choices = self._load_wallet_choices()
+        default_value = choices[0][1] if len(choices) > 1 else NEW_WALLET_SENTINEL
         row = Horizontal(classes="form-row")
         form_container.mount(row)
         row.mount(Label("Exchange:", classes="form-label"))
-        row.mount(Input(value="Strike", id="exchange", placeholder="Exchange name"))
+        row.mount(Select(choices, value=default_value, id="exchange"))
+
+        # New wallet input (hidden unless '+ New Wallet...' selected)
+        new_row = Horizontal(classes="form-row new-wallet-row", id="new-wallet-row")
+        form_container.mount(new_row)
+        new_row.mount(Label("New Wallet Name:", classes="form-label"))
+        new_row.mount(Input(id="new-wallet-input", placeholder="Enter wallet name"))
+        if default_value == NEW_WALLET_SENTINEL:
+            new_row.add_class("visible")
 
         # Quantity
         row = Horizontal(classes="form-row")
@@ -429,7 +499,7 @@ class RecordTransactionScreen(Screen[None]):
 
         try:
             if self._current_type == "buy":
-                exchange = self.query_one("#exchange", Input).value
+                exchange = self._get_exchange_value()
                 quantity = self.query_one("#quantity", Input).value
                 total_cost = self.query_one("#total_cost", Input).value
                 fee = self.query_one("#fee", Input).value
@@ -535,7 +605,7 @@ class RecordTransactionScreen(Screen[None]):
 
         try:
             # Get form values
-            exchange = self.query_one("#exchange", Input).value
+            exchange = self._get_exchange_value()
             quantity_str = self.query_one("#quantity", Input).value
             total_cost_str = self.query_one("#total_cost", Input).value
             fee_str = self.query_one("#fee", Input).value or "0"

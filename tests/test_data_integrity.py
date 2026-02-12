@@ -1,6 +1,7 @@
-"""Tests for data integrity: wallet name normalization at the storage layer.
+"""Tests for data integrity: wallet name normalization and wallet selectors.
 
 DIF-001: Whitespace-padded exchange names are trimmed on storage and query.
+DIF-002: Buy form uses wallet selector dropdown instead of free-text input.
 """
 import sys
 import os
@@ -146,3 +147,79 @@ class TestImportTransactionsWhitespaceNormalization:
         )
         exchanges = [r['exchange'] for r in rows]
         assert exchanges == ['River', 'Strike']
+
+
+# --- DIF-002: Wallet selector on Buy form ---
+
+from tui.app import CryptoApp
+from tui.screens.record_transaction import RecordTransactionScreen, NEW_WALLET_SENTINEL
+from textual.widgets import Select, Input
+
+
+def _make_app_with_wallets() -> CryptoApp:
+    """Create a CryptoApp backed by in-memory SQLite with seed data."""
+    app = CryptoApp()
+    return app
+
+
+class TestBuyFormWalletSelector:
+    """DIF-002: Buy form uses Select dropdown for exchange."""
+
+    @pytest.mark.asyncio
+    async def test_buy_form_has_select_widget(self) -> None:
+        """Buy form should have a Select widget for exchange, not a plain Input."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            assert isinstance(screen, RecordTransactionScreen)
+            # Should have a Select with id="exchange"
+            sel = screen.query_one("#exchange", Select)
+            assert sel is not None
+
+    @pytest.mark.asyncio
+    async def test_buy_form_select_has_new_wallet_option(self) -> None:
+        """The exchange Select should include '+ New Wallet...' option."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            sel = screen.query_one("#exchange", Select)
+            # Check that NEW_WALLET_SENTINEL is among the option values
+            # sel._options is a list of (prompt, value) tuples
+            option_values = [opt[1] for opt in sel._options]
+            assert NEW_WALLET_SENTINEL in option_values
+
+    @pytest.mark.asyncio
+    async def test_buy_form_new_wallet_input_hidden_by_default(self) -> None:
+        """New wallet input row should be hidden when an existing wallet is selected."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            new_row = screen.query_one("#new-wallet-row")
+            # If there are wallets in the DB, the new wallet row should be hidden
+            # If DB is empty, it should be visible (only '+ New Wallet...' available)
+            sel = screen.query_one("#exchange", Select)
+            if sel.value == NEW_WALLET_SENTINEL:
+                assert new_row.has_class("visible")
+            else:
+                assert not new_row.has_class("visible")
+
+    @pytest.mark.asyncio
+    async def test_buy_form_new_wallet_input_shown_on_new_wallet_select(self) -> None:
+        """Selecting '+ New Wallet...' should show the new wallet input."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.press("r")
+            await pilot.pause(0.5)
+            screen = app.screen
+            # Programmatically set the select to new wallet
+            sel = screen.query_one("#exchange", Select)
+            sel.value = NEW_WALLET_SENTINEL
+            await pilot.pause(0.3)
+            new_row = screen.query_one("#new-wallet-row")
+            assert new_row.has_class("visible")
