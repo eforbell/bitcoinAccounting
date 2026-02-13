@@ -104,7 +104,7 @@ class CustodyBreakdown(Static):
     def update_custody(self, custody_data: dict[str, float]) -> None:
         """Update custody breakdown display."""
         container = self.query_one("#custody-content", Container)
-        self._sync_clear_children(container)
+        container.remove_children()
 
         total = sum(custody_data.values())
         if total == 0:
