@@ -12,6 +12,7 @@ from src.python.tui.app import CryptoApp
 from src.python.tui.screens.wallet_management import (
     CreateWalletModal,
     EditWalletModal,
+    MergeWalletsModal,
     RenameWalletModal,
     WalletManagementScreen,
 )
@@ -236,3 +237,60 @@ class TestRenameWalletModal:
 
         modal_without_txs = RenameWalletModal("Wallet2", 0)
         assert modal_without_txs._transaction_count == 0
+
+
+class TestMergeWalletsModal:
+    """Test MergeWalletsModal structure (WM-006)."""
+
+    def test_modal_exists(self) -> None:
+        """Test that MergeWalletsModal class exists."""
+        assert MergeWalletsModal is not None
+
+    def test_modal_requires_params(self) -> None:
+        """Test that modal requires source_wallet_id, transaction_count, and available_targets."""
+        targets = [
+            {'wallet_id': 'Target1', 'type': 'hardware', 'custody': 'self-custodied'},
+            {'wallet_id': 'Target2', 'type': 'exchange', 'custody': 'custodial'}
+        ]
+        modal = MergeWalletsModal("SourceWallet", 10, targets)
+        assert modal._source_wallet_id == "SourceWallet"
+        assert modal._transaction_count == 10
+        assert modal._available_targets == targets
+
+    def test_modal_has_escape_binding(self) -> None:
+        """Test that modal has escape binding."""
+        modal = MergeWalletsModal("Source", 0, [])
+        binding_keys = [b.key for b in modal.BINDINGS if isinstance(b, Binding)]
+        assert "escape" in binding_keys
+
+    def test_modal_has_compose_method(self) -> None:
+        """Test that modal has compose method."""
+        modal = MergeWalletsModal("Source", 0, [])
+        assert hasattr(modal, "compose")
+        assert callable(modal.compose)
+
+    def test_modal_has_validation_method(self) -> None:
+        """Test that modal has validation method."""
+        modal = MergeWalletsModal("Source", 0, [])
+        assert hasattr(modal, "_validate_and_merge")
+        assert callable(modal._validate_and_merge)
+
+    def test_modal_has_cancel_action(self) -> None:
+        """Test that modal has cancel action."""
+        modal = MergeWalletsModal("Source", 0, [])
+        assert hasattr(modal, "action_cancel")
+        assert callable(modal.action_cancel)
+
+    def test_modal_stores_transaction_count(self) -> None:
+        """Test that modal stores transaction count for warning display."""
+        targets = [{'wallet_id': 'Target1', 'type': 'hardware', 'custody': 'self-custodied'}]
+        modal_with_txs = MergeWalletsModal("Source", 25, targets)
+        assert modal_with_txs._transaction_count == 25
+
+        modal_without_txs = MergeWalletsModal("Source", 0, targets)
+        assert modal_without_txs._transaction_count == 0
+
+    def test_modal_handles_empty_target_list(self) -> None:
+        """Test that modal can be created with empty target list."""
+        modal = MergeWalletsModal("Source", 5, [])
+        assert modal._available_targets == []

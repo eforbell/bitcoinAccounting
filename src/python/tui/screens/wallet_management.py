@@ -628,6 +628,197 @@ class RenameWalletModal(ModalScreen[bool]):
             error_label.update(f"Error: {str(e)}")
 
 
+class MergeWalletsModal(ModalScreen[bool]):
+    """Modal dialog for merging a wallet into another with confirmation."""
+
+    CSS = """
+    MergeWalletsModal {
+        align: center middle;
+    }
+
+    #merge-wallet-container {
+        width: 70;
+        height: auto;
+        background: $surface;
+        border: solid $accent;
+        padding: 1 2;
+    }
+
+    #modal-title {
+        height: auto;
+        text-align: center;
+        margin-bottom: 1;
+        color: $accent;
+        text-style: bold;
+    }
+
+    .warning-message {
+        color: $warning;
+        text-align: center;
+        margin-bottom: 1;
+        text-style: bold;
+    }
+
+    .info-message {
+        color: $text-muted;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    .form-row {
+        height: auto;
+        min-height: 4;
+        layout: horizontal;
+        align: left middle;
+        margin-bottom: 1;
+    }
+
+    .form-label {
+        width: 20;
+        padding-right: 1;
+        color: $text-muted;
+    }
+
+    MergeWalletsModal Select {
+        width: 40;
+    }
+
+    MergeWalletsModal .readonly-value {
+        width: 40;
+        color: $text;
+    }
+
+    #button-row {
+        height: auto;
+        layout: horizontal;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #button-row Button {
+        margin: 0 1;
+        min-width: 12;
+    }
+
+    .error-message {
+        color: $error;
+        text-align: center;
+        margin-bottom: 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def __init__(
+        self,
+        source_wallet_id: str,
+        transaction_count: int,
+        available_targets: list[dict[str, Any]]
+    ) -> None:
+        """Initialize the merge wallets modal.
+
+        Args:
+            source_wallet_id: Wallet to merge from (will be deleted)
+            transaction_count: Number of transactions in source wallet
+            available_targets: List of wallet dicts that can be merge targets
+        """
+        super().__init__()
+        self._source_wallet_id = source_wallet_id
+        self._transaction_count = transaction_count
+        self._available_targets = available_targets
+
+    def compose(self) -> ComposeResult:
+        """Compose the merge wallets form."""
+        with Container(id="merge-wallet-container"):
+            yield Label("Merge Wallets", id="modal-title")
+
+            # Warning about merge operation
+            if self._transaction_count > 0:
+                yield Label(
+                    f"⚠ This will merge {self._transaction_count} transaction(s)",
+                    classes="warning-message"
+                )
+            else:
+                yield Label(
+                    "This wallet has no transactions in the ledger",
+                    classes="info-message"
+                )
+
+            yield Label(
+                "The source wallet will be deleted after merge",
+                classes="info-message"
+            )
+
+            # Error message placeholder (initially empty)
+            yield Label("", id="error-msg", classes="error-message")
+
+            # Source wallet (read-only)
+            with Horizontal(classes="form-row"):
+                yield Label("Merge From:", classes="form-label")
+                yield Label(self._source_wallet_id, classes="readonly-value")
+
+            # Target wallet selector
+            with Horizontal(classes="form-row"):
+                yield Label("Merge Into:", classes="form-label")
+                if self._available_targets:
+                    # Build options from available targets
+                    options = [
+                        (f"{w['wallet_id']} ({w['type']})", w['wallet_id'])
+                        for w in self._available_targets
+                    ]
+                    yield Select(
+                        options=options,
+                        prompt="Select target wallet",
+                        id="target-wallet-select"
+                    )
+                else:
+                    yield Label("No other wallets available", classes="readonly-value")
+
+            # Buttons
+            with Horizontal(id="button-row"):
+                if self._available_targets:
+                    yield Button("Merge", variant="warning", id="merge-btn")
+                yield Button("Cancel", variant="default", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "merge-btn":
+            self._validate_and_merge()
+        elif event.button.id == "cancel-btn":
+            self.action_cancel()
+
+    def action_cancel(self) -> None:
+        """Cancel and dismiss the modal."""
+        self.dismiss(False)
+
+    def _validate_and_merge(self) -> None:
+        """Validate selection and perform merge."""
+        # Get form values
+        target_select = self.query_one("#target-wallet-select", Select)
+        error_label = self.query_one("#error-msg", Label)
+
+        # Check if a target is selected
+        if target_select.value == Select.BLANK:
+            error_label.update("Error: Please select a target wallet")
+            target_select.focus()
+            return
+
+        target_id = str(target_select.value)
+
+        # Perform the merge
+        app: CryptoApp = self.app  # type: ignore
+        try:
+            app.crypto.wallet_query.merge_wallets(self._source_wallet_id, target_id)
+
+            # Success - dismiss modal with success status
+            self.dismiss(True)
+
+        except Exception as e:
+            error_label.update(f"Error: {str(e)}")
+
+
 class WalletManagementScreen(Screen[None]):
     """Wallet Management screen with wallet list and CRUD operations."""
 
@@ -907,9 +1098,37 @@ class WalletManagementScreen(Screen[None]):
 
     def action_merge_wallets(self) -> None:
         """Show modal to merge selected wallet into another."""
-        # TODO: WM-006 - Implement MergeWalletsModal
         table = self.query_one("#wallet-table", DataTable)
         if table.cursor_row is None:
             self.notify("Please select a wallet to merge", severity="warning")
             return
-        self.notify("Merge wallets feature coming in WM-006", severity="information")
+
+        # Get the selected wallet ID (source wallet)
+        source_wallet_id = str(table.get_row_at(table.cursor_row)[0])
+
+        # Get transaction count for source wallet
+        app: CryptoApp = self.app  # type: ignore
+        query = "SELECT COUNT(*) FROM ledger WHERE exchange = :wallet_id"
+        tx_count = app.crypto.backend.execute_scalar(query, {"wallet_id": source_wallet_id}) or 0
+
+        # Get all other wallets as potential merge targets (exclude source)
+        available_targets = [w for w in self._wallets if w['wallet_id'] != source_wallet_id]
+
+        if not available_targets:
+            self.notify("No other wallets available to merge into", severity="warning")
+            return
+
+        def handle_result(success: bool) -> None:
+            if success:
+                self.notify(
+                    f"Wallet '{source_wallet_id}' merged successfully",
+                    severity="information"
+                )
+            # Refresh wallet list
+            self._show_loading()
+            self.load_wallet_data()
+
+        self.app.push_screen(
+            MergeWalletsModal(source_wallet_id, tx_count, available_targets),
+            handle_result
+        )
