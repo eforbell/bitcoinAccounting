@@ -843,12 +843,43 @@ class WalletManagementScreen(Screen[None]):
 
     def action_toggle_active(self) -> None:
         """Toggle active/inactive status for selected wallet."""
-        # TODO: Implement toggle active
         table = self.query_one("#wallet-table", DataTable)
         if table.cursor_row is None:
-            self.notify("Please select a wallet to deactivate", severity="warning")
+            self.notify("Please select a wallet to toggle", severity="warning")
             return
-        self.notify("Toggle active feature coming soon", severity="information")
+
+        # Get the selected wallet ID from the table row key
+        wallet_id = str(table.get_row_at(table.cursor_row)[0])  # First column is wallet_id
+
+        # Find the wallet in our cached list to get current active status
+        wallet = next((w for w in self._wallets if w['wallet_id'] == wallet_id), None)
+        if wallet is None:
+            self.notify(f"Wallet '{wallet_id}' not found", severity="error")
+            return
+
+        # Get current active status (handle both bool and int representations)
+        current_active = wallet['active']
+        if isinstance(current_active, int):
+            current_active = bool(current_active)
+
+        # Toggle the status
+        new_active = not current_active
+
+        # Update the wallet
+        app: CryptoApp = self.app  # type: ignore
+        try:
+            app.crypto.wallet_query.update_wallet(wallet_id, active=new_active)
+
+            # Show appropriate notification
+            status_text = "activated" if new_active else "deactivated"
+            self.notify(f"Wallet '{wallet_id}' {status_text}", severity="information")
+
+            # Refresh wallet list
+            self._show_loading()
+            self.load_wallet_data()
+
+        except Exception as e:
+            self.notify(f"Error toggling wallet status: {str(e)}", severity="error")
 
     def action_rename_wallet(self) -> None:
         """Show modal to rename selected wallet."""

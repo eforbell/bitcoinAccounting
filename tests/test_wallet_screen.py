@@ -62,6 +62,12 @@ class TestWalletManagementScreenActions:
         assert callable(screen.action_edit_wallet)
         assert callable(screen.action_toggle_active)
 
+    def test_toggle_active_binding_exists(self) -> None:
+        """Test that 'd' binding exists for toggle active."""
+        screen = WalletManagementScreen()
+        binding_keys = [b.key for b in screen.BINDINGS if isinstance(b, Binding)]
+        assert "d" in binding_keys
+
 
 @pytest.mark.asyncio
 class TestWalletManagementScreenRender:
