@@ -6,12 +6,12 @@ from datetime import datetime
 
 import pytest
 from textual.pilot import Pilot
-from textual.widgets import Button, DataTable, Label
+from textual.widgets import Button, DataTable, Input, Label, Select
 
 from cryptoAccounts import CryptoAccounts
 from db import SqliteBackend
 from tui.app import CryptoApp
-from tui.screens.ledger import LedgerScreen, TransactionDetailModal
+from tui.screens.ledger import EditTransactionModal, LedgerScreen, TransactionDetailModal
 
 
 class TestLedgerScreenMount:
@@ -116,8 +116,11 @@ class TestLedgerDataTable:
     @pytest.mark.asyncio
     async def test_empty_state_when_no_transactions(self) -> None:
         """Verify empty state message when no transactions exist."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend=backend)
         app = CryptoApp()
         async with app.run_test() as pilot:
+            app.crypto = crypto
             app.push_screen(LedgerScreen())
             await pilot.pause(0.2)
             status = app.screen.query_one("#status-label")
@@ -544,3 +547,315 @@ class TestLedgerDetailIntegration:
                 await pilot.press("enter")
                 await pilot.pause(0.3)
                 assert isinstance(app.screen, TransactionDetailModal)
+
+
+class TestEditTransactionModal:
+    """TXE-004: Test EditTransactionModal structure and behavior."""
+
+    SAMPLE_TX = {
+        "ID": 1,
+        "Date": "2024-01-15 10:00:00",
+        "Type": "Deposit",
+        "Buy": 1.0,
+        "Buy Cur.": "BTC",
+        "Sell": None,
+        "Sell Cur.": None,
+        "Fee": None,
+        "Fee Cur.": None,
+        "Exchange": "Coinbase",
+        "Group": "DCA",
+        "Comment": "Initial purchase",
+        "Deleted": 0,
+    }
+    WALLET_OPTS = [("Coinbase", "Coinbase"), ("Strike", "Strike"), ("River", "River")]
+
+    @pytest.mark.asyncio
+    async def test_modal_mounts(self) -> None:
+        """EditTransactionModal can be mounted."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            assert isinstance(app.screen, EditTransactionModal)
+
+    @pytest.mark.asyncio
+    async def test_modal_has_title(self) -> None:
+        """Modal shows 'Edit Transaction #ID' title."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            title = app.screen.query_one("#edit-tx-title", Label)
+            assert "Edit Transaction #1" in title.content
+
+    @pytest.mark.asyncio
+    async def test_modal_has_type_select(self) -> None:
+        """Modal has transaction type Select pre-populated."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            select = app.screen.query_one("#edit-type", Select)
+            assert str(select.value) == "Deposit"
+
+    @pytest.mark.asyncio
+    async def test_modal_has_exchange_select(self) -> None:
+        """Modal has wallet/exchange Select pre-populated."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            select = app.screen.query_one("#edit-exchange", Select)
+            assert str(select.value) == "Coinbase"
+
+    @pytest.mark.asyncio
+    async def test_modal_has_date_input(self) -> None:
+        """Modal has date Input pre-populated."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            inp = app.screen.query_one("#edit-createddate", Input)
+            assert inp.value == "2024-01-15 10:00:00"
+
+    @pytest.mark.asyncio
+    async def test_modal_has_buy_input(self) -> None:
+        """Modal has buy amount Input pre-populated."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            inp = app.screen.query_one("#edit-buy", Input)
+            assert inp.value == "1.0"
+
+    @pytest.mark.asyncio
+    async def test_modal_has_comment_input(self) -> None:
+        """Modal has comment Input pre-populated."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            inp = app.screen.query_one("#edit-comment", Input)
+            assert inp.value == "Initial purchase"
+
+    @pytest.mark.asyncio
+    async def test_modal_has_save_button(self) -> None:
+        """Modal has Save button."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            btn = app.screen.query_one("#edit-save-btn", Button)
+            assert "Save" in str(btn.label)
+
+    @pytest.mark.asyncio
+    async def test_modal_has_cancel_button(self) -> None:
+        """Modal has Cancel button."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            btn = app.screen.query_one("#edit-cancel-btn", Button)
+            assert "Cancel" in str(btn.label)
+
+    @pytest.mark.asyncio
+    async def test_escape_dismisses(self) -> None:
+        """Escape key dismisses the modal."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(LedgerScreen())
+            await pilot.pause()
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            assert isinstance(app.screen, EditTransactionModal)
+
+            await pilot.press("escape")
+            await pilot.pause()
+            assert isinstance(app.screen, LedgerScreen)
+
+    @pytest.mark.asyncio
+    async def test_cancel_dismisses(self) -> None:
+        """Cancel action dismisses the modal."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(LedgerScreen())
+            await pilot.pause()
+            modal = EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS)
+            app.push_screen(modal)
+            await pilot.pause()
+
+            modal.action_cancel()
+            await pilot.pause()
+            assert isinstance(app.screen, LedgerScreen)
+
+    @pytest.mark.asyncio
+    async def test_diff_preview_empty_initially(self) -> None:
+        """Diff preview is empty when no changes made."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            diff = app.screen.query_one("#edit-tx-diff", Label)
+            assert diff.content == ""
+
+    @pytest.mark.asyncio
+    async def test_diff_preview_shows_changes(self) -> None:
+        """Diff preview updates when fields are changed."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS)
+            app.push_screen(modal)
+            await pilot.pause()
+
+            # Change the comment field
+            comment_input = modal.query_one("#edit-comment", Input)
+            comment_input.value = "Edited comment"
+            await pilot.pause()
+
+            diff = modal.query_one("#edit-tx-diff", Label)
+            assert "comment" in diff.content
+            assert "→" in diff.content
+
+    @pytest.mark.asyncio
+    async def test_null_fields_show_empty_inputs(self) -> None:
+        """Null transaction fields result in empty input values."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS))
+            await pilot.pause()
+            sell_input = app.screen.query_one("#edit-sell", Input)
+            assert sell_input.value == ""
+
+    @pytest.mark.asyncio
+    async def test_exchange_not_in_options_still_selected(self) -> None:
+        """If current exchange not in wallet options, it's added."""
+        tx = dict(self.SAMPLE_TX, Exchange="CustomWallet")
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(EditTransactionModal(tx, self.WALLET_OPTS))
+            await pilot.pause()
+            select = app.screen.query_one("#edit-exchange", Select)
+            assert str(select.value) == "CustomWallet"
+
+    @pytest.mark.asyncio
+    async def test_stores_transaction(self) -> None:
+        """Modal stores the original transaction for comparison."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = EditTransactionModal(self.SAMPLE_TX, self.WALLET_OPTS)
+            app.push_screen(modal)
+            await pilot.pause()
+            assert modal.transaction["ID"] == 1
+            assert modal.transaction["Exchange"] == "Coinbase"
+
+
+class TestEditTransactionSave:
+    """TXE-004: Test edit modal saves changes via LedgerWriter."""
+
+    @pytest.fixture
+    def crypto_with_data(self):
+        """Create CryptoAccounts with test transactions."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend=backend)
+        crypto.deposit(exchange='Coinbase', deposit_date=datetime(2024, 1, 15, 10, 0), buy=1.0, buy_curr='BTC')
+        return crypto
+
+    @pytest.mark.asyncio
+    async def test_save_updates_transaction(self, crypto_with_data) -> None:
+        """Save button applies changes to the database."""
+        app = CryptoApp()
+
+        tx = {
+            "ID": 1,
+            "Date": "2024-01-15 10:00:00",
+            "Type": "Deposit",
+            "Buy": 1.0,
+            "Buy Cur.": "BTC",
+            "Sell": None,
+            "Sell Cur.": None,
+            "Fee": None,
+            "Fee Cur.": None,
+            "Exchange": "Coinbase",
+            "Group": "",
+            "Comment": "",
+            "Deleted": 0,
+        }
+
+        async with app.run_test() as pilot:
+            # Set crypto after on_mount to avoid being overwritten
+            app.crypto = crypto_with_data
+            modal = EditTransactionModal(tx, [("Coinbase", "Coinbase")])
+            app.push_screen(modal)
+            await pilot.pause()
+
+            # Change the comment
+            comment_input = modal.query_one("#edit-comment", Input)
+            comment_input.value = "Updated comment"
+            await pilot.pause()
+
+            # Save
+            modal._validate_and_save()
+            await pilot.pause()
+
+            # Verify in database via ledger_writer
+            row = crypto_with_data.ledger_writer._get_transaction(1)
+            assert row['comment'] == 'Updated comment'
+
+    @pytest.mark.asyncio
+    async def test_invalid_date_shows_error(self, crypto_with_data) -> None:
+        """Invalid date format shows error, doesn't save."""
+        app = CryptoApp()
+
+        tx = {
+            "ID": 1, "Date": "2024-01-15 10:00:00", "Type": "Deposit",
+            "Buy": 1.0, "Buy Cur.": "BTC", "Sell": None, "Sell Cur.": None,
+            "Fee": None, "Fee Cur.": None, "Exchange": "Coinbase",
+            "Group": "", "Comment": "", "Deleted": 0,
+        }
+
+        async with app.run_test() as pilot:
+            app.crypto = crypto_with_data
+            modal = EditTransactionModal(tx, [("Coinbase", "Coinbase")])
+            app.push_screen(modal)
+            await pilot.pause()
+
+            # Set invalid date
+            date_input = modal.query_one("#edit-createddate", Input)
+            date_input.value = "not-a-date"
+            await pilot.pause()
+
+            modal._validate_and_save()
+            await pilot.pause()
+
+            # Should show error, not dismiss
+            error = modal.query_one("#edit-tx-error", Label)
+            assert "Invalid date" in error.content
+
+    @pytest.mark.asyncio
+    async def test_invalid_number_shows_error(self, crypto_with_data) -> None:
+        """Invalid numeric value shows error, doesn't save."""
+        app = CryptoApp()
+
+        tx = {
+            "ID": 1, "Date": "2024-01-15 10:00:00", "Type": "Deposit",
+            "Buy": 1.0, "Buy Cur.": "BTC", "Sell": None, "Sell Cur.": None,
+            "Fee": None, "Fee Cur.": None, "Exchange": "Coinbase",
+            "Group": "", "Comment": "", "Deleted": 0,
+        }
+
+        async with app.run_test() as pilot:
+            app.crypto = crypto_with_data
+            modal = EditTransactionModal(tx, [("Coinbase", "Coinbase")])
+            app.push_screen(modal)
+            await pilot.pause()
+
+            # Set invalid buy amount
+            buy_input = modal.query_one("#edit-buy", Input)
+            buy_input.value = "not-a-number"
+            await pilot.pause()
+
+            modal._validate_and_save()
+            await pilot.pause()
+
+            error = modal.query_one("#edit-tx-error", Label)
+            assert "Invalid number" in error.content

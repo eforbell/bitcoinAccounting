@@ -30,7 +30,8 @@
       ],
       "priority": 1,
       "estimatedLines": "+80 (schema migration + query filters + tests)",
-      "testStrategy": "pytest tests/test_db_backend.py tests/test_refactored_integration.py -v"
+      "testStrategy": "pytest tests/test_db_backend.py tests/test_refactored_integration.py -v",
+      "passes": true
     },
     {
       "id": "TXE-002",
@@ -46,7 +47,8 @@
       ],
       "priority": 2,
       "estimatedLines": "+150 (query methods + comprehensive tests)",
-      "testStrategy": "pytest tests/test_transaction_editor.py -v"
+      "testStrategy": "pytest tests/test_transaction_editor.py -v",
+      "passes": true
     },
     {
       "id": "TXE-003",
@@ -61,7 +63,8 @@
       ],
       "priority": 3,
       "estimatedLines": "+180 (modal screen + CSS + tests)",
-      "testStrategy": "pytest tests/test_tui_app.py -k ledger -v"
+      "testStrategy": "pytest tests/test_tui_app.py -k ledger -v",
+      "passes": true
     },
     {
       "id": "TXE-004",
@@ -80,7 +83,8 @@
       ],
       "priority": 4,
       "estimatedLines": "+250 (edit modal + diff logic + validation + tests)",
-      "testStrategy": "pytest tests/test_transaction_editor.py tests/test_tui_app.py -k edit -v"
+      "testStrategy": "pytest tests/test_transaction_editor.py tests/test_tui_app.py -k edit -v",
+      "passes": true
     },
     {
       "id": "TXE-005",

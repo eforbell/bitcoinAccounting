@@ -124,6 +124,284 @@ class TransactionDetailModal(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+# Mapping: (display label, transaction dict key, DB column name)
+_EDIT_FIELDS = [
+    ("Date", "Date", "createddate"),
+    ("Buy Amount", "Buy", "buy"),
+    ("Buy Currency", "Buy Cur.", "buy_curr"),
+    ("Sell Amount", "Sell", "sell"),
+    ("Sell Currency", "Sell Cur.", "sell_curr"),
+    ("Fee", "Fee", "fee"),
+    ("Fee Currency", "Fee Cur.", "fee_curr"),
+    ("Group", "Group", "group"),
+    ("Comment", "Comment", "comment"),
+]
+
+_TRANSACTION_TYPES = [
+    ("Deposit", "Deposit"),
+    ("Withdrawal", "Withdrawal"),
+    ("Trade", "Trade"),
+    ("Spend", "Spend"),
+    ("Mining", "Mining"),
+    ("Interest Income", "Interest Income"),
+]
+
+
+class EditTransactionModal(ModalScreen[bool]):
+    """Modal for editing a transaction with pre-populated fields and diff preview."""
+
+    CSS = """
+    EditTransactionModal {
+        align: center middle;
+    }
+
+    #edit-tx-container {
+        width: 80;
+        height: auto;
+        max-height: 90%;
+        background: $surface;
+        border: solid $accent;
+        padding: 1 2;
+        overflow-y: auto;
+    }
+
+    #edit-tx-title {
+        text-align: center;
+        color: $accent;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    .edit-form-row {
+        height: auto;
+        min-height: 4;
+        layout: horizontal;
+        align: left middle;
+        margin-bottom: 0;
+    }
+
+    .edit-form-label {
+        width: 18;
+        padding-right: 1;
+        color: $text-muted;
+    }
+
+    EditTransactionModal Input {
+        width: 50;
+    }
+
+    EditTransactionModal Select {
+        width: 50;
+    }
+
+    #edit-tx-diff {
+        margin-top: 1;
+        padding: 1;
+        color: #f7931a;
+        text-style: italic;
+    }
+
+    #edit-tx-error {
+        color: $error;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #edit-tx-button-row {
+        height: auto;
+        layout: horizontal;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #edit-tx-button-row Button {
+        margin: 0 1;
+        min-width: 12;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def __init__(
+        self,
+        transaction: dict[str, Any],
+        wallet_options: list[tuple[str, str]],
+    ) -> None:
+        super().__init__()
+        self.transaction = transaction
+        self.wallet_options = wallet_options
+
+    def compose(self) -> ComposeResult:
+        tx = self.transaction
+        with Container(id="edit-tx-container"):
+            yield Label(
+                f"Edit Transaction #{tx.get('ID', '?')}",
+                id="edit-tx-title",
+            )
+            yield Label("", id="edit-tx-error")
+
+            # Transaction type (Select)
+            with Horizontal(classes="edit-form-row"):
+                yield Label("Type:", classes="edit-form-label")
+                yield Select(
+                    options=_TRANSACTION_TYPES,
+                    value=tx.get("Type", "Deposit"),
+                    id="edit-type",
+                    allow_blank=False,
+                )
+
+            # Wallet / Exchange (Select)
+            with Horizontal(classes="edit-form-row"):
+                yield Label("Wallet:", classes="edit-form-label")
+                current_exchange = tx.get("Exchange", "")
+                # Ensure current value is in options
+                opts = list(self.wallet_options)
+                existing_values = {v for _, v in opts}
+                if current_exchange and current_exchange not in existing_values:
+                    opts.append((current_exchange, current_exchange))
+                yield Select(
+                    options=opts,
+                    value=current_exchange,
+                    id="edit-exchange",
+                    allow_blank=False,
+                )
+
+            # Text/numeric input fields
+            for label, tx_key, db_col in _EDIT_FIELDS:
+                val = tx.get(tx_key)
+                display_val = str(val) if val is not None else ""
+                input_id = f"edit-{db_col.replace('_', '-')}"
+                with Horizontal(classes="edit-form-row"):
+                    yield Label(f"{label}:", classes="edit-form-label")
+                    yield Input(
+                        value=display_val,
+                        placeholder=label,
+                        id=input_id,
+                    )
+
+            # Diff preview
+            yield Label("", id="edit-tx-diff")
+
+            # Buttons
+            with Horizontal(id="edit-tx-button-row"):
+                yield Button("Save", variant="primary", id="edit-save-btn")
+                yield Button("Cancel", variant="default", id="edit-cancel-btn")
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Update diff preview when any input changes."""
+        self._update_diff()
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Update diff preview when a select changes."""
+        self._update_diff()
+
+    def _get_changes(self) -> dict[str, tuple[Any, Any]]:
+        """Build dict of {db_col: (old_value, new_value)} for changed fields."""
+        tx = self.transaction
+        changes: dict[str, tuple[Any, Any]] = {}
+
+        # Check type
+        new_type = str(self.query_one("#edit-type", Select).value)
+        old_type = tx.get("Type", "")
+        if new_type != old_type:
+            changes["trans_type"] = (old_type, new_type)
+
+        # Check exchange
+        new_exchange = str(self.query_one("#edit-exchange", Select).value)
+        old_exchange = tx.get("Exchange", "")
+        if new_exchange != old_exchange:
+            changes["exchange"] = (old_exchange, new_exchange)
+
+        # Check text/numeric fields
+        for _label, tx_key, db_col in _EDIT_FIELDS:
+            input_id = f"edit-{db_col.replace('_', '-')}"
+            new_val = self.query_one(f"#{input_id}", Input).value.strip()
+            old_val = tx.get(tx_key)
+            old_str = str(old_val) if old_val is not None else ""
+
+            if new_val != old_str:
+                changes[db_col] = (old_str, new_val)
+
+        return changes
+
+    def _update_diff(self) -> None:
+        """Update the diff preview label."""
+        changes = self._get_changes()
+        diff_label = self.query_one("#edit-tx-diff", Label)
+
+        if not changes:
+            diff_label.update("")
+            return
+
+        parts = []
+        for col, (old, new) in changes.items():
+            old_display = old if old else '(empty)'
+            new_display = new if new else '(empty)'
+            parts.append(f"{col}: {old_display} → {new_display}")
+
+        diff_label.update(f"Changes: {', '.join(parts)}")
+
+    def _validate_and_save(self) -> None:
+        """Validate inputs and save changes."""
+        error_label = self.query_one("#edit-tx-error", Label)
+        changes = self._get_changes()
+
+        if not changes:
+            self.dismiss(False)
+            return
+
+        # Validate date format if changed
+        if "createddate" in changes:
+            new_date = changes["createddate"][1]
+            try:
+                datetime.strptime(new_date, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                error_label.update("Invalid date format. Use YYYY-MM-DD HH:MM:SS")
+                return
+
+        # Validate numeric fields
+        for num_field in ("buy", "sell", "fee"):
+            if num_field in changes:
+                new_val = changes[num_field][1]
+                if new_val:  # allow empty (will become None/0)
+                    try:
+                        float(new_val)
+                    except ValueError:
+                        error_label.update(f"Invalid number for {num_field}: {new_val}")
+                        return
+
+        # Build kwargs for update_transaction
+        kwargs: dict[str, Any] = {}
+        for col, (_old, new) in changes.items():
+            if col in ("buy", "sell", "fee"):
+                kwargs[col] = float(new) if new else 0.0
+            else:
+                kwargs[col] = new
+
+        # Save via LedgerWriter
+        from tui.app import CryptoApp
+        app = self.app
+        assert isinstance(app, CryptoApp)
+
+        try:
+            tx_id = self.transaction.get("ID")
+            app.crypto.ledger_writer.update_transaction(tx_id, **kwargs)  # type: ignore[union-attr]
+            self.dismiss(True)
+        except Exception as e:
+            error_label.update(f"Error: {e}")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "edit-save-btn":
+            self._validate_and_save()
+        elif event.button.id == "edit-cancel-btn":
+            self.action_cancel()
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 class LedgerScreen(Screen[None]):
     """Screen displaying transaction ledger with filtering capabilities."""
 
@@ -504,13 +782,34 @@ class LedgerScreen(Screen[None]):
 
         def handle_detail_result(action: str | None) -> None:
             if action == "edit":
-                # TXE-004 will implement edit flow
-                self.notify("Edit not yet implemented", severity="warning")
+                self._open_edit_modal(tx)
             elif action == "delete":
                 # TXE-005 will implement delete flow
                 self.notify("Delete not yet implemented", severity="warning")
 
         self.app.push_screen(TransactionDetailModal(tx), handle_detail_result)
+
+    def _open_edit_modal(self, tx: dict[str, Any]) -> None:
+        """Open the edit transaction modal with wallet options."""
+        # Build wallet options from the wallet selector
+        wallet_opts: list[tuple[str, str]] = []
+        try:
+            select = self.query_one("#wallet-select", Select)
+            for prompt, value in select._options:
+                if value is not None:
+                    wallet_opts.append((str(prompt), str(value)))
+        except Exception:
+            pass
+
+        def handle_edit_result(saved: bool) -> None:
+            if saved:
+                self.notify("Transaction updated", severity="information")
+                self.load_transactions()
+
+        self.app.push_screen(
+            EditTransactionModal(tx, wallet_opts),
+            handle_edit_result,
+        )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button clicks."""
