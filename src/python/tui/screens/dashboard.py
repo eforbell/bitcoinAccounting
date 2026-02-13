@@ -57,6 +57,49 @@ class StatCard(Static):
         value_label.update(value)
 
 
+class WalletsCard(StatCard):
+    """Wallets stat card with Manage button."""
+
+    DEFAULT_CSS = """
+    WalletsCard {
+        width: 1fr;
+        height: auto;
+        min-height: 4;
+        border: solid #444444;
+        background: #16213e;
+        padding: 0 1;
+        layout: vertical;
+    }
+    WalletsCard .stat-label {
+        color: #888888;
+        text-style: bold;
+        padding-top: 1;
+    }
+    WalletsCard .stat-value {
+        color: #f7931a;
+        text-style: bold;
+    }
+    WalletsCard .manage-link {
+        color: #888888;
+        text-style: italic;
+        padding-bottom: 1;
+    }
+    WalletsCard .manage-link:hover {
+        color: #f7931a;
+        text-style: bold italic;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield Label(self.stat_label, classes="stat-label")
+        yield Label(self.stat_value, classes="stat-value")
+        yield Label("→ Manage", classes="manage-link", id="wallet-manage-link")
+
+    def on_click(self) -> None:
+        """Handle click on the card - open wallet management screen."""
+        self.app.action_menu_wallet()
+
+
 class CustodyBreakdown(Static):
     """Widget showing custody type breakdown as percentages."""
 
@@ -389,7 +432,7 @@ Press [bold]?[/bold] for help anytime."""
             )
         )
         stats_row.mount(
-            StatCard(
+            WalletsCard(
                 "Wallets",
                 f"{active_wallets} active / {total_wallets} total",
                 "wallets-card"
