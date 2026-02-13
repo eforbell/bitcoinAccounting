@@ -10,11 +10,118 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
-from textual.screen import Screen
+from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select, Static
 
 if TYPE_CHECKING:
     from tui.app import CryptoApp
+
+
+# Fields to display in detail modal, in order: (label, dict_key)
+_DETAIL_FIELDS = [
+    ("Transaction ID", "ID"),
+    ("Date", "Date"),
+    ("Type", "Type"),
+    ("Buy Amount", "Buy"),
+    ("Buy Currency", "Buy Cur."),
+    ("Sell Amount", "Sell"),
+    ("Sell Currency", "Sell Cur."),
+    ("Fee", "Fee"),
+    ("Fee Currency", "Fee Cur."),
+    ("Wallet / Exchange", "Exchange"),
+    ("Group", "Group"),
+    ("Comment", "Comment"),
+]
+
+
+class TransactionDetailModal(ModalScreen[str | None]):
+    """Modal showing full transaction details with Edit/Delete/Close actions."""
+
+    CSS = """
+    TransactionDetailModal {
+        align: center middle;
+    }
+
+    #detail-container {
+        width: 70;
+        height: auto;
+        max-height: 80%;
+        background: $surface;
+        border: solid $accent;
+        padding: 1 2;
+    }
+
+    #detail-title {
+        text-align: center;
+        color: $accent;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    .detail-row {
+        height: auto;
+        layout: horizontal;
+        margin-bottom: 0;
+    }
+
+    .detail-field-name {
+        width: 22;
+        color: #888888;
+        text-style: bold;
+    }
+
+    .detail-field-value {
+        width: 1fr;
+        color: #e0e0e0;
+    }
+
+    #detail-button-row {
+        height: auto;
+        layout: horizontal;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #detail-button-row Button {
+        margin: 0 1;
+        min-width: 12;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "close", "Close", show=False),
+    ]
+
+    def __init__(self, transaction: dict[str, Any]) -> None:
+        super().__init__()
+        self.transaction = transaction
+
+    def compose(self) -> ComposeResult:
+        with Container(id="detail-container"):
+            yield Label("Transaction Details", id="detail-title")
+
+            for label, key in _DETAIL_FIELDS:
+                value = self.transaction.get(key, "")
+                display_val = str(value) if value is not None and value != "" else "—"
+                with Horizontal(classes="detail-row"):
+                    yield Label(f"{label}:", classes="detail-field-name")
+                    yield Label(display_val, classes="detail-field-value")
+
+            with Horizontal(id="detail-button-row"):
+                yield Button("Edit", variant="primary", id="detail-edit-btn")
+                yield Button("Delete", variant="warning", id="detail-delete-btn")
+                yield Button("Close", variant="default", id="detail-close-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "detail-edit-btn":
+            self.dismiss("edit")
+        elif event.button.id == "detail-delete-btn":
+            self.dismiss("delete")
+        elif event.button.id == "detail-close-btn":
+            self.dismiss(None)
+
+    def action_close(self) -> None:
+        self.dismiss(None)
 
 
 class LedgerScreen(Screen[None]):
@@ -382,6 +489,28 @@ class LedgerScreen(Screen[None]):
         """Show empty state when no transactions exist."""
         status = self.query_one("#status-label", Label)
         status.update("[yellow]No transactions found. Import data to get started.[/yellow]")
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle Enter on a row to show transaction detail modal."""
+        table = self.query_one("#transactions-table", DataTable)
+        if table.cursor_row is None or not self.filtered_transactions:
+            return
+
+        row_idx = table.cursor_row
+        if row_idx < 0 or row_idx >= len(self.filtered_transactions):
+            return
+
+        tx = self.filtered_transactions[row_idx]
+
+        def handle_detail_result(action: str | None) -> None:
+            if action == "edit":
+                # TXE-004 will implement edit flow
+                self.notify("Edit not yet implemented", severity="warning")
+            elif action == "delete":
+                # TXE-005 will implement delete flow
+                self.notify("Delete not yet implemented", severity="warning")
+
+        self.app.push_screen(TransactionDetailModal(tx), handle_detail_result)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button clicks."""

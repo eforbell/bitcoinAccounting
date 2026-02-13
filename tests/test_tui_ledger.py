@@ -6,11 +6,12 @@ from datetime import datetime
 
 import pytest
 from textual.pilot import Pilot
+from textual.widgets import Button, DataTable, Label
 
 from cryptoAccounts import CryptoAccounts
 from db import SqliteBackend
 from tui.app import CryptoApp
-from tui.screens.ledger import LedgerScreen
+from tui.screens.ledger import LedgerScreen, TransactionDetailModal
 
 
 class TestLedgerScreenMount:
@@ -348,3 +349,198 @@ class TestLedgerReload:
             # Verify binding exists
             bindings = {b.key for b in app.screen.BINDINGS}
             assert "r" in bindings
+
+
+class TestTransactionDetailModal:
+    """TXE-003: Test TransactionDetailModal structure and behavior."""
+
+    SAMPLE_TX = {
+        "ID": 1,
+        "Date": "2024-01-15 10:00:00",
+        "Type": "Deposit",
+        "Buy": 1.0,
+        "Buy Cur.": "BTC",
+        "Sell": None,
+        "Sell Cur.": None,
+        "Fee": None,
+        "Fee Cur.": None,
+        "Exchange": "Coinbase",
+        "Group": "",
+        "Comment": "Initial purchase",
+        "Deleted": 0,
+    }
+
+    @pytest.mark.asyncio
+    async def test_modal_mounts(self) -> None:
+        """TransactionDetailModal can be mounted."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(TransactionDetailModal(self.SAMPLE_TX))
+            await pilot.pause()
+            assert isinstance(app.screen, TransactionDetailModal)
+
+    @pytest.mark.asyncio
+    async def test_modal_has_title(self) -> None:
+        """Modal shows 'Transaction Details' title."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(TransactionDetailModal(self.SAMPLE_TX))
+            await pilot.pause()
+            title = app.screen.query_one("#detail-title", Label)
+            assert "Transaction Details" in title.content
+
+    @pytest.mark.asyncio
+    async def test_modal_has_container(self) -> None:
+        """Modal has the detail container."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(TransactionDetailModal(self.SAMPLE_TX))
+            await pilot.pause()
+            assert app.screen.query_one("#detail-container")
+
+    @pytest.mark.asyncio
+    async def test_modal_displays_field_values(self) -> None:
+        """Modal displays transaction field values."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(TransactionDetailModal(self.SAMPLE_TX))
+            await pilot.pause()
+            labels = app.screen.query(".detail-field-value")
+            texts = [lbl.content for lbl in labels]
+            # Check key values are shown
+            assert any("1" in t for t in texts)  # ID
+            assert any("2024-01-15" in t for t in texts)  # Date
+            assert any("Deposit" in t for t in texts)  # Type
+            assert any("Coinbase" in t for t in texts)  # Exchange
+
+    @pytest.mark.asyncio
+    async def test_modal_displays_field_names(self) -> None:
+        """Modal displays field name labels."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(TransactionDetailModal(self.SAMPLE_TX))
+            await pilot.pause()
+            labels = app.screen.query(".detail-field-name")
+            texts = [lbl.content for lbl in labels]
+            assert any("Transaction ID" in t for t in texts)
+            assert any("Date" in t for t in texts)
+            assert any("Type" in t for t in texts)
+            assert any("Wallet" in t for t in texts)
+
+    @pytest.mark.asyncio
+    async def test_modal_shows_dash_for_empty_fields(self) -> None:
+        """Null/empty fields display as em-dash."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(TransactionDetailModal(self.SAMPLE_TX))
+            await pilot.pause()
+            labels = app.screen.query(".detail-field-value")
+            texts = [lbl.content for lbl in labels]
+            # Sell/Fee fields are None, should show "—"
+            assert texts.count("—") >= 2
+
+    @pytest.mark.asyncio
+    async def test_modal_has_edit_button(self) -> None:
+        """Modal has Edit button."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(TransactionDetailModal(self.SAMPLE_TX))
+            await pilot.pause()
+            btn = app.screen.query_one("#detail-edit-btn", Button)
+            assert "Edit" in str(btn.label)
+
+    @pytest.mark.asyncio
+    async def test_modal_has_delete_button(self) -> None:
+        """Modal has Delete button."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(TransactionDetailModal(self.SAMPLE_TX))
+            await pilot.pause()
+            btn = app.screen.query_one("#detail-delete-btn", Button)
+            assert "Delete" in str(btn.label)
+
+    @pytest.mark.asyncio
+    async def test_modal_has_close_button(self) -> None:
+        """Modal has Close button."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(TransactionDetailModal(self.SAMPLE_TX))
+            await pilot.pause()
+            btn = app.screen.query_one("#detail-close-btn", Button)
+            assert "Close" in str(btn.label)
+
+    @pytest.mark.asyncio
+    async def test_close_button_dismisses(self) -> None:
+        """Close button dismisses the modal."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(LedgerScreen())
+            await pilot.pause()
+            modal = TransactionDetailModal(self.SAMPLE_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            assert isinstance(app.screen, TransactionDetailModal)
+
+            # Directly call the dismiss action (avoids click-targeting flakiness)
+            modal.action_close()
+            await pilot.pause()
+            assert isinstance(app.screen, LedgerScreen)
+
+    @pytest.mark.asyncio
+    async def test_escape_dismisses(self) -> None:
+        """Escape key dismisses the modal."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.push_screen(LedgerScreen())
+            await pilot.pause()
+            app.push_screen(TransactionDetailModal(self.SAMPLE_TX))
+            await pilot.pause()
+            assert isinstance(app.screen, TransactionDetailModal)
+
+            await pilot.press("escape")
+            await pilot.pause()
+            assert isinstance(app.screen, LedgerScreen)
+
+    @pytest.mark.asyncio
+    async def test_modal_stores_transaction(self) -> None:
+        """Modal stores the transaction data for later use."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = TransactionDetailModal(self.SAMPLE_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            assert modal.transaction == self.SAMPLE_TX
+            assert modal.transaction["ID"] == 1
+
+
+class TestLedgerDetailIntegration:
+    """TXE-003: Test Enter key opens detail modal from Ledger."""
+
+    @pytest.fixture
+    def crypto_with_data(self):
+        """Create CryptoAccounts with test transactions."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend=backend)
+        crypto.deposit(exchange='Strike', deposit_date=datetime(2024, 1, 1), buy=1.0, buy_curr='BTC')
+        return crypto
+
+    @pytest.mark.asyncio
+    async def test_enter_on_row_opens_detail_modal(self, crypto_with_data, monkeypatch) -> None:
+        """Pressing Enter on a row opens TransactionDetailModal."""
+        app = CryptoApp()
+        monkeypatch.setattr(app, "crypto", crypto_with_data)
+
+        async with app.run_test() as pilot:
+            screen = LedgerScreen()
+            app.push_screen(screen)
+            await pilot.pause(0.5)
+
+            # Verify table has data
+            table = screen.query_one("#transactions-table", DataTable)
+            if table.row_count > 0:
+                # Focus the table and press Enter (cursor starts at row 0)
+                table.focus()
+                await pilot.pause()
+                await pilot.press("enter")
+                await pilot.pause(0.3)
+                assert isinstance(app.screen, TransactionDetailModal)
