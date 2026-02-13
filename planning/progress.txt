@@ -10,6 +10,17 @@
 - ModalScreen pattern: Use `ModalScreen[ReturnType]` with centered Container; form with Label + Input/Select rows; Button row with primary/default variants; handle dismissal callback in parent screen
 - Edit modal pattern: Pass data via `__init__(data: dict)`, pre-populate form fields, use read-only Label for immutable fields, build updates dict with only changed values
 
+## 2026-02-12 - WM-002 (completion)
+- What was implemented: Toggle wallet active/inactive status functionality (missing piece from WM-002)
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (implemented action_toggle_active to get wallet, toggle active status, update via WalletQuery, refresh list)
+  - `tests/test_wallet_screen.py` (added test for 'd' binding existence)
+- **Learnings:**
+  - Toggle pattern: Get current value from cached data, flip it, update DB, refresh UI
+  - Type handling: Handle both bool and int representations of boolean fields (SQLite returns 0/1)
+  - Status notifications: Show clear feedback with status_text = "activated" if new_active else "deactivated"
+---
+
 ## 2026-02-12 - WM-004
 - What was implemented: EditWalletModal for editing wallet metadata; pre-populated form, read-only name field, only updates changed fields
 - Files changed:
