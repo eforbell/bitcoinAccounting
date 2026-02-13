@@ -22,8 +22,7 @@ class StatCard(Static):
     DEFAULT_CSS = """
     StatCard {
         width: 1fr;
-        height: auto;
-        min-height: 6;
+        height: 6;
         border: solid #444444;
         background: #16213e;
         padding: 0 1;
@@ -63,8 +62,7 @@ class WalletsCard(StatCard):
     DEFAULT_CSS = """
     WalletsCard {
         width: 1fr;
-        height: auto;
-        min-height: 6;
+        height: 6;
         border: solid #444444;
         background: #16213e;
         padding: 0 1;
