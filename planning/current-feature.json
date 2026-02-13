@@ -1,18 +1,17 @@
 {
-  "currentFeature": "feature-11",
-  "featureName": "Wallet Management Screen",
-  "prdPath": "planning/features/feature-11-prd.json",
-  "summaryPath": "planning/features/feature-11-summary.md",
-  "branch": "feature/wallet-management",
+  "currentFeature": "feature-12",
+  "featureName": "Transaction Editor",
+  "prdPath": "planning/features/feature-12-prd.json",
+  "summaryPath": "planning/features/feature-12-summary.md",
+  "branch": "feature/transaction-editor",
   "status": "not_started",
   "stories": [
-    {"id": "WM-001", "title": "Add wallet CRUD methods to WalletQuery", "status": "not_started"},
-    {"id": "WM-002", "title": "Wallet Management TUI screen - wallet list with DataTable", "status": "not_started"},
-    {"id": "WM-003", "title": "Create Wallet modal", "status": "not_started"},
-    {"id": "WM-004", "title": "Edit Wallet modal", "status": "not_started"},
-    {"id": "WM-005", "title": "Rename Wallet with confirmation", "status": "not_started"},
-    {"id": "WM-006", "title": "Merge Wallets with confirmation", "status": "not_started"},
-    {"id": "WM-007", "title": "Update Getting Started guide and keyboard navigation", "status": "not_started"}
+    {"id": "TXE-001", "title": "Add soft-delete column to ledger schema", "status": "not_started"},
+    {"id": "TXE-002", "title": "Add transaction update and delete methods to LedgerWriter", "status": "not_started"},
+    {"id": "TXE-003", "title": "Transaction detail modal from Ledger screen", "status": "not_started"},
+    {"id": "TXE-004", "title": "Edit Transaction modal", "status": "not_started"},
+    {"id": "TXE-005", "title": "Delete Transaction with confirmation", "status": "not_started"},
+    {"id": "TXE-006", "title": "Show deleted transactions toggle in Ledger", "status": "not_started"}
   ],
   "completedFeatures": [
     {
@@ -94,10 +93,17 @@
       "mergedDate": "2026-02-12",
       "stories": 6,
       "notes": "Smart wallet inputs with autocomplete and validation, whitespace normalization at storage layer, TUI duplicate detection in Import Wizard, CLI input guarding in recording scripts"
+    },
+    {
+      "featureId": "feature-11",
+      "featureName": "Wallet Management Screen",
+      "branch": "feature/wallet-management",
+      "mergedDate": "2026-02-13",
+      "stories": 7,
+      "notes": "Dedicated TUI screen for wallet CRUD operations: create, edit, rename, merge, toggle active. WalletQuery extensions with atomic rename/merge. Transaction count warnings for destructive operations. Dashboard wallet card with clickable link."
     }
   ],
   "futureEnhancements": [
-    "Feature #11: Wallet Management Screen (create, edit, rename, merge, deactivate wallets)",
     "Feature #12: Transaction Editor (view, edit, soft-delete, restore transactions from Ledger screen)",
     "Feature #13: Multi-coin support (ETH, other assets)",
     "Feature #14: Web UI layer (Flask/FastAPI)",
