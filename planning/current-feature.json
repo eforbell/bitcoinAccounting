@@ -1,17 +1,18 @@
 {
-  "currentFeature": "feature-10",
-  "featureName": "Data Integrity Foundations",
-  "prdPath": "planning/features/feature-10-prd.json",
-  "summaryPath": "planning/features/feature-10-summary.md",
-  "branch": "feature/data-integrity-foundations",
+  "currentFeature": "feature-11",
+  "featureName": "Wallet Management Screen",
+  "prdPath": "planning/features/feature-11-prd.json",
+  "summaryPath": "planning/features/feature-11-summary.md",
+  "branch": "feature/wallet-management",
   "status": "not_started",
   "stories": [
-    {"id": "DIF-001", "title": "Normalize wallet names at the storage layer", "status": "completed"},
-    {"id": "DIF-002", "title": "Add wallet selector to Record Transaction screen (Buy form)", "status": "completed"},
-    {"id": "DIF-003", "title": "Add wallet selector to Record Transaction screen (Sell, Transfer, Interest forms)", "status": "completed"},
-    {"id": "DIF-004", "title": "Add wallet selector to Import Wizard withdraw-to field", "status": "completed"},
-    {"id": "DIF-005", "title": "Add duplicate detection to TUI Import Wizard", "status": "completed"},
-    {"id": "DIF-006", "title": "Add input validation to CLI recording scripts", "status": "completed"}
+    {"id": "WM-001", "title": "Add wallet CRUD methods to WalletQuery", "status": "not_started"},
+    {"id": "WM-002", "title": "Wallet Management TUI screen - wallet list with DataTable", "status": "not_started"},
+    {"id": "WM-003", "title": "Create Wallet modal", "status": "not_started"},
+    {"id": "WM-004", "title": "Edit Wallet modal", "status": "not_started"},
+    {"id": "WM-005", "title": "Rename Wallet with confirmation", "status": "not_started"},
+    {"id": "WM-006", "title": "Merge Wallets with confirmation", "status": "not_started"},
+    {"id": "WM-007", "title": "Update Getting Started guide and keyboard navigation", "status": "not_started"}
   ],
   "completedFeatures": [
     {
@@ -85,10 +86,17 @@
       "mergedDate": "2026-02-12",
       "stories": 12,
       "notes": "Full-featured terminal UI with Textual: dashboard, portfolio, ledger with summary stats, trade history, record transaction, import wizard with file browser, export, tax reporting (gains/1099-B/forecast), visualizations, and help system. Keyboard and mouse driven."
+    },
+    {
+      "featureId": "feature-10",
+      "featureName": "Data Integrity Foundations",
+      "branch": "feature/data-integrity-foundations",
+      "mergedDate": "2026-02-12",
+      "stories": 6,
+      "notes": "Smart wallet inputs with autocomplete and validation, whitespace normalization at storage layer, TUI duplicate detection in Import Wizard, CLI input guarding in recording scripts"
     }
   ],
   "futureEnhancements": [
-    "Feature #10: Data Integrity Foundations (smart wallet inputs, whitespace normalization, TUI duplicate detection, CLI input guarding)",
     "Feature #11: Wallet Management Screen (create, edit, rename, merge, deactivate wallets)",
     "Feature #12: Transaction Editor (view, edit, soft-delete, restore transactions from Ledger screen)",
     "Feature #13: Multi-coin support (ETH, other assets)",

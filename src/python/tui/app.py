@@ -12,7 +12,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
 from cryptoAccounts import CryptoAccounts
-from tui.screens import DashboardScreen, ExportScreen, ImportWizardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TaxReportingScreen, TradesScreen, VisualizationScreen
+from tui.screens import DashboardScreen, ExportScreen, ImportWizardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TaxReportingScreen, TradesScreen, VisualizationScreen, WalletManagementScreen
 
 
 class HelpScreen(ModalScreen[None]):
@@ -95,6 +95,8 @@ class HelpScreen(ModalScreen[None]):
                 yield Label("      Capital gains tracker, 1099-B export, sale forecast", classes="help-desc")
                 yield Label("  V   Visualizations", classes="help-line")
                 yield Label("      Generate Orange Plot, Balance, Custody charts, PDF report", classes="help-desc")
+                yield Label("  W   Wallet Management", classes="help-line")
+                yield Label("      Create, edit, rename, merge, and manage wallets", classes="help-desc")
                 yield Label("")
 
                 yield Label("Within Screens", classes="help-section")
@@ -195,6 +197,7 @@ class MainMenu(Widget):
         with Center():
             with Horizontal(id="menu-grid-bottom"):
                 yield MenuButton("Import", "Load CSV files", "I", "import")
+                yield MenuButton("Wallets", "Manage wallets", "W", "wallet")
                 yield MenuButton("Tax / Report", "Gains & 1099-B", "T", "tax")
                 yield MenuButton("Visualize", "Generate charts", "V", "viz")
         yield Label("Press a key or click a menu item  |  ? for help  |  Q to quit", id="menu-hint")
@@ -220,6 +223,7 @@ class CryptoApp(App[None]):
         Binding("e", "menu_export", "Export", show=False),
         Binding("t", "menu_tax", "Tax/Report", show=False),
         Binding("v", "menu_viz", "Visualize", show=False),
+        Binding("w", "menu_wallet", "Wallets", show=False),
         Binding("question_mark", "show_help", "Help"),
         Binding("f1", "show_help", "Help", show=False),
     ]
@@ -313,6 +317,10 @@ class CryptoApp(App[None]):
     def action_menu_viz(self) -> None:
         # TUI-011: Visualization screen with chart generation
         self.push_screen(VisualizationScreen())
+
+    def action_menu_wallet(self) -> None:
+        # WM-002: Wallet Management screen
+        self.push_screen(WalletManagementScreen())
 
     def on_worker_state_changed(self, event: object) -> None:
         """Handle worker errors globally to show user-friendly notifications."""

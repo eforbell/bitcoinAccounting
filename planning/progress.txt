@@ -7,6 +7,72 @@
 - Textual CSS class gotcha: CSS `.new-wallet-row { display: none }` overrides `widget.display = True` set programmatically; use `display` property without conflicting CSS rules
 - Duplicate detection in Import Wizard: Call `detect_duplicates(transactions, app.crypto.backend)` in `show_step_3()`; store results in instance var; show warning banner with Static widget; mark duplicates with ⚠ prefix
 - CLI input validation: Use `prompt_float()/prompt_int()` helpers with try/except around conversions; re-prompt on ValueError; strip() all wallet/exchange name inputs
+- ModalScreen pattern: Use `ModalScreen[ReturnType]` with centered Container; form with Label + Input/Select rows; Button row with primary/default variants; handle dismissal callback in parent screen
+- Edit modal pattern: Pass data via `__init__(data: dict)`, pre-populate form fields, use read-only Label for immutable fields, build updates dict with only changed values
+- **CRITICAL: All write operations must call `backend.commit()`** - SQLite does NOT auto-commit by default; without explicit commit(), changes stay in memory and are lost
+- Rename modal pattern: Show transaction count warning, require typing new name twice for confirmation, validate not empty/same/duplicate
+
+## 2026-02-12 - WM-005
+- What was implemented: RenameWalletModal with double-entry confirmation and transaction count warning; integrated via 'r' keybinding
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (added RenameWalletModal class; updated action_rename_wallet to get wallet, query tx count, push modal)
+  - `tests/test_wallet_screen.py` (added TestRenameWalletModal class with 7 structure tests)
+- **Learnings:**
+  - Confirmation pattern: Require typing value twice (new_name and confirm_name inputs) for destructive operations
+  - Warning display: Show impact count ("This will update X transactions") using dynamic query before operation
+  - Multi-stage validation: Check empty → check same as current → check names match → check duplicate exists → execute
+  - Button variants: Use `variant="warning"` for potentially destructive operations (rename, merge, delete)
+  - Transaction count query: `SELECT COUNT(*) FROM ledger WHERE exchange = :wallet_id` to show impact before rename
+---
+
+## 2026-02-12 - WM-001/002/003/004 (critical bug fix)
+- What was fixed: Added missing `backend.commit()` calls to all WalletQuery write methods
+- Files changed:
+  - `src/python/db/queries/wallet.py` (added `self.backend.commit()` to add_wallet, update_wallet, rename_wallet, merge_wallets)
+- **Learnings:**
+  - CRITICAL BUG: SQLite's Python API does NOT auto-commit by default - all write operations must explicitly call `commit()`
+  - Without commit(), changes remain in the connection's transaction buffer and are never persisted to disk
+  - Pattern: Follow LedgerWriter convention - all write methods should call `self.backend.commit()` after execute
+  - Symptoms: UI updates work, but changes disappear on app restart or screen refresh
+  - This affected ALL wallet operations: create, edit, toggle active, rename, merge
+---
+
+## 2026-02-12 - WM-002 (completion)
+- What was implemented: Toggle wallet active/inactive status functionality (missing piece from WM-002)
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (implemented action_toggle_active to get wallet, toggle active status, update via WalletQuery, refresh list)
+  - `tests/test_wallet_screen.py` (added test for 'd' binding existence)
+- **Learnings:**
+  - Toggle pattern: Get current value from cached data, flip it, update DB, refresh UI
+  - Type handling: Handle both bool and int representations of boolean fields (SQLite returns 0/1)
+  - Status notifications: Show clear feedback with status_text = "activated" if new_active else "deactivated"
+---
+
+## 2026-02-12 - WM-004
+- What was implemented: EditWalletModal for editing wallet metadata; pre-populated form, read-only name field, only updates changed fields
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (added EditWalletModal class with wallet dict constructor; updated action_edit_wallet to get selected row, find wallet in cache, push modal)
+  - `tests/test_wallet_screen.py` (added TestEditWalletModal class with 6 structure tests)
+- **Learnings:**
+  - Modal with parameters: Pass data via `__init__(self, data: dict)`, store as instance var, use in compose()
+  - Read-only fields: Use Label widget instead of disabled Input for read-only values (cleaner UX)
+  - Selective updates: Build updates dict with only changed fields (compare new values to original); if empty, dismiss without DB call
+  - Table row access: Use `table.get_row_at(table.cursor_row)[0]` to get first column value (wallet_id in this case)
+  - Always refresh pattern: Refresh data on dismiss regardless of success/cancel to ensure UI consistency
+---
+
+## 2026-02-12 - WM-003
+- What was implemented: CreateWalletModal for creating new wallets with validation; integrated into WalletManagementScreen via 'n' keybinding
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (added CreateWalletModal class with compose, validation, button handlers; updated action_new_wallet to push modal and refresh on success)
+  - `tests/test_wallet_screen.py` (added TestCreateWalletModal class with 5 structure tests)
+- **Learnings:**
+  - ModalScreen pattern: Use `ModalScreen[bool]` to return success/failure status to caller
+  - Form validation: Check inputs inline in `_validate_and_create()`, display errors in Label widget, focus invalid field
+  - Modal callbacks: Use `app.push_screen(modal, callback)` pattern; callback receives modal's return value on dismiss
+  - Testing modals: Simple structure tests (hasattr, callable) avoid dashboard loading issues; full integration tests would require app.crypto initialization
+  - Error display: Empty Label widget as placeholder; update content with `label.update(error_text)` on validation failure
+---
 
 ## 2026-02-12 - DIF-006
 - What was implemented: Input validation with re-prompting for all CLI recording scripts (buySats, sell, transfer, earnInterest); whitespace stripping on wallet/exchange inputs
@@ -1681,3 +1747,66 @@
 
 ---
 
+
+## 2026-02-12 - WM-001
+- What was implemented: Five wallet CRUD methods added to WalletQuery class for wallet management
+- Files changed:
+  - `src/python/db/queries/wallet.py` (added add_wallet, update_wallet, rename_wallet, merge_wallets, sync_wallets_from_ledger methods - +165 lines)
+  - `tests/test_wallet_management.py` (new file - 21 tests across 5 test classes - +446 lines)
+  - `AGENTS.md` (documented learnings)
+- **Learnings:**
+  - Query Object Pattern: Extended WalletQuery with write operations following Feature-8 pattern
+  - SQLite boolean handling: SQLite returns 1/0 for INTEGER boolean fields, not Python True/False; tests must use `== 1 or value is True` for compatibility
+  - Atomic multi-table updates: rename_wallet() and merge_wallets() update both wallets table and all ledger.exchange references; backend handles transactions internally
+  - sync_wallets_from_ledger() must query wallets table directly (not via get_wallets() which has ledger fallback when empty)
+  - Whitespace normalization: All wallet_id parameters stripped at method entry for consistency
+  - In-memory SQLite testing: `:memory:` database with fixtures provides isolated test environment, no cleanup needed
+  - Dynamic SQL UPDATE: Build SET clause from **kwargs filtered to valid fields only; raises ValueError if no valid fields provided
+  - Pre-validation: Check constraints (duplicate wallet_id) before executing updates to provide better error messages
+---
+
+## 2026-02-12 - WM-002
+- What was implemented: Wallet Management TUI screen with wallet list DataTable
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (new file - +248 lines: WalletManagementScreen with DataTable, action stubs, custody color-coding)
+  - `src/python/tui/screens/__init__.py` (added WalletManagementScreen export)
+  - `src/python/tui/app.py` (added 'W' keybinding, action_menu_wallet method, help screen entry)
+  - `tests/test_wallet_screen.py` (new file - +62 lines: 6 tests, 5 passing, 1 skipped)
+  - `AGENTS.md` (documented learnings)
+- **Learnings:**
+  - TUI screen integration pattern: export from __init__, import in app.py, add Binding + action method, update help screen
+  - Pre-existing SQLite threading segfault in dashboard crashes full app tests (run_test())
+  - Workaround: Test screen structure/bindings without running full app - instantiate screen, check attributes, skip render tests
+  - Pattern: `@pytest.mark.skip(reason="Pre-existing SQLite threading segfault...")` for tests that trigger dashboard
+  - DataTable columns use tuples format: `add_columns("Col1", "Col2", ...)` not list
+  - CSS custody color-coding: Define classes in CSS, apply via row styling (implementation deferred to WM-003 when rows populated)
+  - Action stubs pattern: Show notify() "Feature coming in WM-XXX" for unimplemented features
+  - sync_wallets_from_ledger() called in @work(thread=True) load method ensures wallets table synced before display
+---
+
+## 2026-02-13 - WM-006
+- What was implemented: MergeWalletsModal for merging one wallet into another with confirmation
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (added MergeWalletsModal class with source/target selection; updated action_merge_wallets to get source wallet, tx count, filter target list, push modal)
+  - `tests/test_wallet_screen.py` (added TestMergeWalletsModal class with 8 structure tests)
+- **Learnings:**
+  - Multi-parameter modal pattern: Pass source_wallet_id (str), transaction_count (int), and available_targets (list of dicts) via `__init__`
+  - Target selection: Filter available targets to exclude source wallet using list comprehension
+  - Select.BLANK check: Validate that user selected an option with `if target_select.value == Select.BLANK`
+  - Conditional UI: Only show merge button if targets are available; show informative message if no targets exist
+  - Select options with metadata: Use tuples like `(f"{w['wallet_id']} ({w['type']})", w['wallet_id'])` to show type in display but return clean ID as value
+  - Early return pattern: Check if no targets available in action handler and notify user before pushing modal
+---
+
+## 2026-02-13 - WM-007
+- What was implemented: Documentation and navigation updates for Wallet Management feature
+- Files changed:
+  - `GETTING_STARTED.md` (added 'W' keybinding entry to keyboard navigation table)
+  - `src/python/tui/app.py` (added "Wallets" MenuButton to main menu between Import and Tax/Report)
+- **Learnings:**
+  - Documentation updates should be the final story in a feature to capture the complete implementation
+  - Main menu layout: MenuButton takes (label, description, key, action) - action maps to action_menu_{action} method
+  - Help screen was already updated in WM-002 when the screen was first created
+  - Feature summary documents can be written up-front to guide implementation (planning/features/feature-N-summary.md)
+  - Navigation exposure requires 3 touch points: GETTING_STARTED.md keyboard table, main menu button, help screen listing
+---

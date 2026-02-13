@@ -2,6 +2,93 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-11: Wallet Management Screen - WM-006
+
+### Merge Wallets Modal
+- Created `MergeWalletsModal` following established modal patterns (ModalScreen[bool], centered Container, form + buttons)
+- Modal takes three parameters via `__init__`: source_wallet_id (str), transaction_count (int), available_targets (list[dict])
+- Shows transaction count warning: "⚠ This will merge X transaction(s)" and deletion notice
+- Select dropdown built from available_targets list, excluding the source wallet
+- Validates that user selected a target: `if target_select.value == Select.BLANK`
+- Calls `WalletQuery.merge_wallets(source_id, target_id)` which reassigns all ledger rows atomically
+- Integrated via 'm' keybinding; action handler filters targets before pushing modal
+
+### Multi-Parameter Modal Pattern
+- Pass complex state via `__init__` parameters and store as instance variables
+- For dynamic content (like target wallet list), compute in parent screen before pushing modal
+- Use conditional rendering: only show merge button if targets exist, show informative message otherwise
+- Select options can show metadata: `(f"{w['wallet_id']} ({w['type']})", w['wallet_id'])` displays type but returns ID
+
+### Early Validation in Action Handlers
+- Check preconditions (wallet selected, targets available) before pushing modal
+- Use early returns with notifications: `if not available_targets: notify(...); return`
+- Filter data lists before passing to modal: `[w for w in wallets if w['wallet_id'] != source_id]`
+- Query transaction count before modal to show in warning: `execute_scalar("SELECT COUNT(*) FROM ledger WHERE exchange = :id")`
+
+### Testing Modals with Parameters
+- Test modal instantiation with different parameter combinations (empty targets, non-zero tx count, etc.)
+- Verify instance variables are stored correctly: `assert modal._source_wallet_id == "Source"`
+- Check that modal handles edge cases gracefully (empty target list)
+- 8 structure tests covering existence, bindings, methods, parameter handling, edge cases
+
+## Feature-11: Wallet Management Screen - WM-002
+
+### Wallet Management TUI Screen
+- Created `WalletManagementScreen` following existing TUI screen patterns (Header, Container, Footer)
+- Integrated into main app with 'W' keybinding (`Binding("w", "menu_wallet", "Wallets")`)
+- DataTable with 6 columns: Name, Type, Custody, Description, Active, Tx Count
+- Calls `sync_wallets_from_ledger()` on mount to ensure all ledger-referenced wallets exist in wallets table
+- Action stubs for WM-003+ (new, edit, rename, merge) - show notifications "coming soon"
+- Color-coding CSS classes defined for custody types (green=self-custodied, yellow=custodial, cyan=multisig)
+
+### TUI Testing with Pre-existing Segfault
+- Pre-existing SQLite threading segfault in dashboard (documented in MEMORY.md) crashes full app tests
+- Solution: Test screen structure/bindings without running full app (`run_test()`)
+- Pattern: Instantiate screen, check attributes, verify methods exist
+- Skip render tests with `@pytest.mark.skip(reason="Pre-existing SQLite threading segfault...")`
+- 5 structure tests pass, 1 render test skipped
+
+### TUI Screen Integration Pattern
+- Add screen to `tui/screens/__init__.py` exports
+- Import in `tui/app.py` and add to imports list
+- Add `Binding("key", "menu_name", "Label")` to app BINDINGS
+- Add `action_menu_name()` method that calls `self.push_screen(ScreenClass())`
+- Update HelpScreen compose() with navigation label for new screen
+
+## Feature-11: Wallet Management Screen - WM-001
+
+### Wallet CRUD Methods in WalletQuery
+- Added five new methods to `WalletQuery` class following Query Object pattern from Feature-8
+- `add_wallet()`: INSERT with whitespace normalization on wallet_id, validates unique constraint
+- `update_wallet()`: Dynamic SET clause built from **kwargs, filters to valid fields only
+- `rename_wallet()`: Atomic update of both wallets table and all ledger.exchange references
+- `merge_wallets()`: Reassign all ledger rows from source to target, then delete source wallet record
+- `sync_wallets_from_ledger()`: Bridges implicit ledger wallets to explicit wallets table entries
+
+### SQLite Boolean Handling in Tests
+- SQLite stores booleans as INTEGER (1/0), not Python True/False
+- Test assertions must use `== 1` or `== True` (not `is True`) for portability
+- Pattern: `assert value == 1 or value is True` handles both SQLite and PostgreSQL
+- Applies to `active` field checks in get_wallets() results
+
+### Atomic Wallet Operations
+- `rename_wallet()` and `merge_wallets()` modify ledger data - must update both tables
+- SQLite/PostgreSQL backends handle transactions internally for multiple execute() calls
+- Pre-validate constraints (duplicate wallet_id) before executing updates
+- Use whitespace stripping consistently: `wallet_id = wallet_id.strip()` at method entry
+
+### Testing Pattern: In-Memory SQLite with Fixtures
+- Use pytest fixtures for `backend`, `wallet_query`, `ledger_writer`
+- `:memory:` database creates isolated test environment, no cleanup needed
+- `create_tables(backend)` in fixture ensures schema exists for each test
+- 21 tests covering CRUD operations, error cases, edge cases, atomicity
+
+### sync_wallets_from_ledger() Implementation
+- Query wallets table directly (`SELECT wallet_id FROM wallets`), NOT via `get_wallets()`
+- `get_wallets()` has ledger fallback when table is empty, which would hide missing entries
+- Infer wallet_type from custody ('custodial' → 'exchange', else → 'hardware')
+- Auto-add 'Auto-synced from ledger' note for audit trail
+
 ## Feature-10: Data Integrity Foundations - DIF-006
 
 ### CLI Input Validation with Re-Prompting

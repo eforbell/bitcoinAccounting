@@ -31,7 +31,8 @@
       ],
       "priority": 1,
       "estimatedLines": "+200 (query methods + tests)",
-      "testStrategy": "pytest tests/test_wallet_management.py -v"
+      "testStrategy": "pytest tests/test_wallet_management.py -v",
+      "passes": true
     },
     {
       "id": "WM-002",
@@ -47,7 +48,8 @@
       ],
       "priority": 2,
       "estimatedLines": "+200 (screen + CSS + tests)",
-      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v"
+      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v",
+      "passes": true
     },
     {
       "id": "WM-003",
@@ -61,7 +63,8 @@
       ],
       "priority": 3,
       "estimatedLines": "+150 (modal + CSS + tests)",
-      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v"
+      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v",
+      "passes": true
     },
     {
       "id": "WM-004",
@@ -75,7 +78,8 @@
       ],
       "priority": 4,
       "estimatedLines": "+100 (modal reuses Create pattern + tests)",
-      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v"
+      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v",
+      "passes": true
     },
     {
       "id": "WM-005",
@@ -90,7 +94,8 @@
       ],
       "priority": 5,
       "estimatedLines": "+120 (modal + confirmation + tests)",
-      "testStrategy": "pytest tests/test_wallet_management.py -k rename -v"
+      "testStrategy": "pytest tests/test_wallet_management.py -k rename -v",
+      "passes": true
     },
     {
       "id": "WM-006",
@@ -106,7 +111,8 @@
       ],
       "priority": 6,
       "estimatedLines": "+120 (modal + confirmation + tests)",
-      "testStrategy": "pytest tests/test_wallet_management.py -k merge -v"
+      "testStrategy": "pytest tests/test_wallet_management.py -k merge -v",
+      "passes": true
     },
     {
       "id": "WM-007",
@@ -119,7 +125,8 @@
       ],
       "priority": 7,
       "estimatedLines": "+20 (documentation updates)",
-      "testStrategy": "Manual review"
+      "testStrategy": "Manual review",
+      "passes": true
     }
   ],
   "riskAssessment": {

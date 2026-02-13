@@ -9,5 +9,6 @@ from .record_transaction import RecordTransactionScreen
 from .tax_reporting import TaxReportingScreen
 from .trades import TradesScreen
 from .visualizations import VisualizationScreen
+from .wallet_management import WalletManagementScreen
 
-__all__ = ['DashboardScreen', 'ExportScreen', 'ImportWizardScreen', 'LedgerScreen', 'PortfolioScreen', 'RecordTransactionScreen', 'TaxReportingScreen', 'TradesScreen', 'VisualizationScreen']
+__all__ = ['DashboardScreen', 'ExportScreen', 'ImportWizardScreen', 'LedgerScreen', 'PortfolioScreen', 'RecordTransactionScreen', 'TaxReportingScreen', 'TradesScreen', 'VisualizationScreen', 'WalletManagementScreen']
