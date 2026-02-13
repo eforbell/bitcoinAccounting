@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -10,11 +10,595 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
-from textual.screen import Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select, Static
+from textual.screen import ModalScreen, Screen
+from textual.widgets import Button, Checkbox, DataTable, Footer, Header, Input, Label, Select
 
 if TYPE_CHECKING:
     from tui.app import CryptoApp
+
+
+# Fields to display in detail modal, in order: (label, dict_key)
+_DETAIL_FIELDS = [
+    ("Transaction ID", "ID"),
+    ("Date", "Date"),
+    ("Type", "Type"),
+    ("Buy Amount", "Buy"),
+    ("Buy Currency", "Buy Cur."),
+    ("Sell Amount", "Sell"),
+    ("Sell Currency", "Sell Cur."),
+    ("Fee", "Fee"),
+    ("Fee Currency", "Fee Cur."),
+    ("Wallet / Exchange", "Exchange"),
+    ("Group", "Group"),
+    ("Comment", "Comment"),
+]
+
+
+class TransactionDetailModal(ModalScreen[str | None]):
+    """Modal showing full transaction details with Edit/Delete/Close actions."""
+
+    CSS = """
+    TransactionDetailModal {
+        align: center middle;
+    }
+
+    #detail-container {
+        width: 70;
+        height: auto;
+        max-height: 80%;
+        background: $surface;
+        border: solid $accent;
+        padding: 1 2;
+    }
+
+    #detail-title {
+        text-align: center;
+        color: $accent;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    .detail-row {
+        height: auto;
+        layout: horizontal;
+        margin-bottom: 0;
+    }
+
+    .detail-field-name {
+        width: 22;
+        color: #888888;
+        text-style: bold;
+    }
+
+    .detail-field-value {
+        width: 1fr;
+        color: #e0e0e0;
+    }
+
+    #detail-button-row {
+        height: auto;
+        layout: horizontal;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #detail-button-row Button {
+        margin: 0 1;
+        min-width: 12;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "close", "Close", show=False),
+    ]
+
+    def __init__(self, transaction: dict[str, Any]) -> None:
+        super().__init__()
+        self.transaction = transaction
+
+    def compose(self) -> ComposeResult:
+        with Container(id="detail-container"):
+            yield Label("Transaction Details", id="detail-title")
+
+            for label, key in _DETAIL_FIELDS:
+                value = self.transaction.get(key, "")
+                display_val = str(value) if value is not None and value != "" else "—"
+                with Horizontal(classes="detail-row"):
+                    yield Label(f"{label}:", classes="detail-field-name")
+                    yield Label(display_val, classes="detail-field-value")
+
+            is_deleted = bool(self.transaction.get("Deleted"))
+            with Horizontal(id="detail-button-row"):
+                if is_deleted:
+                    yield Button("Restore", variant="success", id="detail-restore-btn")
+                else:
+                    yield Button("Edit", variant="primary", id="detail-edit-btn")
+                    yield Button("Delete", variant="warning", id="detail-delete-btn")
+                yield Button("Close", variant="default", id="detail-close-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "detail-edit-btn":
+            self.dismiss("edit")
+        elif event.button.id == "detail-delete-btn":
+            self.dismiss("delete")
+        elif event.button.id == "detail-restore-btn":
+            self.dismiss("restore")
+        elif event.button.id == "detail-close-btn":
+            self.dismiss(None)
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
+# Mapping: (display label, transaction dict key, DB column name)
+_EDIT_FIELDS = [
+    ("Date", "Date", "createddate"),
+    ("Buy Amount", "Buy", "buy"),
+    ("Buy Currency", "Buy Cur.", "buy_curr"),
+    ("Sell Amount", "Sell", "sell"),
+    ("Sell Currency", "Sell Cur.", "sell_curr"),
+    ("Fee", "Fee", "fee"),
+    ("Fee Currency", "Fee Cur.", "fee_curr"),
+    ("Group", "Group", "group"),
+    ("Comment", "Comment", "comment"),
+]
+
+_TRANSACTION_TYPES = [
+    ("Deposit", "Deposit"),
+    ("Withdrawal", "Withdrawal"),
+    ("Trade", "Trade"),
+    ("Spend", "Spend"),
+    ("Mining", "Mining"),
+    ("Interest Income", "Interest Income"),
+]
+
+
+class EditTransactionModal(ModalScreen[bool]):
+    """Modal for editing a transaction with pre-populated fields and diff preview."""
+
+    CSS = """
+    EditTransactionModal {
+        align: center middle;
+    }
+
+    #edit-tx-container {
+        width: 80;
+        height: auto;
+        max-height: 90%;
+        background: $surface;
+        border: solid $accent;
+        padding: 1 2;
+        overflow-y: auto;
+    }
+
+    #edit-tx-title {
+        text-align: center;
+        color: $accent;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    .edit-form-row {
+        height: auto;
+        min-height: 4;
+        layout: horizontal;
+        align: left middle;
+        margin-bottom: 0;
+    }
+
+    .edit-form-label {
+        width: 18;
+        padding-right: 1;
+        color: $text-muted;
+    }
+
+    EditTransactionModal Input {
+        width: 50;
+    }
+
+    EditTransactionModal Select {
+        width: 50;
+    }
+
+    #edit-tx-diff {
+        margin-top: 1;
+        padding: 1;
+        color: #f7931a;
+        text-style: italic;
+    }
+
+    #edit-tx-error {
+        color: $error;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #edit-tx-button-row {
+        height: auto;
+        layout: horizontal;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #edit-tx-button-row Button {
+        margin: 0 1;
+        min-width: 12;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def __init__(
+        self,
+        transaction: dict[str, Any],
+        wallet_options: list[tuple[str, str]],
+    ) -> None:
+        super().__init__()
+        self.transaction = transaction
+        self.wallet_options = wallet_options
+
+    def compose(self) -> ComposeResult:
+        tx = self.transaction
+        with Container(id="edit-tx-container"):
+            yield Label(
+                f"Edit Transaction #{tx.get('ID', '?')}",
+                id="edit-tx-title",
+            )
+            yield Label("", id="edit-tx-error")
+
+            # Transaction type (Select)
+            with Horizontal(classes="edit-form-row"):
+                yield Label("Type:", classes="edit-form-label")
+                yield Select(
+                    options=_TRANSACTION_TYPES,
+                    value=tx.get("Type", "Deposit"),
+                    id="edit-type",
+                    allow_blank=False,
+                )
+
+            # Wallet / Exchange (Select)
+            with Horizontal(classes="edit-form-row"):
+                yield Label("Wallet:", classes="edit-form-label")
+                current_exchange = tx.get("Exchange", "")
+                # Ensure current value is in options
+                opts = list(self.wallet_options)
+                existing_values = {v for _, v in opts}
+                if current_exchange and current_exchange not in existing_values:
+                    opts.append((current_exchange, current_exchange))
+                yield Select(
+                    options=opts,
+                    value=current_exchange,
+                    id="edit-exchange",
+                    allow_blank=False,
+                )
+
+            # Text/numeric input fields
+            for label, tx_key, db_col in _EDIT_FIELDS:
+                val = tx.get(tx_key)
+                display_val = str(val) if val is not None else ""
+                input_id = f"edit-{db_col.replace('_', '-')}"
+                with Horizontal(classes="edit-form-row"):
+                    yield Label(f"{label}:", classes="edit-form-label")
+                    yield Input(
+                        value=display_val,
+                        placeholder=label,
+                        id=input_id,
+                    )
+
+            # Diff preview
+            yield Label("", id="edit-tx-diff")
+
+            # Buttons
+            with Horizontal(id="edit-tx-button-row"):
+                yield Button("Save", variant="primary", id="edit-save-btn")
+                yield Button("Cancel", variant="default", id="edit-cancel-btn")
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Update diff preview when any input changes."""
+        self._update_diff()
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Update diff preview when a select changes."""
+        self._update_diff()
+
+    def _get_changes(self) -> dict[str, tuple[Any, Any]]:
+        """Build dict of {db_col: (old_value, new_value)} for changed fields."""
+        tx = self.transaction
+        changes: dict[str, tuple[Any, Any]] = {}
+
+        # Check type
+        new_type = str(self.query_one("#edit-type", Select).value)
+        old_type = tx.get("Type", "")
+        if new_type != old_type:
+            changes["trans_type"] = (old_type, new_type)
+
+        # Check exchange
+        new_exchange = str(self.query_one("#edit-exchange", Select).value)
+        old_exchange = tx.get("Exchange", "")
+        if new_exchange != old_exchange:
+            changes["exchange"] = (old_exchange, new_exchange)
+
+        # Check text/numeric fields
+        for _label, tx_key, db_col in _EDIT_FIELDS:
+            input_id = f"edit-{db_col.replace('_', '-')}"
+            new_val = self.query_one(f"#{input_id}", Input).value.strip()
+            old_val = tx.get(tx_key)
+            old_str = str(old_val) if old_val is not None else ""
+
+            if new_val != old_str:
+                changes[db_col] = (old_str, new_val)
+
+        return changes
+
+    def _update_diff(self) -> None:
+        """Update the diff preview label."""
+        changes = self._get_changes()
+        diff_label = self.query_one("#edit-tx-diff", Label)
+
+        if not changes:
+            diff_label.update("")
+            return
+
+        parts = []
+        for col, (old, new) in changes.items():
+            old_display = old if old else '(empty)'
+            new_display = new if new else '(empty)'
+            parts.append(f"{col}: {old_display} → {new_display}")
+
+        diff_label.update(f"Changes: {', '.join(parts)}")
+
+    def _validate_and_save(self) -> None:
+        """Validate inputs and save changes."""
+        error_label = self.query_one("#edit-tx-error", Label)
+        changes = self._get_changes()
+
+        if not changes:
+            self.dismiss(False)
+            return
+
+        # Validate date format if changed
+        if "createddate" in changes:
+            new_date = changes["createddate"][1]
+            try:
+                datetime.strptime(new_date, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                error_label.update("Invalid date format. Use YYYY-MM-DD HH:MM:SS")
+                return
+
+        # Validate numeric fields
+        for num_field in ("buy", "sell", "fee"):
+            if num_field in changes:
+                new_val = changes[num_field][1]
+                if new_val:  # allow empty (will become None/0)
+                    try:
+                        float(new_val)
+                    except ValueError:
+                        error_label.update(f"Invalid number for {num_field}: {new_val}")
+                        return
+
+        # Build kwargs for update_transaction
+        kwargs: dict[str, Any] = {}
+        for col, (_old, new) in changes.items():
+            if col in ("buy", "sell", "fee"):
+                kwargs[col] = float(new) if new else 0.0
+            else:
+                kwargs[col] = new
+
+        # Save via LedgerWriter
+        from tui.app import CryptoApp
+        app = self.app
+        assert isinstance(app, CryptoApp)
+
+        try:
+            tx_id = self.transaction.get("ID")
+            app.crypto.ledger_writer.update_transaction(tx_id, **kwargs)  # type: ignore[union-attr]
+            self.dismiss(True)
+        except Exception as e:
+            error_label.update(f"Error: {e}")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "edit-save-btn":
+            self._validate_and_save()
+        elif event.button.id == "edit-cancel-btn":
+            self.action_cancel()
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
+def _detect_transfer_pair(
+    tx: dict[str, Any], all_transactions: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Heuristic transfer pair detection.
+
+    A transfer pair is a withdrawal on one wallet matched to a deposit on
+    another wallet within 72 hours with a similar BTC amount (within 1%).
+    Returns the matching transaction dict, or None.
+    """
+    tx_type = tx.get("Type", "")
+    if tx_type not in ("Deposit", "Withdrawal"):
+        return None
+
+    try:
+        tx_date = datetime.strptime(str(tx.get("Date", "")), "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return None
+
+    # Determine the amount and target type for matching
+    if tx_type == "Deposit":
+        tx_amount = float(tx.get("Buy") or 0)
+        match_type = "Withdrawal"
+    else:
+        tx_amount = float(tx.get("Sell") or 0)
+        match_type = "Deposit"
+
+    if tx_amount <= 0:
+        return None
+
+    tx_exchange = tx.get("Exchange", "")
+    tx_id = tx.get("ID")
+
+    for other in all_transactions:
+        if other.get("ID") == tx_id:
+            continue
+        if other.get("Type") != match_type:
+            continue
+        if other.get("Exchange") == tx_exchange:
+            continue  # Same wallet can't be a transfer pair
+
+        try:
+            other_date = datetime.strptime(
+                str(other.get("Date", "")), "%Y-%m-%d %H:%M:%S"
+            )
+        except (ValueError, TypeError):
+            continue
+
+        if abs((other_date - tx_date).total_seconds()) > 72 * 3600:
+            continue
+
+        if match_type == "Deposit":
+            other_amount = float(other.get("Buy") or 0)
+        else:
+            other_amount = float(other.get("Sell") or 0)
+
+        if other_amount <= 0:
+            continue
+
+        # Within 1% of each other
+        if abs(tx_amount - other_amount) / max(tx_amount, other_amount) <= 0.01:
+            return other
+
+    return None
+
+
+class DeleteConfirmModal(ModalScreen[bool]):
+    """Confirmation dialog for deleting a transaction with transfer pair warning."""
+
+    CSS = """
+    DeleteConfirmModal {
+        align: center middle;
+    }
+
+    #delete-container {
+        width: 65;
+        height: auto;
+        max-height: 70%;
+        background: $surface;
+        border: solid $error;
+        padding: 1 2;
+    }
+
+    #delete-title {
+        text-align: center;
+        color: $error;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    #delete-summary {
+        margin-bottom: 1;
+    }
+
+    #delete-warning {
+        color: $warning;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    #delete-prompt {
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #delete-button-row {
+        height: auto;
+        layout: horizontal;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #delete-button-row Button {
+        margin: 0 1;
+        min-width: 12;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def __init__(
+        self,
+        transaction: dict[str, Any],
+        transfer_match: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__()
+        self.transaction = transaction
+        self.transfer_match = transfer_match
+
+    def compose(self) -> ComposeResult:
+        tx = self.transaction
+        with Container(id="delete-container"):
+            yield Label("Delete Transaction", id="delete-title")
+
+            # Transaction summary
+            summary_lines = [
+                f"ID: {tx.get('ID', '?')}",
+                f"Date: {tx.get('Date', '?')}",
+                f"Type: {tx.get('Type', '?')}",
+            ]
+            if tx.get("Buy"):
+                summary_lines.append(
+                    f"Buy: {tx['Buy']} {tx.get('Buy Cur.', '')}"
+                )
+            if tx.get("Sell"):
+                summary_lines.append(
+                    f"Sell: {tx['Sell']} {tx.get('Sell Cur.', '')}"
+                )
+            summary_lines.append(f"Wallet: {tx.get('Exchange', '?')}")
+            yield Label("\n".join(summary_lines), id="delete-summary")
+
+            # Transfer pair warning
+            if self.transfer_match:
+                match = self.transfer_match
+                match_type = match.get("Type", "transaction")
+                yield Label(
+                    f"This transaction appears to be part of a transfer pair. "
+                    f"The matching {match_type.lower()} on "
+                    f"{match.get('Exchange', '?')} will NOT be automatically deleted.",
+                    id="delete-warning",
+                )
+
+            yield Label("Are you sure you want to delete this transaction?", id="delete-prompt")
+
+            with Horizontal(id="delete-button-row"):
+                yield Button("Delete", variant="error", id="delete-confirm-btn")
+                yield Button("Cancel", variant="default", id="delete-cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "delete-confirm-btn":
+            self._do_delete()
+        elif event.button.id == "delete-cancel-btn":
+            self.dismiss(False)
+
+    def _do_delete(self) -> None:
+        """Perform the soft delete."""
+        from tui.app import CryptoApp
+
+        app = self.app
+        assert isinstance(app, CryptoApp)
+
+        try:
+            tx_id = self.transaction.get("ID")
+            app.crypto.ledger_writer.soft_delete_transaction(tx_id)  # type: ignore[union-attr]
+            self.dismiss(True)
+        except Exception as e:
+            self.notify(f"Delete failed: {e}", severity="error")
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
 
 
 class LedgerScreen(Screen[None]):
@@ -124,6 +708,8 @@ class LedgerScreen(Screen[None]):
         self.end_date: str | None = None
         self.sort_column: str | None = None
         self.sort_reverse = False
+        self.show_deleted = False
+        self.deleted_count = 0  # Count of hidden deleted transactions
 
     def compose(self) -> ComposeResult:
         """Compose the ledger screen layout."""
@@ -167,6 +753,7 @@ class LedgerScreen(Screen[None]):
                 with Vertical(classes="filter-group"):
                     yield Label(" ", classes="filter-label")  # Spacing
                     yield Button("Apply Filters", id="apply-filters-btn", variant="primary")
+                    yield Checkbox("Show Deleted", value=False, id="show-deleted-cb")
 
         # Status bar
         with Container(classes="status-bar"):
@@ -250,8 +837,8 @@ class LedgerScreen(Screen[None]):
 
             self.app.call_from_thread(show_loading)
 
-            # Get transactions with filters
-            kwargs: dict[str, Any] = {}
+            # Get transactions with filters (always include deleted for counting)
+            kwargs: dict[str, Any] = {"include_deleted": True}
             if self.current_coin:  # Only filter by coin if specified (None = All)
                 kwargs["coin"] = self.current_coin
             if self.current_wallet:
@@ -263,12 +850,21 @@ class LedgerScreen(Screen[None]):
 
             headers, transactions = app.crypto.get_transactions(**kwargs)  # type: ignore[no-untyped-call]
 
+            # Count deleted transactions
+            self.deleted_count = sum(1 for t in transactions if t.get("Deleted"))
+
             # Store data
             self.column_names = list(headers)
             self.all_transactions = list(transactions)
 
+            # Filter deleted unless show_deleted is on
+            if self.show_deleted:
+                visible = list(transactions)
+            else:
+                visible = [t for t in transactions if not t.get("Deleted")]
+
             # Reverse to show most recent first (more natural)
-            self.filtered_transactions = list(reversed(transactions))
+            self.filtered_transactions = list(reversed(visible))
 
             # Apply sorting if set
             if self.sort_column and self.sort_column in self.column_names:
@@ -308,10 +904,20 @@ class LedgerScreen(Screen[None]):
 
         # Add rows
         # Note: get_transactions() returns list of dicts, not tuples
+        from rich.text import Text
+
         for row_dict in self.filtered_transactions:
-            # Extract values in the same order as column_names
-            display_row = [str(row_dict.get(col, "")) if row_dict.get(col) is not None else ""
-                          for col in self.column_names]
+            is_deleted = bool(row_dict.get("Deleted"))
+            display_row = []
+            for col in self.column_names:
+                val = row_dict.get(col)
+                cell = str(val) if val is not None else ""
+                if is_deleted and col == "Type":
+                    cell = f"{cell} [DELETED]"
+                if is_deleted:
+                    display_row.append(Text(cell, style="dim"))
+                else:
+                    display_row.append(cell)
             table.add_row(*display_row)
 
     def _update_status(self) -> None:
@@ -320,12 +926,18 @@ class LedgerScreen(Screen[None]):
         total = len(self.all_transactions)
         filtered = len(self.filtered_transactions)
 
+        parts = []
         if total == filtered:
-            status.update(f"Showing [cyan]{total}[/cyan] transactions")
+            parts.append(f"Showing [cyan]{total}[/cyan] transactions")
         else:
-            status.update(
+            parts.append(
                 f"Showing [cyan]{filtered}[/cyan] of [cyan]{total}[/cyan] transactions"
             )
+
+        if not self.show_deleted and self.deleted_count > 0:
+            parts.append(f"([dim]{self.deleted_count} deleted hidden[/dim])")
+
+        status.update(" ".join(parts))
 
         self._update_summary()
 
@@ -382,6 +994,85 @@ class LedgerScreen(Screen[None]):
         """Show empty state when no transactions exist."""
         status = self.query_one("#status-label", Label)
         status.update("[yellow]No transactions found. Import data to get started.[/yellow]")
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle Enter on a row to show transaction detail modal."""
+        table = self.query_one("#transactions-table", DataTable)
+        if table.cursor_row is None or not self.filtered_transactions:
+            return
+
+        row_idx = table.cursor_row
+        if row_idx < 0 or row_idx >= len(self.filtered_transactions):
+            return
+
+        tx = self.filtered_transactions[row_idx]
+
+        def handle_detail_result(action: str | None) -> None:
+            if action == "edit":
+                self._open_edit_modal(tx)
+            elif action == "delete":
+                self._open_delete_modal(tx)
+            elif action == "restore":
+                self._restore_transaction(tx)
+
+        self.app.push_screen(TransactionDetailModal(tx), handle_detail_result)
+
+    def _open_edit_modal(self, tx: dict[str, Any]) -> None:
+        """Open the edit transaction modal with wallet options."""
+        # Build wallet options from the wallet selector
+        wallet_opts: list[tuple[str, str]] = []
+        try:
+            select = self.query_one("#wallet-select", Select)
+            for prompt, value in select._options:
+                if value is not None:
+                    wallet_opts.append((str(prompt), str(value)))
+        except Exception:
+            pass
+
+        def handle_edit_result(saved: bool) -> None:
+            if saved:
+                self.notify("Transaction updated", severity="information")
+                self.load_transactions()
+
+        self.app.push_screen(
+            EditTransactionModal(tx, wallet_opts),
+            handle_edit_result,
+        )
+
+    def _open_delete_modal(self, tx: dict[str, Any]) -> None:
+        """Open delete confirmation modal with transfer pair detection."""
+        transfer_match = _detect_transfer_pair(tx, self.filtered_transactions)
+
+        def handle_delete_result(deleted: bool) -> None:
+            if deleted:
+                self.notify("Transaction deleted", severity="information")
+                self.load_transactions()
+
+        self.app.push_screen(
+            DeleteConfirmModal(tx, transfer_match),
+            handle_delete_result,
+        )
+
+    def _restore_transaction(self, tx: dict[str, Any]) -> None:
+        """Restore a soft-deleted transaction."""
+        from tui.app import CryptoApp
+
+        app = self.app
+        assert isinstance(app, CryptoApp)
+
+        try:
+            tx_id = tx.get("ID")
+            app.crypto.ledger_writer.restore_transaction(tx_id)  # type: ignore[union-attr]
+            self.notify("Transaction restored", severity="information")
+            self.load_transactions()
+        except Exception as e:
+            self.notify(f"Restore failed: {e}", severity="error")
+
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        """Handle Show Deleted checkbox toggle."""
+        if event.checkbox.id == "show-deleted-cb":
+            self.show_deleted = event.value
+            self.load_transactions()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button clicks."""

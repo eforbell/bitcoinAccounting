@@ -932,6 +932,7 @@ class WalletManagementScreen(Screen[None]):
             SELECT exchange, COUNT(*) as tx_count
             FROM ledger
             WHERE exchange IS NOT NULL
+            AND (deleted = 0 OR deleted IS NULL)
             GROUP BY exchange
         """
         try:
@@ -1084,7 +1085,7 @@ class WalletManagementScreen(Screen[None]):
 
         # Get transaction count for this wallet
         app: CryptoApp = self.app  # type: ignore
-        query = "SELECT COUNT(*) FROM ledger WHERE exchange = :wallet_id"
+        query = "SELECT COUNT(*) FROM ledger WHERE exchange = :wallet_id AND (deleted = 0 OR deleted IS NULL)"
         tx_count = app.crypto.backend.execute_scalar(query, {"wallet_id": wallet_id}) or 0
 
         def handle_result(success: bool) -> None:
@@ -1108,7 +1109,7 @@ class WalletManagementScreen(Screen[None]):
 
         # Get transaction count for source wallet
         app: CryptoApp = self.app  # type: ignore
-        query = "SELECT COUNT(*) FROM ledger WHERE exchange = :wallet_id"
+        query = "SELECT COUNT(*) FROM ledger WHERE exchange = :wallet_id AND (deleted = 0 OR deleted IS NULL)"
         tx_count = app.crypto.backend.execute_scalar(query, {"wallet_id": source_wallet_id}) or 0
 
         # Get all other wallets as potential merge targets (exclude source)

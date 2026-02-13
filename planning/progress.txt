@@ -11,6 +11,59 @@
 - Edit modal pattern: Pass data via `__init__(data: dict)`, pre-populate form fields, use read-only Label for immutable fields, build updates dict with only changed values
 - **CRITICAL: All write operations must call `backend.commit()`** - SQLite does NOT auto-commit by default; without explicit commit(), changes stay in memory and are lost
 - Rename modal pattern: Show transaction count warning, require typing new name twice for confirmation, validate not empty/same/duplicate
+- Soft-delete filter pattern: All ledger SELECT queries must include `AND (deleted = 0 OR deleted IS NULL)` to exclude soft-deleted rows; NULL check handles pre-migration rows
+- Schema migration pattern: Use PRAGMA table_info() to check existing columns before ALTER TABLE ADD COLUMN (SQLite lacks IF NOT EXISTS for columns); run migration in create_tables()
+- TransactionQuery includes ID and Deleted columns: `get_transactions()` returns `l.id "ID"` and `l.deleted "Deleted"` for use by edit/delete modals
+- LedgerWriter CRUD pattern: `_get_transaction(tx_id)` validates existence and returns row dict; `UPDATABLE_FIELDS` frozenset whitelists allowed update columns; `update_transaction(tx_id, **kwargs)` filters kwargs against whitelist, strips exchange, builds dynamic SET clause with quoted "group" column
+- TransactionDetailModal pattern: `ModalScreen[str | None]` returning action ("edit"/"delete"/None); receives tx dict via `__init__`; `_DETAIL_FIELDS` list of (label, key) tuples drives compose(); `on_data_table_row_selected` in parent uses `filtered_transactions[cursor_row]` to get tx data
+- Textual Label content access: Use `label.content` (str), NOT `label.renderable` (doesn't exist in this version)
+- Textual on_mount vs compose() children: When widgets are mounted via `container.mount(widget)`, compose() children may not be queryable in `on_mount`. Use `set_timer(0.05, callback)` with try/except guard to defer.
+
+## 2026-02-13 - TXE-003
+- What was implemented: TransactionDetailModal showing all transaction fields, opens from Ledger DataTable on Enter
+- Files changed:
+  - `src/python/tui/screens/ledger.py` (added TransactionDetailModal class, _DETAIL_FIELDS constant, on_data_table_row_selected handler)
+  - `tests/test_tui_ledger.py` (added TestTransactionDetailModal with 12 structure tests, TestLedgerDetailIntegration with 1 integration test)
+  - `src/python/tui/screens/dashboard.py` (bugfix: deferred on_mount data population in CustodyBreakdown and RecentTransactions)
+- **Learnings:**
+  - Label.content is the correct way to access label text in this Textual version (not .renderable)
+  - DataTable.cursor_row is read-only - use table.focus() + pilot.press("enter") for testing row selection
+  - ModalScreen dismiss with callback: parent passes `def handle_result(action)` to `push_screen(modal, callback)`
+  - Dashboard NoMatches bug: compose() children not yet queryable in on_mount when widget is mounted via container.mount(); set_timer(0.05) defers enough
+---
+
+## 2026-02-13 - TXE-002
+- What was implemented: update_transaction(), soft_delete_transaction(), restore_transaction() methods on LedgerWriter
+- Files changed:
+  - `src/python/db/queries/ledger.py` (added UPDATABLE_FIELDS constant, _get_transaction helper, update_transaction, soft_delete_transaction, restore_transaction methods)
+  - `tests/test_transaction_editor.py` (added 24 new tests in TestUpdateTransaction, TestSoftDeleteTransaction, TestRestoreTransaction classes)
+- **Learnings:**
+  - SQL `group` is a reserved word - must quote as `"group"` in SET clauses (same as in INSERT/SELECT)
+  - Dynamic SET clause construction: build from filtered kwargs, join with commas, use named params to avoid injection
+  - UPDATABLE_FIELDS frozenset provides a whitelist pattern - unknown kwargs are silently ignored when valid ones are also present, but raises if ALL kwargs are invalid
+  - _get_transaction helper centralizes tx_id validation - SELECT * returns full row dict for return value after mutations
+  - soft_delete_transaction timestamps with datetime.now().strftime() for consistency with existing date format patterns
+---
+
+## 2026-02-13 - TXE-001
+- What was implemented: Soft-delete schema migration and query filtering across entire codebase
+- Files changed:
+  - `src/python/db/schema.py` (added deleted/deleted_date columns to CREATE TABLE; added _migrate_ledger_soft_delete() for ALTER TABLE on existing DBs)
+  - `src/python/db/queries/balance.py` (added deleted filter to get_balance and get_sum_of_all_transfers - 4 subqueries)
+  - `src/python/db/queries/income.py` (added deleted filter to get_interest_income)
+  - `src/python/db/queries/trades.py` (added deleted filter to get_trades and get_sales)
+  - `src/python/db/queries/transaction.py` (added include_deleted param; added ID/Deleted columns to SELECT; added deleted filter)
+  - `src/python/db/queries/wallet.py` (added deleted filter to 4 queries: get_balance_by_account, get_wallets fallback, get_balance_by_wallet, sync_wallets_from_ledger)
+  - `src/python/imports/validation.py` (added deleted filter to duplicate detection query)
+  - `src/python/tui/screens/wallet_management.py` (added deleted filter to 3 transaction count queries)
+  - `src/python/viz/custody_chart.py` (added deleted filter to date range and custody balance queries)
+  - `tests/test_transaction_editor.py` (new: 13 tests for schema migration, query filtering, NULL safety)
+- **Learnings:**
+  - SQLite ALTER TABLE ADD COLUMN with DEFAULT doesn't backfill existing rows (they get NULL), so always use (deleted = 0 OR deleted IS NULL) in filters
+  - Schema migration must be idempotent: check PRAGMA table_info() before ALTER TABLE since SQLite errors on duplicate column adds
+  - Wide-reaching query changes (15 queries across 8 files) require systematic auditing - use grep/search to find ALL ledger SELECT queries
+  - Adding columns to SELECT output affects all consumers (TUI screens, export, dashboard) - only add columns that are needed
+---
 
 ## 2026-02-12 - WM-005
 - What was implemented: RenameWalletModal with double-entry confirmation and transaction count warning; integrated via 'r' keybinding
@@ -1809,4 +1862,42 @@
   - Help screen was already updated in WM-002 when the screen was first created
   - Feature summary documents can be written up-front to guide implementation (planning/features/feature-N-summary.md)
   - Navigation exposure requires 3 touch points: GETTING_STARTED.md keyboard table, main menu button, help screen listing
+---
+
+## 2026-02-13 - TXE-004
+- What was implemented: Edit Transaction modal with pre-populated form, diff preview, validation, and save
+- Files changed:
+  - `src/python/tui/screens/ledger.py` (+303 lines: EditTransactionModal class, _EDIT_FIELDS, _TRANSACTION_TYPES, _open_edit_modal, edit flow wiring from detail modal)
+  - `tests/test_tui_ledger.py` (+319 lines: 19 tests for edit modal structure, pre-populated fields, diff preview, save, date validation, number validation)
+- **Learnings:**
+  - CryptoApp.on_mount() always runs `self.crypto = CryptoAccounts()`, overwriting any pre-set value. In tests, set `app.crypto` inside `run_test()` context (after mount), not before via monkeypatch
+  - SQLite threading in Textual tests: `backend.execute_one()` may read stale data after writes in modal context. Verify via `ledger_writer._get_transaction()` instead of raw backend queries
+  - Empty state test (`test_empty_state_when_no_transactions`) was a pre-existing failure - CryptoApp() connects to real DB unless overridden. Fixed by injecting in-memory backend
+  - Input.value can be set programmatically and `_get_changes()` picks up the diff correctly
+  - ModalScreen chaining: Detail modal dismisses with "edit" string → parent handler opens Edit modal → Edit modal dismisses with True/False → parent reloads data
+---
+
+## 2026-02-13 - TXE-005
+- What was implemented: Delete Transaction with confirmation dialog and transfer pair detection
+- Files changed:
+  - `src/python/tui/screens/ledger.py` (+120 lines: DeleteConfirmModal class, _detect_transfer_pair helper, _open_delete_modal on LedgerScreen, wired delete action from detail modal)
+  - `tests/test_tui_ledger.py` (+180 lines: 10 modal structure tests, 8 transfer pair detection unit tests, 2 save/cancel DB tests)
+- **Learnings:**
+  - Static widget has no `.renderable` or `.content` attribute; use Label instead for text content that tests need to read
+  - Transfer pair heuristic: match Deposit↔Withdrawal across different wallets within 72hrs with amount within 1% tolerance
+  - `timedelta` not needed since we compare `total_seconds()` directly against `72 * 3600`
+  - Remove unused imports (Static) to keep code clean
+---
+
+## 2026-02-13 - TXE-006
+- What was implemented: Show Deleted toggle in Ledger with restore flow and status count
+- Files changed:
+  - `src/python/tui/screens/ledger.py` (+40 lines: Checkbox in filter panel, show_deleted state, deleted_count tracking, dim styling for deleted rows with [DELETED] indicator, Restore button in detail modal, _restore_transaction method, on_checkbox_changed handler, status bar deleted count)
+  - `src/python/cryptoAccounts.py` (+1 line: Added include_deleted parameter passthrough to get_transactions wrapper)
+  - `tests/test_tui_ledger.py` (+100 lines: 8 tests for checkbox, toggle, status count, restore button, deleted/active modal buttons)
+- **Learnings:**
+  - CryptoAccounts.get_transactions() is a thin wrapper around TransactionQuery.get_transactions() - new parameters must be passed through
+  - Always fetch with include_deleted=True and filter client-side to get accurate deleted_count
+  - Rich Text objects can be used as DataTable cell values for styling (e.g., `Text("value", style="dim")`)
+  - Checkbox widget: `Checkbox.Changed` event with `event.value` for checked state, `event.checkbox.id` for identification
 ---

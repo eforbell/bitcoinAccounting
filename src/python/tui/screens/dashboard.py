@@ -111,7 +111,16 @@ class CustodyBreakdown(Static):
     def on_mount(self) -> None:
         """Populate with initial data once children are mounted."""
         if self._pending_data is not None:
-            self.update_custody(self._pending_data)
+            # Defer so compose() children are fully registered in the DOM
+            self.set_timer(0.05, self._apply_pending_data)
+
+    def _apply_pending_data(self) -> None:
+        """Apply pending custody data after children are mounted."""
+        if self._pending_data is not None:
+            try:
+                self.update_custody(self._pending_data)
+            except Exception:
+                pass
             self._pending_data = None
 
     def update_custody(self, custody_data: dict[str, float]) -> None:
@@ -177,7 +186,15 @@ class RecentTransactions(Static):
     def on_mount(self) -> None:
         """Populate with initial data once children are mounted."""
         if self._pending_headers is not None and self._pending_transactions is not None:
-            self.update_transactions(self._pending_headers, self._pending_transactions)
+            self.set_timer(0.05, self._apply_pending_transactions)
+
+    def _apply_pending_transactions(self) -> None:
+        """Apply pending transaction data after children are mounted."""
+        if self._pending_headers is not None and self._pending_transactions is not None:
+            try:
+                self.update_transactions(self._pending_headers, self._pending_transactions)
+            except Exception:
+                pass
             self._pending_headers = None
             self._pending_transactions = None
 

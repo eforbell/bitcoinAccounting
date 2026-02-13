@@ -7,10 +7,16 @@ into the ledger table.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..backend import DatabaseBackend
+
+UPDATABLE_FIELDS = frozenset({
+    'createddate', 'trans_type', 'buy', 'buy_curr',
+    'sell', 'sell_curr', 'fee', 'fee_curr',
+    'exchange', 'group', 'comment',
+})
 
 
 class LedgerWriter:
@@ -270,3 +276,95 @@ class LedgerWriter:
         })
         if commit:
             self.backend.commit()
+
+    def _get_transaction(self, tx_id: int) -> dict[str, Any]:
+        """Fetch a single transaction by ID or raise ValueError."""
+        row = self.backend.execute_one(
+            'SELECT * FROM ledger WHERE id = :id',
+            {'id': tx_id}
+        )
+        if row is None:
+            raise ValueError(f"Transaction with id {tx_id} does not exist")
+        return dict(row)
+
+    def update_transaction(self, tx_id: int, **kwargs: Any) -> dict[str, Any]:
+        """Update specified fields on a ledger row by id.
+
+        Args:
+            tx_id: The ledger row id to update.
+            **kwargs: Field names and new values. Allowed fields:
+                createddate, trans_type, buy, buy_curr, sell, sell_curr,
+                fee, fee_curr, exchange, group, comment.
+
+        Returns:
+            The updated row as a dictionary.
+
+        Raises:
+            ValueError: If tx_id does not exist or no valid fields provided.
+        """
+        self._get_transaction(tx_id)
+
+        updates = {k: v for k, v in kwargs.items() if k in UPDATABLE_FIELDS}
+        if not updates:
+            raise ValueError("No valid fields to update. "
+                             f"Allowed fields: {sorted(UPDATABLE_FIELDS)}")
+
+        # Strip whitespace on exchange/wallet name
+        if 'exchange' in updates and isinstance(updates['exchange'], str):
+            updates['exchange'] = updates['exchange'].strip()
+
+        set_clause = ', '.join(
+            f'"{col}" = :{col}' if col == 'group'
+            else f'{col} = :{col}'
+            for col in updates
+        )
+        params = {**updates, 'id': tx_id}
+        self.backend.execute(
+            f'UPDATE ledger SET {set_clause} WHERE id = :id',
+            params
+        )
+        self.backend.commit()
+        return self._get_transaction(tx_id)
+
+    def soft_delete_transaction(self, tx_id: int) -> dict[str, Any]:
+        """Soft-delete a ledger row by setting deleted=1 and deleted_date=now.
+
+        Args:
+            tx_id: The ledger row id to soft-delete.
+
+        Returns:
+            The updated row as a dictionary.
+
+        Raises:
+            ValueError: If tx_id does not exist.
+        """
+        self._get_transaction(tx_id)
+
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.backend.execute(
+            'UPDATE ledger SET deleted = 1, deleted_date = :now WHERE id = :id',
+            {'now': now, 'id': tx_id}
+        )
+        self.backend.commit()
+        return self._get_transaction(tx_id)
+
+    def restore_transaction(self, tx_id: int) -> dict[str, Any]:
+        """Restore a soft-deleted ledger row by setting deleted=0 and deleted_date=NULL.
+
+        Args:
+            tx_id: The ledger row id to restore.
+
+        Returns:
+            The updated row as a dictionary.
+
+        Raises:
+            ValueError: If tx_id does not exist.
+        """
+        self._get_transaction(tx_id)
+
+        self.backend.execute(
+            'UPDATE ledger SET deleted = 0, deleted_date = NULL WHERE id = :id',
+            {'id': tx_id}
+        )
+        self.backend.commit()
+        return self._get_transaction(tx_id)

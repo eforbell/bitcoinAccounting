@@ -50,11 +50,13 @@ class BalanceCalculator:
             SELECT
                 COALESCE(
                     (SELECT SUM(buy) FROM ledger
-                     WHERE buy_curr = :coin AND trans_type != 'Stake'),
+                     WHERE buy_curr = :coin AND trans_type != 'Stake'
+                     AND (deleted = 0 OR deleted IS NULL)),
                     0
                 ) - COALESCE(
                     (SELECT SUM(sell) FROM ledger
-                     WHERE sell_curr = :coin),
+                     WHERE sell_curr = :coin
+                     AND (deleted = 0 OR deleted IS NULL)),
                     0
                 ) AS balance
         """
@@ -80,12 +82,14 @@ class BalanceCalculator:
                 COALESCE(
                     (SELECT SUM(buy) FROM ledger
                      WHERE buy_curr = :coin
-                     AND trans_type IN ('Withdrawal', 'Deposit')),
+                     AND trans_type IN ('Withdrawal', 'Deposit')
+                     AND (deleted = 0 OR deleted IS NULL)),
                     0
                 ) - COALESCE(
                     (SELECT SUM(sell) FROM ledger
                      WHERE sell_curr = :coin
-                     AND trans_type IN ('Withdrawal', 'Deposit')),
+                     AND trans_type IN ('Withdrawal', 'Deposit')
+                     AND (deleted = 0 OR deleted IS NULL)),
                     0
                 ) AS transfer_sum
         """

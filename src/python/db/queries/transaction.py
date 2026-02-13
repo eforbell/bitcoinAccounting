@@ -33,7 +33,8 @@ class TransactionQuery:
         coin: str | None = None,
         wallet: str | list[str] | None = None,
         start_date: str | None = None,
-        end_date: str | None = None
+        end_date: str | None = None,
+        include_deleted: bool = False
     ) -> tuple[list[str], list[dict[str, Any]]]:
         """Get all transactions with optional filtering.
 
@@ -42,17 +43,21 @@ class TransactionQuery:
             wallet: Filter by wallet/exchange (single string or list of strings)
             start_date: Start date (YYYY-MM-DD format or date object)
             end_date: End date (YYYY-MM-DD format or date object)
+            include_deleted: If True, include soft-deleted transactions. Default False.
 
         Returns:
             tuple: (column_names, transactions)
                 - column_names: List of column names
                 - transactions: List of transaction dictionaries
         """
-        base_query = '''select l.createddate "Date", l.trans_type "Type", l.buy "Buy", l.buy_curr "Buy Cur.", l.sell "Sell", l.sell_curr "Sell Cur.", l.fee "Fee", l.fee_curr "Fee Cur.", l.exchange "Exchange", l."group" "Group", l."comment" "Comment" from ledger l'''
+        base_query = '''select l.id "ID", l.createddate "Date", l.trans_type "Type", l.buy "Buy", l.buy_curr "Buy Cur.", l.sell "Sell", l.sell_curr "Sell Cur.", l.fee "Fee", l.fee_curr "Fee Cur.", l.exchange "Exchange", l."group" "Group", l."comment" "Comment", l.deleted "Deleted" from ledger l'''
 
         # Build WHERE clause with filters
         where_clauses = []
         params = {}
+
+        if not include_deleted:
+            where_clauses.append("(l.deleted = 0 OR l.deleted IS NULL)")
 
         if coin is not None:
             where_clauses.append("(l.buy_curr = :coin OR l.sell_curr = :coin OR l.fee_curr = :coin)")

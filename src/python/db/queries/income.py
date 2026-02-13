@@ -66,6 +66,7 @@ class IncomeQuery:
             SELECT createddate, buy, exchange
             FROM ledger
             WHERE trans_type = 'Interest Income' AND buy_curr = :coin
+            AND (deleted = 0 OR deleted IS NULL)
             ORDER BY createddate
         """
 
