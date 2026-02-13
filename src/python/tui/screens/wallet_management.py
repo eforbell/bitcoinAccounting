@@ -215,6 +215,224 @@ class CreateWalletModal(ModalScreen[bool]):
             error_label.update(f"Error: {str(e)}")
 
 
+class EditWalletModal(ModalScreen[bool]):
+    """Modal dialog for editing an existing wallet."""
+
+    CSS = """
+    EditWalletModal {
+        align: center middle;
+    }
+
+    #edit-wallet-container {
+        width: 70;
+        height: auto;
+        background: $surface;
+        border: solid $accent;
+        padding: 1 2;
+    }
+
+    #modal-title {
+        height: auto;
+        text-align: center;
+        margin-bottom: 1;
+        color: $accent;
+        text-style: bold;
+    }
+
+    .form-row {
+        height: auto;
+        min-height: 4;
+        layout: horizontal;
+        align: left middle;
+        margin-bottom: 1;
+    }
+
+    .form-label {
+        width: 15;
+        padding-right: 1;
+        color: $text-muted;
+    }
+
+    EditWalletModal Input {
+        width: 45;
+    }
+
+    EditWalletModal Select {
+        width: 45;
+    }
+
+    EditWalletModal .readonly-value {
+        width: 45;
+        color: $text;
+    }
+
+    #button-row {
+        height: auto;
+        layout: horizontal;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #button-row Button {
+        margin: 0 1;
+        min-width: 12;
+    }
+
+    .error-message {
+        color: $error;
+        text-align: center;
+        margin-bottom: 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def __init__(self, wallet: dict[str, Any]) -> None:
+        """Initialize the edit wallet modal.
+
+        Args:
+            wallet: Dictionary with keys: wallet_id, type, custody, description, active
+        """
+        super().__init__()
+        self._wallet = wallet
+        self._error_message: str = ""
+
+    def compose(self) -> ComposeResult:
+        """Compose the edit wallet form."""
+        with Container(id="edit-wallet-container"):
+            yield Label(f"Edit Wallet: {self._wallet['wallet_id']}", id="modal-title")
+
+            # Error message placeholder (initially empty)
+            yield Label("", id="error-msg", classes="error-message")
+
+            # Name field (read-only)
+            with Horizontal(classes="form-row"):
+                yield Label("Name:", classes="form-label")
+                yield Label(self._wallet['wallet_id'], classes="readonly-value")
+
+            # Type field (Select)
+            with Horizontal(classes="form-row"):
+                yield Label("Type:", classes="form-label")
+                yield Select(
+                    options=[
+                        ("Exchange", "exchange"),
+                        ("Hardware Wallet", "hardware"),
+                        ("Software Wallet", "software"),
+                        ("Mobile Wallet", "mobile"),
+                        ("Paper Wallet", "paper"),
+                        ("Other", "other"),
+                    ],
+                    value=self._wallet['type'],
+                    id="wallet-type-select"
+                )
+
+            # Custody field (Select)
+            with Horizontal(classes="form-row"):
+                yield Label("Custody:", classes="form-label")
+                yield Select(
+                    options=[
+                        ("Self-Custodied", "self-custodied"),
+                        ("Custodial", "custodial"),
+                        ("Multisig", "multisig"),
+                    ],
+                    value=self._wallet['custody'],
+                    id="wallet-custody-select"
+                )
+
+            # Description field (optional)
+            with Horizontal(classes="form-row"):
+                yield Label("Description:", classes="form-label")
+                yield Input(
+                    placeholder="Optional description",
+                    value=self._wallet.get('description') or "",
+                    id="wallet-description-input"
+                )
+
+            # Notes field (optional) - only show if notes exist in wallet dict
+            # Note: notes field might not be in all wallet queries, so we check for it
+            if 'notes' in self._wallet:
+                with Horizontal(classes="form-row"):
+                    yield Label("Notes:", classes="form-label")
+                    yield Input(
+                        placeholder="Optional notes",
+                        value=self._wallet.get('notes') or "",
+                        id="wallet-notes-input"
+                    )
+
+            # Buttons
+            with Horizontal(id="button-row"):
+                yield Button("Save", variant="primary", id="save-btn")
+                yield Button("Cancel", variant="default", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "save-btn":
+            self._validate_and_save()
+        elif event.button.id == "cancel-btn":
+            self.action_cancel()
+
+    def action_cancel(self) -> None:
+        """Cancel and dismiss the modal."""
+        self.dismiss(False)
+
+    def _validate_and_save(self) -> None:
+        """Validate inputs and save wallet updates."""
+        # Get form values
+        type_select = self.query_one("#wallet-type-select", Select)
+        custody_select = self.query_one("#wallet-custody-select", Select)
+        description_input = self.query_one("#wallet-description-input", Input)
+        error_label = self.query_one("#error-msg", Label)
+
+        wallet_type = str(type_select.value)
+        custody = str(custody_select.value)
+        description = description_input.value.strip() or None
+
+        # Check if notes input exists (might not be present)
+        notes = None
+        try:
+            notes_input = self.query_one("#wallet-notes-input", Input)
+            notes = notes_input.value.strip() or None
+        except Exception:
+            pass  # Notes field not present, that's ok
+
+        # Build update dict with only changed fields
+        updates: dict[str, Any] = {}
+
+        if wallet_type != self._wallet['type']:
+            updates['wallet_type'] = wallet_type
+
+        if custody != self._wallet['custody']:
+            updates['custody'] = custody
+
+        if description != (self._wallet.get('description') or None):
+            updates['description'] = description
+
+        if notes is not None and 'notes' in self._wallet:
+            if notes != (self._wallet.get('notes') or None):
+                updates['notes'] = notes
+
+        # If no changes, just dismiss
+        if not updates:
+            self.dismiss(False)
+            return
+
+        # Update the wallet
+        app: CryptoApp = self.app  # type: ignore
+        try:
+            app.crypto.wallet_query.update_wallet(
+                self._wallet['wallet_id'],
+                **updates
+            )
+
+            # Success - dismiss modal with success status
+            self.dismiss(True)
+
+        except Exception as e:
+            error_label.update(f"Error: {str(e)}")
+
+
 class WalletManagementScreen(Screen[None]):
     """Wallet Management screen with wallet list and CRUD operations."""
 
@@ -405,12 +623,28 @@ class WalletManagementScreen(Screen[None]):
 
     def action_edit_wallet(self) -> None:
         """Show modal to edit selected wallet."""
-        # TODO: WM-004 - Implement EditWalletModal
         table = self.query_one("#wallet-table", DataTable)
         if table.cursor_row is None:
             self.notify("Please select a wallet to edit", severity="warning")
             return
-        self.notify("Edit wallet feature coming in WM-004", severity="information")
+
+        # Get the selected wallet ID from the table row key
+        wallet_id = str(table.get_row_at(table.cursor_row)[0])  # First column is wallet_id
+
+        # Find the wallet in our cached list
+        wallet = next((w for w in self._wallets if w['wallet_id'] == wallet_id), None)
+        if wallet is None:
+            self.notify(f"Wallet '{wallet_id}' not found", severity="error")
+            return
+
+        def handle_result(success: bool) -> None:
+            if success:
+                self.notify("Wallet updated successfully", severity="information")
+            # Always refresh wallet list (even if cancelled, to ensure consistency)
+            self._show_loading()
+            self.load_wallet_data()
+
+        self.app.push_screen(EditWalletModal(wallet), handle_result)
 
     def action_toggle_active(self) -> None:
         """Toggle active/inactive status for selected wallet."""

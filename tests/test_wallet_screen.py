@@ -9,7 +9,7 @@ from textual.binding import Binding
 from textual.widgets import Button, Input, Label, Select
 
 from src.python.tui.app import CryptoApp
-from src.python.tui.screens.wallet_management import CreateWalletModal, WalletManagementScreen
+from src.python.tui.screens.wallet_management import CreateWalletModal, EditWalletModal, WalletManagementScreen
 
 
 class TestWalletManagementScreenStructure:
@@ -105,5 +105,77 @@ class TestCreateWalletModal:
     def test_modal_has_cancel_action(self) -> None:
         """Test that modal has cancel action."""
         modal = CreateWalletModal()
+        assert hasattr(modal, "action_cancel")
+        assert callable(modal.action_cancel)
+
+
+class TestEditWalletModal:
+    """Test EditWalletModal structure (WM-004)."""
+
+    def test_modal_exists(self) -> None:
+        """Test that EditWalletModal class exists."""
+        assert EditWalletModal is not None
+
+    def test_modal_requires_wallet_param(self) -> None:
+        """Test that modal requires wallet parameter."""
+        test_wallet = {
+            'wallet_id': 'TestWallet',
+            'type': 'hardware',
+            'custody': 'self-custodied',
+            'description': 'Test',
+            'active': True
+        }
+        modal = EditWalletModal(test_wallet)
+        assert modal._wallet == test_wallet
+
+    def test_modal_has_escape_binding(self) -> None:
+        """Test that modal has escape binding."""
+        test_wallet = {
+            'wallet_id': 'TestWallet',
+            'type': 'hardware',
+            'custody': 'self-custodied',
+            'description': 'Test',
+            'active': True
+        }
+        modal = EditWalletModal(test_wallet)
+        binding_keys = [b.key for b in modal.BINDINGS if isinstance(b, Binding)]
+        assert "escape" in binding_keys
+
+    def test_modal_has_compose_method(self) -> None:
+        """Test that modal has compose method."""
+        test_wallet = {
+            'wallet_id': 'TestWallet',
+            'type': 'hardware',
+            'custody': 'self-custodied',
+            'description': 'Test',
+            'active': True
+        }
+        modal = EditWalletModal(test_wallet)
+        assert hasattr(modal, "compose")
+        assert callable(modal.compose)
+
+    def test_modal_has_validation_method(self) -> None:
+        """Test that modal has validation method."""
+        test_wallet = {
+            'wallet_id': 'TestWallet',
+            'type': 'hardware',
+            'custody': 'self-custodied',
+            'description': 'Test',
+            'active': True
+        }
+        modal = EditWalletModal(test_wallet)
+        assert hasattr(modal, "_validate_and_save")
+        assert callable(modal._validate_and_save)
+
+    def test_modal_has_cancel_action(self) -> None:
+        """Test that modal has cancel action."""
+        test_wallet = {
+            'wallet_id': 'TestWallet',
+            'type': 'hardware',
+            'custody': 'self-custodied',
+            'description': 'Test',
+            'active': True
+        }
+        modal = EditWalletModal(test_wallet)
         assert hasattr(modal, "action_cancel")
         assert callable(modal.action_cancel)
