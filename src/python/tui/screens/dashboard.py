@@ -281,7 +281,7 @@ class DashboardScreen(Screen[None]):
             all_widgets.append(child)
             all_widgets.extend(child.walk_children(with_self=False))
         # Start normal async cleanup (timers, message-loop shutdown)
-        self._sync_clear_children(container)
+        container.remove_children()
         # Force synchronous removal from NodeLists and app registry
         for widget in reversed(all_widgets):
             if widget._parent is not None:
