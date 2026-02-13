@@ -104,7 +104,7 @@ class CustodyBreakdown(Static):
     def update_custody(self, custody_data: dict[str, float]) -> None:
         """Update custody breakdown display."""
         container = self.query_one("#custody-content", Container)
-        container.remove_children()
+        self._sync_clear_children(container)
 
         total = sum(custody_data.values())
         if total == 0:
@@ -263,6 +263,31 @@ class DashboardScreen(Screen[None]):
         # This preserves focus and keyboard navigation
         self.load_dashboard_data(refresh_only=True)
 
+    def _sync_clear_children(self, container: Container | Vertical) -> None:
+        """Remove all children, immediately deregistering widget IDs.
+
+        Textual's ``remove_children()`` defers ID cleanup to the async
+        message loop, causing ``DuplicateIds`` when new widgets with the
+        same IDs are mounted in the same handler.  This method triggers the
+        normal async cleanup *and* forces synchronous deregistration so IDs
+        can be reused immediately.
+        """
+        children = list(container.children)
+        if not children:
+            return
+        # Collect the full subtree before mutating anything
+        all_widgets: list[Any] = []
+        for child in children:
+            all_widgets.append(child)
+            all_widgets.extend(child.walk_children(with_self=False))
+        # Start normal async cleanup (timers, message-loop shutdown)
+        self._sync_clear_children(container)
+        # Force synchronous removal from NodeLists and app registry
+        for widget in reversed(all_widgets):
+            if widget._parent is not None:
+                widget._parent._nodes._remove(widget)
+            self.app._registry.discard(widget)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle quick action button clicks."""
         button_id = event.button.id
@@ -287,14 +312,14 @@ class DashboardScreen(Screen[None]):
         """Display loading state."""
         self._state = "loading"
         container = self.query_one("#dashboard-container", Container)
-        container.remove_children()
+        self._sync_clear_children(container)
         container.mount(Label("Loading portfolio data...", id="loading-message"))
 
     def _show_empty(self) -> None:
         """Display empty state with onboarding message."""
         self._state = "empty"
         container = self.query_one("#dashboard-container", Container)
-        container.remove_children()
+        self._sync_clear_children(container)
 
         empty_msg = """[bold]Welcome to Crypto Accounting![/bold]
 
@@ -319,7 +344,7 @@ Press [bold]?[/bold] for help anytime."""
         """Display error state."""
         self._state = "error"
         container = self.query_one("#dashboard-container", Container)
-        container.remove_children()
+        self._sync_clear_children(container)
         container.mount(Label(f"[red]Error loading data:[/red]\n{error}", id="error-message"))
 
     def _update_widgets(self) -> None:
@@ -368,7 +393,7 @@ Press [bold]?[/bold] for help anytime."""
         """Display loaded data."""
         self._state = "success"
         container = self.query_one("#dashboard-container", Container)
-        container.remove_children()
+        self._sync_clear_children(container)
 
         # Stats row
         balance = self._data.get("balance", 0.0)
@@ -397,7 +422,7 @@ Press [bold]?[/bold] for help anytime."""
         )
         stats_row.mount(
             WalletsCard(
-                "Wallets →",
+                "Manage Wallets →",
                 f"{active_wallets} active / {total_wallets} total",
                 "wallets-card"
             )
