@@ -233,6 +233,7 @@ class WalletQuery:
                 "notes": notes
             }
         )
+        self.backend.commit()
 
     def update_wallet(self, wallet_id: str, **kwargs: Any) -> None:
         """Update wallet metadata fields.
@@ -258,6 +259,7 @@ class WalletQuery:
 
         params = {**update_fields, "wallet_id": wallet_id}
         self.backend.execute(query, params)
+        self.backend.commit()
 
     def rename_wallet(self, old_id: str, new_id: str) -> None:
         """Rename a wallet, updating all ledger references atomically.
@@ -289,6 +291,7 @@ class WalletQuery:
         # Execute both updates
         self.backend.execute(update_wallets, {"old_id": old_id, "new_id": new_id})
         self.backend.execute(update_ledger, {"old_id": old_id, "new_id": new_id})
+        self.backend.commit()
 
     def merge_wallets(self, source_id: str, target_id: str) -> None:
         """Merge two wallets by moving all transactions from source to target.
@@ -313,6 +316,7 @@ class WalletQuery:
         # Delete source wallet record
         delete_wallet = "DELETE FROM wallets WHERE wallet_id = :source_id"
         self.backend.execute(delete_wallet, {"source_id": source_id})
+        self.backend.commit()
 
     def sync_wallets_from_ledger(self) -> int:
         """Create wallet records for exchanges in ledger that lack wallet entries.
