@@ -35,6 +35,7 @@ You'll land on the **Dashboard**, which shows your BTC balance, cost basis, cust
 | **E** | Export | Export filtered transactions to CSV |
 | **T** | Tax | Gains tracker, 1099-B export, and sale forecast |
 | **V** | Visualize | Generate charts and PDF reports |
+| **W** | Wallets | Manage wallet metadata (create, edit, rename, merge) |
 | **?** / **F1** | Help | Keyboard shortcut reference |
 | **Esc** | -- | Go back to previous screen |
 | **Q** | -- | Quit |

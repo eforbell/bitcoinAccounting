@@ -197,6 +197,7 @@ class MainMenu(Widget):
         with Center():
             with Horizontal(id="menu-grid-bottom"):
                 yield MenuButton("Import", "Load CSV files", "I", "import")
+                yield MenuButton("Wallets", "Manage wallets", "W", "wallet")
                 yield MenuButton("Tax / Report", "Gains & 1099-B", "T", "tax")
                 yield MenuButton("Visualize", "Generate charts", "V", "viz")
         yield Label("Press a key or click a menu item  |  ? for help  |  Q to quit", id="menu-hint")
