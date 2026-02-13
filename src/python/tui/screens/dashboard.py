@@ -435,7 +435,7 @@ Press [bold]?[/bold] for help anytime."""
         )
         stats_row.mount(
             WalletsCard(
-                "Manage Wallets →",
+                "[bold #f7931a]Manage Wallets →[/bold #f7931a]",
                 f"{active_wallets} active / {total_wallets} total",
                 "wallets-card"
             )
