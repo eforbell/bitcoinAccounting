@@ -277,3 +277,317 @@ class TestSoftDeleteQueryFiltering:
         assert len(trades) == 1
 
         backend.close()
+
+
+class TestUpdateTransaction:
+    """TXE-002: LedgerWriter.update_transaction() tests."""
+
+    def test_update_single_field(self):
+        """Update one field on a transaction."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        updated = writer.update_transaction(1, exchange='River')
+        assert updated['exchange'] == 'River'
+        backend.close()
+
+    def test_update_multiple_fields(self):
+        """Update several fields at once."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        updated = writer.update_transaction(
+            2,
+            buy=1.0,
+            sell=50000.0,
+            comment='Edited trade'
+        )
+        assert updated['buy'] == pytest.approx(1.0)
+        assert updated['sell'] == pytest.approx(50000.0)
+        assert updated['comment'] == 'Edited trade'
+        backend.close()
+
+    def test_update_exchange_strips_whitespace(self):
+        """Exchange field should be stripped of whitespace."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        updated = writer.update_transaction(1, exchange='  River  ')
+        assert updated['exchange'] == 'River'
+        backend.close()
+
+    def test_update_group_field(self):
+        """The 'group' field (SQL reserved word) can be updated."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        updated = writer.update_transaction(1, group='DCA January')
+        assert updated['group'] == 'DCA January'
+        backend.close()
+
+    def test_update_returns_full_row(self):
+        """update_transaction returns the full updated row dict."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        updated = writer.update_transaction(1, comment='test')
+        assert 'id' in updated
+        assert 'createddate' in updated
+        assert 'trans_type' in updated
+        assert 'exchange' in updated
+        backend.close()
+
+    def test_update_persisted_to_db(self):
+        """Changes are committed and visible to a fresh query."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        writer.update_transaction(1, exchange='River')
+
+        row = backend.execute_one('SELECT exchange FROM ledger WHERE id = 1')
+        assert row['exchange'] == 'River'
+        backend.close()
+
+    def test_update_missing_tx_id_raises(self):
+        """ValueError raised for nonexistent tx_id."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        with pytest.raises(ValueError, match="does not exist"):
+            writer.update_transaction(999, exchange='River')
+        backend.close()
+
+    def test_update_no_valid_fields_raises(self):
+        """ValueError raised when no recognized fields are passed."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        with pytest.raises(ValueError, match="No valid fields"):
+            writer.update_transaction(1, bogus_field='nope')
+        backend.close()
+
+    def test_update_ignores_unknown_fields(self):
+        """Unknown kwargs are silently ignored when valid ones are also present."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        updated = writer.update_transaction(1, exchange='River', fake='ignored')
+        assert updated['exchange'] == 'River'
+        backend.close()
+
+    def test_update_trans_type(self):
+        """Can change the transaction type."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        updated = writer.update_transaction(1, trans_type='Mining')
+        assert updated['trans_type'] == 'Mining'
+        backend.close()
+
+    def test_update_date(self):
+        """Can change the createddate."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        updated = writer.update_transaction(1, createddate='2025-06-01 12:00:00')
+        assert updated['createddate'] == '2025-06-01 12:00:00'
+        backend.close()
+
+    def test_update_all_updatable_fields(self):
+        """All 11 updatable fields can be set in one call."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        updated = writer.update_transaction(
+            2,
+            createddate='2025-01-01 00:00:00',
+            trans_type='Spend',
+            buy=0.0,
+            buy_curr='',
+            sell=100.0,
+            sell_curr='USD',
+            fee=1.0,
+            fee_curr='USD',
+            exchange='River',
+            group='test-group',
+            comment='test-comment'
+        )
+        assert updated['createddate'] == '2025-01-01 00:00:00'
+        assert updated['trans_type'] == 'Spend'
+        assert updated['buy'] == pytest.approx(0.0)
+        assert updated['sell'] == pytest.approx(100.0)
+        assert updated['fee'] == pytest.approx(1.0)
+        assert updated['exchange'] == 'River'
+        assert updated['group'] == 'test-group'
+        assert updated['comment'] == 'test-comment'
+        backend.close()
+
+
+class TestSoftDeleteTransaction:
+    """TXE-002: LedgerWriter.soft_delete_transaction() tests."""
+
+    def test_soft_delete_sets_flag(self):
+        """soft_delete sets deleted=1."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        result = writer.soft_delete_transaction(1)
+        assert result['deleted'] == 1
+        backend.close()
+
+    def test_soft_delete_sets_timestamp(self):
+        """soft_delete populates deleted_date."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        result = writer.soft_delete_transaction(1)
+        assert result['deleted_date'] is not None
+        assert len(result['deleted_date']) == 19  # YYYY-MM-DD HH:MM:SS
+        backend.close()
+
+    def test_soft_delete_persisted(self):
+        """Soft-delete is committed to the database."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        writer.soft_delete_transaction(1)
+
+        row = backend.execute_one('SELECT deleted, deleted_date FROM ledger WHERE id = 1')
+        assert row['deleted'] == 1
+        assert row['deleted_date'] is not None
+        backend.close()
+
+    def test_soft_delete_hides_from_queries(self):
+        """Soft-deleted rows are excluded from TransactionQuery."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        writer.soft_delete_transaction(1)
+
+        query = TransactionQuery(backend)
+        _, txs = query.get_transactions()
+        assert len(txs) == 2
+        assert all(tx['ID'] != 1 for tx in txs)
+        backend.close()
+
+    def test_soft_delete_missing_tx_raises(self):
+        """ValueError raised for nonexistent tx_id."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        with pytest.raises(ValueError, match="does not exist"):
+            writer.soft_delete_transaction(999)
+        backend.close()
+
+    def test_soft_delete_returns_full_row(self):
+        """soft_delete_transaction returns the full row dict."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        result = writer.soft_delete_transaction(1)
+        assert 'id' in result
+        assert 'createddate' in result
+        assert 'trans_type' in result
+        backend.close()
+
+
+class TestRestoreTransaction:
+    """TXE-002: LedgerWriter.restore_transaction() tests."""
+
+    def test_restore_clears_deleted_flag(self):
+        """restore sets deleted=0."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        writer.soft_delete_transaction(1)
+        result = writer.restore_transaction(1)
+        assert result['deleted'] == 0
+        backend.close()
+
+    def test_restore_clears_deleted_date(self):
+        """restore sets deleted_date=NULL."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        writer.soft_delete_transaction(1)
+        result = writer.restore_transaction(1)
+        assert result['deleted_date'] is None
+        backend.close()
+
+    def test_restore_makes_visible_in_queries(self):
+        """Restored rows re-appear in TransactionQuery."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        writer.soft_delete_transaction(1)
+        query = TransactionQuery(backend)
+        _, txs = query.get_transactions()
+        assert len(txs) == 2
+
+        writer.restore_transaction(1)
+        _, txs = query.get_transactions()
+        assert len(txs) == 3
+        backend.close()
+
+    def test_restore_missing_tx_raises(self):
+        """ValueError raised for nonexistent tx_id."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        with pytest.raises(ValueError, match="does not exist"):
+            writer.restore_transaction(999)
+        backend.close()
+
+    def test_restore_persisted(self):
+        """Restore is committed to the database."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        writer.soft_delete_transaction(1)
+        writer.restore_transaction(1)
+
+        row = backend.execute_one('SELECT deleted, deleted_date FROM ledger WHERE id = 1')
+        assert row['deleted'] == 0
+        assert row['deleted_date'] is None
+        backend.close()
+
+    def test_delete_restore_roundtrip(self):
+        """Full delete-restore cycle preserves original transaction data."""
+        backend = _make_backend()
+        _seed_transactions(backend)
+        writer = LedgerWriter(backend)
+
+        original = backend.execute_one('SELECT * FROM ledger WHERE id = 1')
+
+        writer.soft_delete_transaction(1)
+        restored = writer.restore_transaction(1)
+
+        assert restored['createddate'] == original['createddate']
+        assert restored['trans_type'] == original['trans_type']
+        assert restored['buy'] == original['buy']
+        assert restored['exchange'] == original['exchange']
+        assert restored['deleted'] == 0
+        backend.close()
