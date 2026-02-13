@@ -1681,3 +1681,20 @@
 
 ---
 
+
+## 2026-02-12 - WM-001
+- What was implemented: Five wallet CRUD methods added to WalletQuery class for wallet management
+- Files changed:
+  - `src/python/db/queries/wallet.py` (added add_wallet, update_wallet, rename_wallet, merge_wallets, sync_wallets_from_ledger methods - +165 lines)
+  - `tests/test_wallet_management.py` (new file - 21 tests across 5 test classes - +446 lines)
+  - `AGENTS.md` (documented learnings)
+- **Learnings:**
+  - Query Object Pattern: Extended WalletQuery with write operations following Feature-8 pattern
+  - SQLite boolean handling: SQLite returns 1/0 for INTEGER boolean fields, not Python True/False; tests must use `== 1 or value is True` for compatibility
+  - Atomic multi-table updates: rename_wallet() and merge_wallets() update both wallets table and all ledger.exchange references; backend handles transactions internally
+  - sync_wallets_from_ledger() must query wallets table directly (not via get_wallets() which has ledger fallback when empty)
+  - Whitespace normalization: All wallet_id parameters stripped at method entry for consistency
+  - In-memory SQLite testing: `:memory:` database with fixtures provides isolated test environment, no cleanup needed
+  - Dynamic SQL UPDATE: Build SET clause from **kwargs filtered to valid fields only; raises ValueError if no valid fields provided
+  - Pre-validation: Check constraints (duplicate wallet_id) before executing updates to provide better error messages
+---

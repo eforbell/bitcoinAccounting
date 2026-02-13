@@ -31,7 +31,8 @@
       ],
       "priority": 1,
       "estimatedLines": "+200 (query methods + tests)",
-      "testStrategy": "pytest tests/test_wallet_management.py -v"
+      "testStrategy": "pytest tests/test_wallet_management.py -v",
+      "passes": true
     },
     {
       "id": "WM-002",
