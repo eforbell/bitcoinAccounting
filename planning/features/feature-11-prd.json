@@ -78,7 +78,8 @@
       ],
       "priority": 4,
       "estimatedLines": "+100 (modal reuses Create pattern + tests)",
-      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v"
+      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v",
+      "passes": true
     },
     {
       "id": "WM-005",

@@ -8,6 +8,20 @@
 - Duplicate detection in Import Wizard: Call `detect_duplicates(transactions, app.crypto.backend)` in `show_step_3()`; store results in instance var; show warning banner with Static widget; mark duplicates with ⚠ prefix
 - CLI input validation: Use `prompt_float()/prompt_int()` helpers with try/except around conversions; re-prompt on ValueError; strip() all wallet/exchange name inputs
 - ModalScreen pattern: Use `ModalScreen[ReturnType]` with centered Container; form with Label + Input/Select rows; Button row with primary/default variants; handle dismissal callback in parent screen
+- Edit modal pattern: Pass data via `__init__(data: dict)`, pre-populate form fields, use read-only Label for immutable fields, build updates dict with only changed values
+
+## 2026-02-12 - WM-004
+- What was implemented: EditWalletModal for editing wallet metadata; pre-populated form, read-only name field, only updates changed fields
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (added EditWalletModal class with wallet dict constructor; updated action_edit_wallet to get selected row, find wallet in cache, push modal)
+  - `tests/test_wallet_screen.py` (added TestEditWalletModal class with 6 structure tests)
+- **Learnings:**
+  - Modal with parameters: Pass data via `__init__(self, data: dict)`, store as instance var, use in compose()
+  - Read-only fields: Use Label widget instead of disabled Input for read-only values (cleaner UX)
+  - Selective updates: Build updates dict with only changed fields (compare new values to original); if empty, dismiss without DB call
+  - Table row access: Use `table.get_row_at(table.cursor_row)[0]` to get first column value (wallet_id in this case)
+  - Always refresh pattern: Refresh data on dismiss regardless of success/cancel to ensure UI consistency
+---
 
 ## 2026-02-12 - WM-003
 - What was implemented: CreateWalletModal for creating new wallets with validation; integrated into WalletManagementScreen via 'n' keybinding
