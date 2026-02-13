@@ -9,7 +9,12 @@ from textual.binding import Binding
 from textual.widgets import Button, Input, Label, Select
 
 from src.python.tui.app import CryptoApp
-from src.python.tui.screens.wallet_management import CreateWalletModal, EditWalletModal, WalletManagementScreen
+from src.python.tui.screens.wallet_management import (
+    CreateWalletModal,
+    EditWalletModal,
+    RenameWalletModal,
+    WalletManagementScreen,
+)
 
 
 class TestWalletManagementScreenStructure:
@@ -185,3 +190,49 @@ class TestEditWalletModal:
         modal = EditWalletModal(test_wallet)
         assert hasattr(modal, "action_cancel")
         assert callable(modal.action_cancel)
+
+
+class TestRenameWalletModal:
+    """Test RenameWalletModal structure (WM-005)."""
+
+    def test_modal_exists(self) -> None:
+        """Test that RenameWalletModal class exists."""
+        assert RenameWalletModal is not None
+
+    def test_modal_requires_params(self) -> None:
+        """Test that modal requires wallet_id and transaction_count parameters."""
+        modal = RenameWalletModal("TestWallet", 5)
+        assert modal._wallet_id == "TestWallet"
+        assert modal._transaction_count == 5
+
+    def test_modal_has_escape_binding(self) -> None:
+        """Test that modal has escape binding."""
+        modal = RenameWalletModal("TestWallet", 0)
+        binding_keys = [b.key for b in modal.BINDINGS if isinstance(b, Binding)]
+        assert "escape" in binding_keys
+
+    def test_modal_has_compose_method(self) -> None:
+        """Test that modal has compose method."""
+        modal = RenameWalletModal("TestWallet", 0)
+        assert hasattr(modal, "compose")
+        assert callable(modal.compose)
+
+    def test_modal_has_validation_method(self) -> None:
+        """Test that modal has validation method."""
+        modal = RenameWalletModal("TestWallet", 0)
+        assert hasattr(modal, "_validate_and_rename")
+        assert callable(modal._validate_and_rename)
+
+    def test_modal_has_cancel_action(self) -> None:
+        """Test that modal has cancel action."""
+        modal = RenameWalletModal("TestWallet", 0)
+        assert hasattr(modal, "action_cancel")
+        assert callable(modal.action_cancel)
+
+    def test_modal_shows_transaction_count(self) -> None:
+        """Test that modal stores transaction count for warning display."""
+        modal_with_txs = RenameWalletModal("Wallet1", 10)
+        assert modal_with_txs._transaction_count == 10
+
+        modal_without_txs = RenameWalletModal("Wallet2", 0)
+        assert modal_without_txs._transaction_count == 0
