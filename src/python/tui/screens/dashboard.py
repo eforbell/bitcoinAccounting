@@ -241,6 +241,7 @@ class DashboardScreen(Screen[None]):
         width: 100%;
         height: auto;
         margin-bottom: 1;
+        align: top top;
     }
     #quick-actions {
         width: 100%;
