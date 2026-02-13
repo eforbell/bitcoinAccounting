@@ -253,10 +253,9 @@ class DashboardScreen(Screen[None]):
 
     def on_screen_resume(self) -> None:
         """Reload dashboard data when screen is resumed (returning from another screen)."""
-        # Note: Dashboard refresh is now handled by app.refresh_dashboard_in_stack()
-        # which is called directly from record transaction screen after recording.
-        # This method is kept for potential future use.
-        pass
+        # Refresh dashboard when returning from screens like wallet management
+        # that may have modified data (e.g., toggled wallet active status)
+        self.refresh_dashboard()
 
     def refresh_dashboard(self) -> None:
         """Explicitly refresh dashboard data (called by app callbacks)."""
