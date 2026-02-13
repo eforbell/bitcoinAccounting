@@ -91,6 +91,7 @@ class TradeQuery:
             FROM ledger
             WHERE trans_type = 'Trade'
               AND (buy_curr = :coin OR sell_curr = :coin)
+              AND (deleted = 0 OR deleted IS NULL)
             ORDER BY createddate ASC
         """
 
@@ -209,6 +210,7 @@ class TradeQuery:
             WHERE sell_curr = :coin
                 AND trans_type = 'Trade'
                 AND sell > 0
+                AND (deleted = 0 OR deleted IS NULL)
         """
 
         params: dict[str, Any] = {"coin": coin}

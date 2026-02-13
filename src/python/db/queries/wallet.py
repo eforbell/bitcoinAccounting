@@ -47,6 +47,7 @@ class WalletQuery:
                 COALESCE(SUM(CASE WHEN sell_curr = :coin THEN sell ELSE 0 END), 0)
             FROM ledger
             WHERE exchange = :account
+            AND (deleted = 0 OR deleted IS NULL)
         """
         result = self.backend.execute_scalar(query, {"coin": coin, "account": account})
         balance = float(result) if result is not None else 0.0
@@ -107,6 +108,7 @@ class WalletQuery:
             SELECT DISTINCT exchange
             FROM ledger
             WHERE exchange IS NOT NULL
+            AND (deleted = 0 OR deleted IS NULL)
             ORDER BY exchange
         """
         rows = self.backend.execute(query)
@@ -192,6 +194,7 @@ class WalletQuery:
                     COALESCE(SUM(CASE WHEN sell_curr = :coin THEN sell ELSE 0 END), 0) as balance
                 FROM ledger
                 WHERE exchange IS NOT NULL
+                AND (deleted = 0 OR deleted IS NULL)
                 GROUP BY exchange
                 ORDER BY exchange
             """
@@ -333,6 +336,7 @@ class WalletQuery:
             SELECT DISTINCT exchange
             FROM ledger
             WHERE exchange IS NOT NULL
+            AND (deleted = 0 OR deleted IS NULL)
             ORDER BY exchange
         """
         ledger_wallets = [row['exchange'] for row in self.backend.execute(ledger_query)]

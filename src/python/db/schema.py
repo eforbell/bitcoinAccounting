@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS ledger (
     exchange TEXT,
     "group" TEXT,
     comment TEXT,
-    transactionid TEXT
+    transactionid TEXT,
+    deleted INTEGER DEFAULT 0,
+    deleted_date TEXT
 )
 """
 
@@ -82,6 +84,33 @@ def get_sqlite_path() -> str:
     return os.getenv('SQLITE_DB_PATH', os.path.expanduser('~/.cryptoaccounting/ledger.db'))
 
 
+def _migrate_ledger_soft_delete(backend: DatabaseBackend) -> None:
+    """Add soft-delete columns to existing ledger tables.
+
+    This migration is idempotent - ALTER TABLE will be skipped if columns
+    already exist. Handles existing databases that were created before
+    the soft-delete feature was added.
+
+    Args:
+        backend: DatabaseBackend instance to execute DDL on
+    """
+    # SQLite doesn't support ALTER TABLE ADD COLUMN IF NOT EXISTS,
+    # so we check existing columns first via PRAGMA
+    from .sqlite import SqliteBackend
+    if isinstance(backend, SqliteBackend):
+        rows = backend.execute("PRAGMA table_info(ledger)")
+        existing_cols = {row['name'] for row in rows}
+
+        if 'deleted' not in existing_cols:
+            backend.execute("ALTER TABLE ledger ADD COLUMN deleted INTEGER DEFAULT 0")
+        if 'deleted_date' not in existing_cols:
+            backend.execute("ALTER TABLE ledger ADD COLUMN deleted_date TEXT")
+    else:
+        # PostgreSQL: use IF NOT EXISTS (supported in PG 9.6+)
+        backend.execute("ALTER TABLE ledger ADD COLUMN IF NOT EXISTS deleted INTEGER DEFAULT 0")
+        backend.execute("ALTER TABLE ledger ADD COLUMN IF NOT EXISTS deleted_date TEXT")
+
+
 def create_tables(backend: DatabaseBackend) -> None:
     """Create all tables if they don't exist.
 
@@ -92,4 +121,6 @@ def create_tables(backend: DatabaseBackend) -> None:
     """
     for table_ddl in SQLITE_TABLES:
         backend.execute(table_ddl)
+    # Migrate existing ledger tables to add soft-delete columns
+    _migrate_ledger_soft_delete(backend)
     backend.commit()

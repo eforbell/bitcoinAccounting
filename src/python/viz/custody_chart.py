@@ -86,6 +86,7 @@ class CustodyChart:
             SELECT MIN(createddate) as min_date
             FROM ledger
             WHERE (buy_curr = 'BTC' OR sell_curr = 'BTC')
+            AND (deleted = 0 OR deleted IS NULL)
             """
         )
 
@@ -142,7 +143,8 @@ class CustodyChart:
                 COALESCE(CASE WHEN sell_curr = 'BTC' THEN sell ELSE 0 END, 0) as btc_change,
                 exchange
             FROM ledger
-            WHERE buy_curr = 'BTC' OR sell_curr = 'BTC'
+            WHERE (buy_curr = 'BTC' OR sell_curr = 'BTC')
+            AND (deleted = 0 OR deleted IS NULL)
             ORDER BY createddate ASC
         """
 

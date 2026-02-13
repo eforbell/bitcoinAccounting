@@ -284,6 +284,7 @@ def _is_potential_duplicate(tx: dict[str, Any], backend: DatabaseBackend) -> boo
         AND {amount_col} = :amount
         AND {curr_col} = :curr
         AND DATE(createddate) = DATE(:date_str)
+        AND (deleted = 0 OR deleted IS NULL)
     """
 
     try:
