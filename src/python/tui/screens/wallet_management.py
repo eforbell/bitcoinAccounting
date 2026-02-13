@@ -7,12 +7,212 @@ from typing import TYPE_CHECKING, Any
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Container
-from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Header, Label
+from textual.containers import Container, Horizontal, Vertical
+from textual.screen import ModalScreen, Screen
+from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select
 
 if TYPE_CHECKING:
     from tui.app import CryptoApp
+
+
+class CreateWalletModal(ModalScreen[bool]):
+    """Modal dialog for creating a new wallet."""
+
+    CSS = """
+    CreateWalletModal {
+        align: center middle;
+    }
+
+    #create-wallet-container {
+        width: 70;
+        height: auto;
+        background: $surface;
+        border: solid $accent;
+        padding: 1 2;
+    }
+
+    #modal-title {
+        height: auto;
+        text-align: center;
+        margin-bottom: 1;
+        color: $accent;
+        text-style: bold;
+    }
+
+    .form-row {
+        height: auto;
+        min-height: 4;
+        layout: horizontal;
+        align: left middle;
+        margin-bottom: 1;
+    }
+
+    .form-label {
+        width: 15;
+        padding-right: 1;
+        color: $text-muted;
+    }
+
+    CreateWalletModal Input {
+        width: 45;
+    }
+
+    CreateWalletModal Select {
+        width: 45;
+    }
+
+    #button-row {
+        height: auto;
+        layout: horizontal;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #button-row Button {
+        margin: 0 1;
+        min-width: 12;
+    }
+
+    .error-message {
+        color: $error;
+        text-align: center;
+        margin-bottom: 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def __init__(self) -> None:
+        """Initialize the create wallet modal."""
+        super().__init__()
+        self._error_message: str = ""
+
+    def compose(self) -> ComposeResult:
+        """Compose the create wallet form."""
+        with Container(id="create-wallet-container"):
+            yield Label("Create New Wallet", id="modal-title")
+
+            # Error message placeholder (initially empty)
+            yield Label("", id="error-msg", classes="error-message")
+
+            # Name field (required)
+            with Horizontal(classes="form-row"):
+                yield Label("Name:", classes="form-label")
+                yield Input(
+                    placeholder="Enter wallet name",
+                    id="wallet-name-input"
+                )
+
+            # Type field (Select)
+            with Horizontal(classes="form-row"):
+                yield Label("Type:", classes="form-label")
+                yield Select(
+                    options=[
+                        ("Exchange", "exchange"),
+                        ("Hardware Wallet", "hardware"),
+                        ("Software Wallet", "software"),
+                        ("Mobile Wallet", "mobile"),
+                        ("Paper Wallet", "paper"),
+                        ("Other", "other"),
+                    ],
+                    value="hardware",
+                    id="wallet-type-select"
+                )
+
+            # Custody field (Select)
+            with Horizontal(classes="form-row"):
+                yield Label("Custody:", classes="form-label")
+                yield Select(
+                    options=[
+                        ("Self-Custodied", "self-custodied"),
+                        ("Custodial", "custodial"),
+                        ("Multisig", "multisig"),
+                    ],
+                    value="self-custodied",
+                    id="wallet-custody-select"
+                )
+
+            # Description field (optional)
+            with Horizontal(classes="form-row"):
+                yield Label("Description:", classes="form-label")
+                yield Input(
+                    placeholder="Optional description",
+                    id="wallet-description-input"
+                )
+
+            # Notes field (optional)
+            with Horizontal(classes="form-row"):
+                yield Label("Notes:", classes="form-label")
+                yield Input(
+                    placeholder="Optional notes",
+                    id="wallet-notes-input"
+                )
+
+            # Buttons
+            with Horizontal(id="button-row"):
+                yield Button("Create", variant="primary", id="create-btn")
+                yield Button("Cancel", variant="default", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "create-btn":
+            self._validate_and_create()
+        elif event.button.id == "cancel-btn":
+            self.action_cancel()
+
+    def action_cancel(self) -> None:
+        """Cancel and dismiss the modal."""
+        self.dismiss(False)
+
+    def _validate_and_create(self) -> None:
+        """Validate inputs and create wallet."""
+        # Get form values
+        name_input = self.query_one("#wallet-name-input", Input)
+        type_select = self.query_one("#wallet-type-select", Select)
+        custody_select = self.query_one("#wallet-custody-select", Select)
+        description_input = self.query_one("#wallet-description-input", Input)
+        notes_input = self.query_one("#wallet-notes-input", Input)
+        error_label = self.query_one("#error-msg", Label)
+
+        wallet_name = name_input.value.strip()
+        wallet_type = str(type_select.value)
+        custody = str(custody_select.value)
+        description = description_input.value.strip() or None
+        notes = notes_input.value.strip() or None
+
+        # Validation: name must not be empty
+        if not wallet_name:
+            error_label.update("Error: Wallet name is required")
+            name_input.focus()
+            return
+
+        # Validation: check if wallet already exists
+        app: CryptoApp = self.app  # type: ignore
+        try:
+            existing_wallets = app.crypto.wallet_query.get_wallets()
+            existing_names = {w['wallet_id'] for w in existing_wallets}
+
+            if wallet_name in existing_names:
+                error_label.update(f"Error: Wallet '{wallet_name}' already exists")
+                name_input.focus()
+                return
+
+            # Create the wallet
+            app.crypto.wallet_query.add_wallet(
+                wallet_id=wallet_name,
+                wallet_type=wallet_type,
+                custody=custody,
+                description=description,
+                notes=notes
+            )
+
+            # Success - dismiss modal with success status
+            self.dismiss(True)
+
+        except Exception as e:
+            error_label.update(f"Error: {str(e)}")
 
 
 class WalletManagementScreen(Screen[None]):
@@ -194,8 +394,14 @@ class WalletManagementScreen(Screen[None]):
 
     def action_new_wallet(self) -> None:
         """Show modal to create a new wallet."""
-        # TODO: WM-003 - Implement CreateWalletModal
-        self.notify("Create wallet feature coming in WM-003", severity="information")
+        def handle_result(success: bool) -> None:
+            if success:
+                self.notify("Wallet created successfully", severity="information")
+                # Refresh wallet list
+                self._show_loading()
+                self.load_wallet_data()
+
+        self.app.push_screen(CreateWalletModal(), handle_result)
 
     def action_edit_wallet(self) -> None:
         """Show modal to edit selected wallet."""
