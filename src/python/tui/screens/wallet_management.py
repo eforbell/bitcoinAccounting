@@ -178,10 +178,10 @@ class WalletManagementScreen(Screen[None]):
             wallets = wallet_query.get_wallets()
 
             # Update UI on main thread
-            self.call_from_thread(self._handle_wallet_data, wallets)
+            self.app.call_from_thread(self._handle_wallet_data, wallets)
 
         except Exception as e:
-            self.call_from_thread(self._show_error, str(e))
+            self.app.call_from_thread(self._show_error, str(e))
 
     def _handle_wallet_data(self, wallets: list[dict[str, Any]]) -> None:
         """Handle wallet data loaded from background thread."""
