@@ -433,6 +433,201 @@ class EditWalletModal(ModalScreen[bool]):
             error_label.update(f"Error: {str(e)}")
 
 
+class RenameWalletModal(ModalScreen[bool]):
+    """Modal dialog for renaming a wallet with confirmation."""
+
+    CSS = """
+    RenameWalletModal {
+        align: center middle;
+    }
+
+    #rename-wallet-container {
+        width: 70;
+        height: auto;
+        background: $surface;
+        border: solid $accent;
+        padding: 1 2;
+    }
+
+    #modal-title {
+        height: auto;
+        text-align: center;
+        margin-bottom: 1;
+        color: $accent;
+        text-style: bold;
+    }
+
+    .warning-message {
+        color: $warning;
+        text-align: center;
+        margin-bottom: 1;
+        text-style: bold;
+    }
+
+    .info-message {
+        color: $text-muted;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    .form-row {
+        height: auto;
+        min-height: 4;
+        layout: horizontal;
+        align: left middle;
+        margin-bottom: 1;
+    }
+
+    .form-label {
+        width: 20;
+        padding-right: 1;
+        color: $text-muted;
+    }
+
+    RenameWalletModal Input {
+        width: 40;
+    }
+
+    #button-row {
+        height: auto;
+        layout: horizontal;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #button-row Button {
+        margin: 0 1;
+        min-width: 12;
+    }
+
+    .error-message {
+        color: $error;
+        text-align: center;
+        margin-bottom: 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def __init__(self, wallet_id: str, transaction_count: int) -> None:
+        """Initialize the rename wallet modal.
+
+        Args:
+            wallet_id: Current wallet identifier
+            transaction_count: Number of ledger transactions that reference this wallet
+        """
+        super().__init__()
+        self._wallet_id = wallet_id
+        self._transaction_count = transaction_count
+
+    def compose(self) -> ComposeResult:
+        """Compose the rename wallet form."""
+        with Container(id="rename-wallet-container"):
+            yield Label(f"Rename Wallet: {self._wallet_id}", id="modal-title")
+
+            # Warning about transaction updates
+            if self._transaction_count > 0:
+                yield Label(
+                    f"⚠ This will update {self._transaction_count} transaction(s) in the ledger",
+                    classes="warning-message"
+                )
+            else:
+                yield Label(
+                    "This wallet has no transactions in the ledger",
+                    classes="info-message"
+                )
+
+            # Error message placeholder (initially empty)
+            yield Label("", id="error-msg", classes="error-message")
+
+            # Current name (read-only)
+            with Horizontal(classes="form-row"):
+                yield Label("Current Name:", classes="form-label")
+                yield Label(self._wallet_id, classes="readonly-value")
+
+            # New name input
+            with Horizontal(classes="form-row"):
+                yield Label("New Name:", classes="form-label")
+                yield Input(
+                    placeholder="Enter new wallet name",
+                    id="new-name-input"
+                )
+
+            # Confirm new name input
+            with Horizontal(classes="form-row"):
+                yield Label("Confirm New Name:", classes="form-label")
+                yield Input(
+                    placeholder="Type new name again",
+                    id="confirm-name-input"
+                )
+
+            # Buttons
+            with Horizontal(id="button-row"):
+                yield Button("Rename", variant="warning", id="rename-btn")
+                yield Button("Cancel", variant="default", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "rename-btn":
+            self._validate_and_rename()
+        elif event.button.id == "cancel-btn":
+            self.action_cancel()
+
+    def action_cancel(self) -> None:
+        """Cancel and dismiss the modal."""
+        self.dismiss(False)
+
+    def _validate_and_rename(self) -> None:
+        """Validate inputs and rename wallet."""
+        # Get form values
+        new_name_input = self.query_one("#new-name-input", Input)
+        confirm_name_input = self.query_one("#confirm-name-input", Input)
+        error_label = self.query_one("#error-msg", Label)
+
+        new_name = new_name_input.value.strip()
+        confirm_name = confirm_name_input.value.strip()
+
+        # Validation: new name must not be empty
+        if not new_name:
+            error_label.update("Error: New wallet name is required")
+            new_name_input.focus()
+            return
+
+        # Validation: new name must not be the same as current name
+        if new_name == self._wallet_id:
+            error_label.update("Error: New name must be different from current name")
+            new_name_input.focus()
+            return
+
+        # Validation: names must match
+        if new_name != confirm_name:
+            error_label.update("Error: Names do not match. Please type the new name twice.")
+            confirm_name_input.focus()
+            return
+
+        # Validation: check if new name already exists
+        app: CryptoApp = self.app  # type: ignore
+        try:
+            existing_wallets = app.crypto.wallet_query.get_wallets()
+            existing_names = {w['wallet_id'] for w in existing_wallets}
+
+            if new_name in existing_names:
+                error_label.update(f"Error: Wallet '{new_name}' already exists")
+                new_name_input.focus()
+                return
+
+            # Perform the rename
+            app.crypto.wallet_query.rename_wallet(self._wallet_id, new_name)
+
+            # Success - dismiss modal with success status
+            self.dismiss(True)
+
+        except Exception as e:
+            error_label.update(f"Error: {str(e)}")
+
+
 class WalletManagementScreen(Screen[None]):
     """Wallet Management screen with wallet list and CRUD operations."""
 
@@ -657,12 +852,27 @@ class WalletManagementScreen(Screen[None]):
 
     def action_rename_wallet(self) -> None:
         """Show modal to rename selected wallet."""
-        # TODO: WM-005 - Implement RenameWalletModal
         table = self.query_one("#wallet-table", DataTable)
         if table.cursor_row is None:
             self.notify("Please select a wallet to rename", severity="warning")
             return
-        self.notify("Rename wallet feature coming in WM-005", severity="information")
+
+        # Get the selected wallet ID from the table row key
+        wallet_id = str(table.get_row_at(table.cursor_row)[0])  # First column is wallet_id
+
+        # Get transaction count for this wallet
+        app: CryptoApp = self.app  # type: ignore
+        query = "SELECT COUNT(*) FROM ledger WHERE exchange = :wallet_id"
+        tx_count = app.crypto.backend.execute_scalar(query, {"wallet_id": wallet_id}) or 0
+
+        def handle_result(success: bool) -> None:
+            if success:
+                self.notify("Wallet renamed successfully", severity="information")
+            # Refresh wallet list
+            self._show_loading()
+            self.load_wallet_data()
+
+        self.app.push_screen(RenameWalletModal(wallet_id, tx_count), handle_result)
 
     def action_merge_wallets(self) -> None:
         """Show modal to merge selected wallet into another."""
