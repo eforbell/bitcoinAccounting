@@ -2,6 +2,30 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-11: Wallet Management Screen - WM-002
+
+### Wallet Management TUI Screen
+- Created `WalletManagementScreen` following existing TUI screen patterns (Header, Container, Footer)
+- Integrated into main app with 'W' keybinding (`Binding("w", "menu_wallet", "Wallets")`)
+- DataTable with 6 columns: Name, Type, Custody, Description, Active, Tx Count
+- Calls `sync_wallets_from_ledger()` on mount to ensure all ledger-referenced wallets exist in wallets table
+- Action stubs for WM-003+ (new, edit, rename, merge) - show notifications "coming soon"
+- Color-coding CSS classes defined for custody types (green=self-custodied, yellow=custodial, cyan=multisig)
+
+### TUI Testing with Pre-existing Segfault
+- Pre-existing SQLite threading segfault in dashboard (documented in MEMORY.md) crashes full app tests
+- Solution: Test screen structure/bindings without running full app (`run_test()`)
+- Pattern: Instantiate screen, check attributes, verify methods exist
+- Skip render tests with `@pytest.mark.skip(reason="Pre-existing SQLite threading segfault...")`
+- 5 structure tests pass, 1 render test skipped
+
+### TUI Screen Integration Pattern
+- Add screen to `tui/screens/__init__.py` exports
+- Import in `tui/app.py` and add to imports list
+- Add `Binding("key", "menu_name", "Label")` to app BINDINGS
+- Add `action_menu_name()` method that calls `self.push_screen(ScreenClass())`
+- Update HelpScreen compose() with navigation label for new screen
+
 ## Feature-11: Wallet Management Screen - WM-001
 
 ### Wallet CRUD Methods in WalletQuery
