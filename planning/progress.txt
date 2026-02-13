@@ -7,6 +7,20 @@
 - Textual CSS class gotcha: CSS `.new-wallet-row { display: none }` overrides `widget.display = True` set programmatically; use `display` property without conflicting CSS rules
 - Duplicate detection in Import Wizard: Call `detect_duplicates(transactions, app.crypto.backend)` in `show_step_3()`; store results in instance var; show warning banner with Static widget; mark duplicates with ⚠ prefix
 - CLI input validation: Use `prompt_float()/prompt_int()` helpers with try/except around conversions; re-prompt on ValueError; strip() all wallet/exchange name inputs
+- ModalScreen pattern: Use `ModalScreen[ReturnType]` with centered Container; form with Label + Input/Select rows; Button row with primary/default variants; handle dismissal callback in parent screen
+
+## 2026-02-12 - WM-003
+- What was implemented: CreateWalletModal for creating new wallets with validation; integrated into WalletManagementScreen via 'n' keybinding
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (added CreateWalletModal class with compose, validation, button handlers; updated action_new_wallet to push modal and refresh on success)
+  - `tests/test_wallet_screen.py` (added TestCreateWalletModal class with 5 structure tests)
+- **Learnings:**
+  - ModalScreen pattern: Use `ModalScreen[bool]` to return success/failure status to caller
+  - Form validation: Check inputs inline in `_validate_and_create()`, display errors in Label widget, focus invalid field
+  - Modal callbacks: Use `app.push_screen(modal, callback)` pattern; callback receives modal's return value on dismiss
+  - Testing modals: Simple structure tests (hasattr, callable) avoid dashboard loading issues; full integration tests would require app.crypto initialization
+  - Error display: Empty Label widget as placeholder; update content with `label.update(error_text)` on validation failure
+---
 
 ## 2026-02-12 - DIF-006
 - What was implemented: Input validation with re-prompting for all CLI recording scripts (buySats, sell, transfer, earnInterest); whitespace stripping on wallet/exchange inputs
