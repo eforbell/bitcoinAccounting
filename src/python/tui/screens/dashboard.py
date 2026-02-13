@@ -60,6 +60,19 @@ class StatCard(Static):
 class WalletsCard(StatCard):
     """Wallets stat card with clickable arrow to manage wallets."""
 
+    DEFAULT_CSS = """
+    WalletsCard {
+        border: solid #444444;
+    }
+    WalletsCard:hover {
+        border: solid #f7931a;
+        background: #0f3460;
+    }
+    WalletsCard .stat-label {
+        color: #f7931a;
+    }
+    """
+
     def on_click(self) -> None:
         """Handle click on the card - open wallet management screen."""
         self.app.action_menu_wallet()
