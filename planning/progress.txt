@@ -9,6 +9,19 @@
 - CLI input validation: Use `prompt_float()/prompt_int()` helpers with try/except around conversions; re-prompt on ValueError; strip() all wallet/exchange name inputs
 - ModalScreen pattern: Use `ModalScreen[ReturnType]` with centered Container; form with Label + Input/Select rows; Button row with primary/default variants; handle dismissal callback in parent screen
 - Edit modal pattern: Pass data via `__init__(data: dict)`, pre-populate form fields, use read-only Label for immutable fields, build updates dict with only changed values
+- **CRITICAL: All write operations must call `backend.commit()`** - SQLite does NOT auto-commit by default; without explicit commit(), changes stay in memory and are lost
+
+## 2026-02-12 - WM-001/002/003/004 (critical bug fix)
+- What was fixed: Added missing `backend.commit()` calls to all WalletQuery write methods
+- Files changed:
+  - `src/python/db/queries/wallet.py` (added `self.backend.commit()` to add_wallet, update_wallet, rename_wallet, merge_wallets)
+- **Learnings:**
+  - CRITICAL BUG: SQLite's Python API does NOT auto-commit by default - all write operations must explicitly call `commit()`
+  - Without commit(), changes remain in the connection's transaction buffer and are never persisted to disk
+  - Pattern: Follow LedgerWriter convention - all write methods should call `self.backend.commit()` after execute
+  - Symptoms: UI updates work, but changes disappear on app restart or screen refresh
+  - This affected ALL wallet operations: create, edit, toggle active, rename, merge
+---
 
 ## 2026-02-12 - WM-002 (completion)
 - What was implemented: Toggle wallet active/inactive status functionality (missing piece from WM-002)
