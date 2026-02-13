@@ -10,6 +10,20 @@
 - ModalScreen pattern: Use `ModalScreen[ReturnType]` with centered Container; form with Label + Input/Select rows; Button row with primary/default variants; handle dismissal callback in parent screen
 - Edit modal pattern: Pass data via `__init__(data: dict)`, pre-populate form fields, use read-only Label for immutable fields, build updates dict with only changed values
 - **CRITICAL: All write operations must call `backend.commit()`** - SQLite does NOT auto-commit by default; without explicit commit(), changes stay in memory and are lost
+- Rename modal pattern: Show transaction count warning, require typing new name twice for confirmation, validate not empty/same/duplicate
+
+## 2026-02-12 - WM-005
+- What was implemented: RenameWalletModal with double-entry confirmation and transaction count warning; integrated via 'r' keybinding
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (added RenameWalletModal class; updated action_rename_wallet to get wallet, query tx count, push modal)
+  - `tests/test_wallet_screen.py` (added TestRenameWalletModal class with 7 structure tests)
+- **Learnings:**
+  - Confirmation pattern: Require typing value twice (new_name and confirm_name inputs) for destructive operations
+  - Warning display: Show impact count ("This will update X transactions") using dynamic query before operation
+  - Multi-stage validation: Check empty → check same as current → check names match → check duplicate exists → execute
+  - Button variants: Use `variant="warning"` for potentially destructive operations (rename, merge, delete)
+  - Transaction count query: `SELECT COUNT(*) FROM ledger WHERE exchange = :wallet_id` to show impact before rename
+---
 
 ## 2026-02-12 - WM-001/002/003/004 (critical bug fix)
 - What was fixed: Added missing `backend.commit()` calls to all WalletQuery write methods

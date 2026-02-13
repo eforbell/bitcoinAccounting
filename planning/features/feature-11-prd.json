@@ -94,7 +94,8 @@
       ],
       "priority": 5,
       "estimatedLines": "+120 (modal + confirmation + tests)",
-      "testStrategy": "pytest tests/test_wallet_management.py -k rename -v"
+      "testStrategy": "pytest tests/test_wallet_management.py -k rename -v",
+      "passes": true
     },
     {
       "id": "WM-006",
