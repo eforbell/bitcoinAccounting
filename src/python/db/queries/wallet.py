@@ -197,3 +197,160 @@ class WalletQuery:
             """
             rows = self.backend.execute(query, {"coin": coin})
             return {row['exchange']: float(row['balance']) for row in rows}
+
+    def add_wallet(
+        self,
+        wallet_id: str,
+        wallet_type: str,
+        custody: str,
+        description: str | None = None,
+        notes: str | None = None
+    ) -> None:
+        """Add a new wallet to the wallets table.
+
+        Args:
+            wallet_id: Unique wallet identifier/name
+            wallet_type: Type of wallet (e.g., 'exchange', 'hardware', 'software', 'mobile', 'paper', 'other')
+            custody: Custody type ('self-custodied', 'custodial', 'multisig')
+            description: Optional wallet description
+            notes: Optional additional notes
+
+        Raises:
+            Exception: If wallet_id already exists (duplicate key violation)
+        """
+        wallet_id = wallet_id.strip()
+        query = """
+            INSERT INTO wallets (wallet_id, wallet_type, custody, description, notes)
+            VALUES (:wallet_id, :wallet_type, :custody, :description, :notes)
+        """
+        self.backend.execute(
+            query,
+            {
+                "wallet_id": wallet_id,
+                "wallet_type": wallet_type,
+                "custody": custody,
+                "description": description,
+                "notes": notes
+            }
+        )
+
+    def update_wallet(self, wallet_id: str, **kwargs: Any) -> None:
+        """Update wallet metadata fields.
+
+        Args:
+            wallet_id: Wallet identifier to update
+            **kwargs: Fields to update (wallet_type, custody, description, active, notes)
+
+        Raises:
+            ValueError: If no valid fields provided
+            Exception: If wallet_id doesn't exist
+        """
+        wallet_id = wallet_id.strip()
+        valid_fields = {'wallet_type', 'custody', 'description', 'active', 'notes'}
+        update_fields = {k: v for k, v in kwargs.items() if k in valid_fields}
+
+        if not update_fields:
+            raise ValueError("No valid fields to update")
+
+        # Build SET clause dynamically
+        set_clause = ", ".join(f"{field} = :{field}" for field in update_fields)
+        query = f"UPDATE wallets SET {set_clause} WHERE wallet_id = :wallet_id"
+
+        params = {**update_fields, "wallet_id": wallet_id}
+        self.backend.execute(query, params)
+
+    def rename_wallet(self, old_id: str, new_id: str) -> None:
+        """Rename a wallet, updating all ledger references atomically.
+
+        This operation updates both the wallets table and all ledger.exchange
+        references in a single transaction to maintain referential integrity.
+
+        Args:
+            old_id: Current wallet identifier
+            new_id: New wallet identifier
+
+        Raises:
+            ValueError: If new_id already exists
+            Exception: If old_id doesn't exist
+        """
+        old_id = old_id.strip()
+        new_id = new_id.strip()
+
+        # Check if new_id already exists
+        check_query = "SELECT COUNT(*) FROM wallets WHERE wallet_id = :new_id"
+        if self.backend.execute_scalar(check_query, {"new_id": new_id}) > 0:
+            raise ValueError(f"Wallet '{new_id}' already exists")
+
+        # Perform atomic rename in transaction
+        # Note: backend.execute() handles transactions internally for multi-statement operations
+        update_wallets = "UPDATE wallets SET wallet_id = :new_id WHERE wallet_id = :old_id"
+        update_ledger = "UPDATE ledger SET exchange = :new_id WHERE exchange = :old_id"
+
+        # Execute both updates
+        self.backend.execute(update_wallets, {"old_id": old_id, "new_id": new_id})
+        self.backend.execute(update_ledger, {"old_id": old_id, "new_id": new_id})
+
+    def merge_wallets(self, source_id: str, target_id: str) -> None:
+        """Merge two wallets by moving all transactions from source to target.
+
+        All ledger rows with source_id are reassigned to target_id, then the
+        source wallet record is deleted.
+
+        Args:
+            source_id: Wallet to merge from (will be deleted)
+            target_id: Wallet to merge into (will receive all transactions)
+
+        Raises:
+            Exception: If target_id doesn't exist
+        """
+        source_id = source_id.strip()
+        target_id = target_id.strip()
+
+        # Update all ledger rows to point to target
+        update_ledger = "UPDATE ledger SET exchange = :target_id WHERE exchange = :source_id"
+        self.backend.execute(update_ledger, {"source_id": source_id, "target_id": target_id})
+
+        # Delete source wallet record
+        delete_wallet = "DELETE FROM wallets WHERE wallet_id = :source_id"
+        self.backend.execute(delete_wallet, {"source_id": source_id})
+
+    def sync_wallets_from_ledger(self) -> int:
+        """Create wallet records for exchanges in ledger that lack wallet entries.
+
+        This bridges the gap between implicit wallet references (exchange names
+        in ledger) and explicit wallet management (wallets table). Useful for
+        existing databases or after imports that reference new wallets.
+
+        Returns:
+            int: Number of new wallet records created
+        """
+        # Get all distinct exchange names from ledger
+        ledger_query = """
+            SELECT DISTINCT exchange
+            FROM ledger
+            WHERE exchange IS NOT NULL
+            ORDER BY exchange
+        """
+        ledger_wallets = [row['exchange'] for row in self.backend.execute(ledger_query)]
+
+        # Get existing wallet IDs from wallets table only (not ledger fallback)
+        wallets_query = "SELECT wallet_id FROM wallets"
+        existing = {row['wallet_id'] for row in self.backend.execute(wallets_query)}
+
+        # Find wallets that need to be created
+        missing = [w for w in ledger_wallets if w not in existing]
+
+        # Create wallet records for missing ones
+        for wallet_id in missing:
+            custody = self.infer_custody_type(wallet_id)
+            # Infer wallet_type from custody
+            wallet_type = 'exchange' if custody == 'custodial' else 'hardware'
+            self.add_wallet(
+                wallet_id=wallet_id,
+                wallet_type=wallet_type,
+                custody=custody,
+                description=None,
+                notes='Auto-synced from ledger'
+            )
+
+        return len(missing)

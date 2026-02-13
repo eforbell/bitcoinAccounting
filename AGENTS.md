@@ -2,6 +2,40 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-11: Wallet Management Screen - WM-001
+
+### Wallet CRUD Methods in WalletQuery
+- Added five new methods to `WalletQuery` class following Query Object pattern from Feature-8
+- `add_wallet()`: INSERT with whitespace normalization on wallet_id, validates unique constraint
+- `update_wallet()`: Dynamic SET clause built from **kwargs, filters to valid fields only
+- `rename_wallet()`: Atomic update of both wallets table and all ledger.exchange references
+- `merge_wallets()`: Reassign all ledger rows from source to target, then delete source wallet record
+- `sync_wallets_from_ledger()`: Bridges implicit ledger wallets to explicit wallets table entries
+
+### SQLite Boolean Handling in Tests
+- SQLite stores booleans as INTEGER (1/0), not Python True/False
+- Test assertions must use `== 1` or `== True` (not `is True`) for portability
+- Pattern: `assert value == 1 or value is True` handles both SQLite and PostgreSQL
+- Applies to `active` field checks in get_wallets() results
+
+### Atomic Wallet Operations
+- `rename_wallet()` and `merge_wallets()` modify ledger data - must update both tables
+- SQLite/PostgreSQL backends handle transactions internally for multiple execute() calls
+- Pre-validate constraints (duplicate wallet_id) before executing updates
+- Use whitespace stripping consistently: `wallet_id = wallet_id.strip()` at method entry
+
+### Testing Pattern: In-Memory SQLite with Fixtures
+- Use pytest fixtures for `backend`, `wallet_query`, `ledger_writer`
+- `:memory:` database creates isolated test environment, no cleanup needed
+- `create_tables(backend)` in fixture ensures schema exists for each test
+- 21 tests covering CRUD operations, error cases, edge cases, atomicity
+
+### sync_wallets_from_ledger() Implementation
+- Query wallets table directly (`SELECT wallet_id FROM wallets`), NOT via `get_wallets()`
+- `get_wallets()` has ledger fallback when table is empty, which would hide missing entries
+- Infer wallet_type from custody ('custodial' → 'exchange', else → 'hardware')
+- Auto-add 'Auto-synced from ledger' note for audit trail
+
 ## Feature-10: Data Integrity Foundations - DIF-006
 
 ### CLI Input Validation with Re-Prompting
