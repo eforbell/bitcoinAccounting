@@ -23,7 +23,7 @@ class StatCard(Static):
     StatCard {
         width: 1fr;
         height: auto;
-        min-height: 4;
+        min-height: 6;
         border: solid #444444;
         background: #16213e;
         padding: 0 1;
@@ -64,7 +64,7 @@ class WalletsCard(StatCard):
     WalletsCard {
         width: 1fr;
         height: auto;
-        min-height: 4;
+        min-height: 6;
         border: solid #444444;
         background: #16213e;
         padding: 0 1;
