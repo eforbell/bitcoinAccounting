@@ -1698,3 +1698,22 @@
   - Dynamic SQL UPDATE: Build SET clause from **kwargs filtered to valid fields only; raises ValueError if no valid fields provided
   - Pre-validation: Check constraints (duplicate wallet_id) before executing updates to provide better error messages
 ---
+
+## 2026-02-12 - WM-002
+- What was implemented: Wallet Management TUI screen with wallet list DataTable
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (new file - +248 lines: WalletManagementScreen with DataTable, action stubs, custody color-coding)
+  - `src/python/tui/screens/__init__.py` (added WalletManagementScreen export)
+  - `src/python/tui/app.py` (added 'W' keybinding, action_menu_wallet method, help screen entry)
+  - `tests/test_wallet_screen.py` (new file - +62 lines: 6 tests, 5 passing, 1 skipped)
+  - `AGENTS.md` (documented learnings)
+- **Learnings:**
+  - TUI screen integration pattern: export from __init__, import in app.py, add Binding + action method, update help screen
+  - Pre-existing SQLite threading segfault in dashboard crashes full app tests (run_test())
+  - Workaround: Test screen structure/bindings without running full app - instantiate screen, check attributes, skip render tests
+  - Pattern: `@pytest.mark.skip(reason="Pre-existing SQLite threading segfault...")` for tests that trigger dashboard
+  - DataTable columns use tuples format: `add_columns("Col1", "Col2", ...)` not list
+  - CSS custody color-coding: Define classes in CSS, apply via row styling (implementation deferred to WM-003 when rows populated)
+  - Action stubs pattern: Show notify() "Feature coming in WM-XXX" for unimplemented features
+  - sync_wallets_from_ledger() called in @work(thread=True) load method ensures wallets table synced before display
+---

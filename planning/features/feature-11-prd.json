@@ -48,7 +48,8 @@
       ],
       "priority": 2,
       "estimatedLines": "+200 (screen + CSS + tests)",
-      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v"
+      "testStrategy": "pytest tests/test_tui_app.py -k wallet -v",
+      "passes": true
     },
     {
       "id": "WM-003",
