@@ -1888,3 +1888,16 @@
   - `timedelta` not needed since we compare `total_seconds()` directly against `72 * 3600`
   - Remove unused imports (Static) to keep code clean
 ---
+
+## 2026-02-13 - TXE-006
+- What was implemented: Show Deleted toggle in Ledger with restore flow and status count
+- Files changed:
+  - `src/python/tui/screens/ledger.py` (+40 lines: Checkbox in filter panel, show_deleted state, deleted_count tracking, dim styling for deleted rows with [DELETED] indicator, Restore button in detail modal, _restore_transaction method, on_checkbox_changed handler, status bar deleted count)
+  - `src/python/cryptoAccounts.py` (+1 line: Added include_deleted parameter passthrough to get_transactions wrapper)
+  - `tests/test_tui_ledger.py` (+100 lines: 8 tests for checkbox, toggle, status count, restore button, deleted/active modal buttons)
+- **Learnings:**
+  - CryptoAccounts.get_transactions() is a thin wrapper around TransactionQuery.get_transactions() - new parameters must be passed through
+  - Always fetch with include_deleted=True and filter client-side to get accurate deleted_count
+  - Rich Text objects can be used as DataTable cell values for styling (e.g., `Text("value", style="dim")`)
+  - Checkbox widget: `Checkbox.Changed` event with `event.value` for checked state, `event.checkbox.id` for identification
+---

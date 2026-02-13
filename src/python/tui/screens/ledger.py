@@ -11,7 +11,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select
+from textual.widgets import Button, Checkbox, DataTable, Footer, Header, Input, Label, Select
 
 if TYPE_CHECKING:
     from tui.app import CryptoApp
@@ -107,9 +107,13 @@ class TransactionDetailModal(ModalScreen[str | None]):
                     yield Label(f"{label}:", classes="detail-field-name")
                     yield Label(display_val, classes="detail-field-value")
 
+            is_deleted = bool(self.transaction.get("Deleted"))
             with Horizontal(id="detail-button-row"):
-                yield Button("Edit", variant="primary", id="detail-edit-btn")
-                yield Button("Delete", variant="warning", id="detail-delete-btn")
+                if is_deleted:
+                    yield Button("Restore", variant="success", id="detail-restore-btn")
+                else:
+                    yield Button("Edit", variant="primary", id="detail-edit-btn")
+                    yield Button("Delete", variant="warning", id="detail-delete-btn")
                 yield Button("Close", variant="default", id="detail-close-btn")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -117,6 +121,8 @@ class TransactionDetailModal(ModalScreen[str | None]):
             self.dismiss("edit")
         elif event.button.id == "detail-delete-btn":
             self.dismiss("delete")
+        elif event.button.id == "detail-restore-btn":
+            self.dismiss("restore")
         elif event.button.id == "detail-close-btn":
             self.dismiss(None)
 
@@ -702,6 +708,8 @@ class LedgerScreen(Screen[None]):
         self.end_date: str | None = None
         self.sort_column: str | None = None
         self.sort_reverse = False
+        self.show_deleted = False
+        self.deleted_count = 0  # Count of hidden deleted transactions
 
     def compose(self) -> ComposeResult:
         """Compose the ledger screen layout."""
@@ -745,6 +753,7 @@ class LedgerScreen(Screen[None]):
                 with Vertical(classes="filter-group"):
                     yield Label(" ", classes="filter-label")  # Spacing
                     yield Button("Apply Filters", id="apply-filters-btn", variant="primary")
+                    yield Checkbox("Show Deleted", value=False, id="show-deleted-cb")
 
         # Status bar
         with Container(classes="status-bar"):
@@ -828,8 +837,8 @@ class LedgerScreen(Screen[None]):
 
             self.app.call_from_thread(show_loading)
 
-            # Get transactions with filters
-            kwargs: dict[str, Any] = {}
+            # Get transactions with filters (always include deleted for counting)
+            kwargs: dict[str, Any] = {"include_deleted": True}
             if self.current_coin:  # Only filter by coin if specified (None = All)
                 kwargs["coin"] = self.current_coin
             if self.current_wallet:
@@ -841,12 +850,21 @@ class LedgerScreen(Screen[None]):
 
             headers, transactions = app.crypto.get_transactions(**kwargs)  # type: ignore[no-untyped-call]
 
+            # Count deleted transactions
+            self.deleted_count = sum(1 for t in transactions if t.get("Deleted"))
+
             # Store data
             self.column_names = list(headers)
             self.all_transactions = list(transactions)
 
+            # Filter deleted unless show_deleted is on
+            if self.show_deleted:
+                visible = list(transactions)
+            else:
+                visible = [t for t in transactions if not t.get("Deleted")]
+
             # Reverse to show most recent first (more natural)
-            self.filtered_transactions = list(reversed(transactions))
+            self.filtered_transactions = list(reversed(visible))
 
             # Apply sorting if set
             if self.sort_column and self.sort_column in self.column_names:
@@ -886,10 +904,20 @@ class LedgerScreen(Screen[None]):
 
         # Add rows
         # Note: get_transactions() returns list of dicts, not tuples
+        from rich.text import Text
+
         for row_dict in self.filtered_transactions:
-            # Extract values in the same order as column_names
-            display_row = [str(row_dict.get(col, "")) if row_dict.get(col) is not None else ""
-                          for col in self.column_names]
+            is_deleted = bool(row_dict.get("Deleted"))
+            display_row = []
+            for col in self.column_names:
+                val = row_dict.get(col)
+                cell = str(val) if val is not None else ""
+                if is_deleted and col == "Type":
+                    cell = f"{cell} [DELETED]"
+                if is_deleted:
+                    display_row.append(Text(cell, style="dim"))
+                else:
+                    display_row.append(cell)
             table.add_row(*display_row)
 
     def _update_status(self) -> None:
@@ -898,12 +926,18 @@ class LedgerScreen(Screen[None]):
         total = len(self.all_transactions)
         filtered = len(self.filtered_transactions)
 
+        parts = []
         if total == filtered:
-            status.update(f"Showing [cyan]{total}[/cyan] transactions")
+            parts.append(f"Showing [cyan]{total}[/cyan] transactions")
         else:
-            status.update(
+            parts.append(
                 f"Showing [cyan]{filtered}[/cyan] of [cyan]{total}[/cyan] transactions"
             )
+
+        if not self.show_deleted and self.deleted_count > 0:
+            parts.append(f"([dim]{self.deleted_count} deleted hidden[/dim])")
+
+        status.update(" ".join(parts))
 
         self._update_summary()
 
@@ -978,6 +1012,8 @@ class LedgerScreen(Screen[None]):
                 self._open_edit_modal(tx)
             elif action == "delete":
                 self._open_delete_modal(tx)
+            elif action == "restore":
+                self._restore_transaction(tx)
 
         self.app.push_screen(TransactionDetailModal(tx), handle_detail_result)
 
@@ -1016,6 +1052,27 @@ class LedgerScreen(Screen[None]):
             DeleteConfirmModal(tx, transfer_match),
             handle_delete_result,
         )
+
+    def _restore_transaction(self, tx: dict[str, Any]) -> None:
+        """Restore a soft-deleted transaction."""
+        from tui.app import CryptoApp
+
+        app = self.app
+        assert isinstance(app, CryptoApp)
+
+        try:
+            tx_id = tx.get("ID")
+            app.crypto.ledger_writer.restore_transaction(tx_id)  # type: ignore[union-attr]
+            self.notify("Transaction restored", severity="information")
+            self.load_transactions()
+        except Exception as e:
+            self.notify(f"Restore failed: {e}", severity="error")
+
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        """Handle Show Deleted checkbox toggle."""
+        if event.checkbox.id == "show-deleted-cb":
+            self.show_deleted = event.value
+            self.load_transactions()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button clicks."""

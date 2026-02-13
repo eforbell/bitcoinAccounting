@@ -116,7 +116,8 @@
       ],
       "priority": 6,
       "estimatedLines": "+100 (toggle + styling + restore flow + tests)",
-      "testStrategy": "pytest tests/test_tui_app.py -k ledger -v"
+      "testStrategy": "pytest tests/test_tui_app.py -k ledger -v",
+      "passes": true
     }
   ],
   "riskAssessment": {

@@ -78,7 +78,7 @@ class CryptoAccounts(object):
         """
         return self.basis_calc.get_avg_purchase_price(coin, 'USD')
 
-    def get_transactions(self, coin=None, wallet=None, start_date=None, end_date=None):
+    def get_transactions(self, coin=None, wallet=None, start_date=None, end_date=None, include_deleted=False):
         """Get all transactions, optionally filtered by coin, wallet, and date range.
 
         Args:
@@ -88,13 +88,14 @@ class CryptoAccounts(object):
                    - List of strings: ['Strike', 'Coldcard']
             start_date: Optional start date (YYYY-MM-DD format or date object)
             end_date: Optional end date (YYYY-MM-DD format or date object)
+            include_deleted: If True, include soft-deleted transactions. Default False.
 
         Returns:
             tuple: (column_names, transactions)
                 - column_names: List of column names
                 - transactions: List of transaction dictionaries
         """
-        return self.transaction_query.get_transactions(coin, wallet, start_date, end_date)
+        return self.transaction_query.get_transactions(coin, wallet, start_date, end_date, include_deleted=include_deleted)
     def print_trades(self, coin = 'BTC'):
         """Print trade history with cost basis for a coin.
 

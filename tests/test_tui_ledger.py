@@ -1171,3 +1171,176 @@ class TestDeleteTransactionSave:
             # Verify NOT deleted
             row = crypto_with_data.ledger_writer._get_transaction(1)
             assert row['deleted'] == 0
+
+
+# ── TXE-006: Show deleted transactions toggle in Ledger ────────────────
+
+from textual.widgets import Checkbox
+
+
+class TestShowDeletedToggle:
+    """Test the Show Deleted checkbox in the Ledger filter panel."""
+
+    @pytest.mark.asyncio
+    async def test_checkbox_present(self) -> None:
+        """Verify Show Deleted checkbox exists in the filter panel."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            screen = LedgerScreen()
+            app.push_screen(screen)
+            await pilot.pause()
+            cb = screen.query_one("#show-deleted-cb", Checkbox)
+            assert not cb.value  # Default unchecked
+
+    @pytest.mark.asyncio
+    async def test_deleted_hidden_by_default(self) -> None:
+        """Deleted transactions are hidden when checkbox is unchecked."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend=backend)
+        crypto.deposit(exchange='Coinbase', deposit_date=datetime(2024, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Coinbase', deposit_date=datetime(2024, 1, 2), buy=2.0, buy_curr='BTC')
+        # Soft-delete the second transaction
+        crypto.ledger_writer.soft_delete_transaction(2)
+
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.crypto = crypto
+            screen = LedgerScreen()
+            app.push_screen(screen)
+            await pilot.pause(0.3)
+            table = screen.query_one("#transactions-table", DataTable)
+            # Only 1 visible (tx 2 is deleted)
+            assert table.row_count == 1
+
+    @pytest.mark.asyncio
+    async def test_status_shows_hidden_deleted_count(self) -> None:
+        """Status bar shows '(N deleted hidden)' when deleted exist."""
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend=backend)
+        crypto.deposit(exchange='Coinbase', deposit_date=datetime(2024, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Coinbase', deposit_date=datetime(2024, 1, 2), buy=2.0, buy_curr='BTC')
+        crypto.ledger_writer.soft_delete_transaction(2)
+
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.crypto = crypto
+            screen = LedgerScreen()
+            app.push_screen(screen)
+            await pilot.pause(0.3)
+            status = screen.query_one("#status-label", Label)
+            assert "1 deleted hidden" in status.content
+
+
+class TestShowDeletedChecked:
+    """Test behavior when Show Deleted checkbox is checked."""
+
+    @pytest.fixture
+    def crypto_with_deleted(self):
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend=backend)
+        crypto.deposit(exchange='Coinbase', deposit_date=datetime(2024, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.deposit(exchange='Coinbase', deposit_date=datetime(2024, 1, 2), buy=2.0, buy_curr='BTC')
+        crypto.ledger_writer.soft_delete_transaction(2)
+        return crypto
+
+    @pytest.mark.asyncio
+    async def test_toggle_shows_deleted_rows(self, crypto_with_deleted) -> None:
+        """Checking Show Deleted reveals deleted transactions."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            app.crypto = crypto_with_deleted
+            screen = LedgerScreen()
+            app.push_screen(screen)
+            await pilot.pause(0.3)
+            table = screen.query_one("#transactions-table", DataTable)
+            assert table.row_count == 1  # Hidden by default
+
+            # Toggle checkbox on
+            screen.show_deleted = True
+            screen.load_transactions()
+            await pilot.pause(0.3)
+            assert table.row_count == 2  # Now shows both
+
+
+class TestDetailModalForDeletedTransaction:
+    """Test that detail modal shows Restore for deleted transactions."""
+
+    DELETED_TX = {
+        "ID": 1, "Date": "2024-01-15 10:00:00", "Type": "Deposit",
+        "Buy": 1.0, "Buy Cur.": "BTC", "Sell": None, "Sell Cur.": None,
+        "Fee": None, "Fee Cur.": None, "Exchange": "Coinbase",
+        "Group": "", "Comment": "", "Deleted": 1,
+    }
+
+    ACTIVE_TX = {
+        "ID": 2, "Date": "2024-01-15 10:00:00", "Type": "Deposit",
+        "Buy": 1.0, "Buy Cur.": "BTC", "Sell": None, "Sell Cur.": None,
+        "Fee": None, "Fee Cur.": None, "Exchange": "Coinbase",
+        "Group": "", "Comment": "", "Deleted": 0,
+    }
+
+    @pytest.mark.asyncio
+    async def test_deleted_tx_shows_restore_button(self) -> None:
+        """Deleted transaction shows Restore instead of Edit/Delete."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = TransactionDetailModal(self.DELETED_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            assert modal.query_one("#detail-restore-btn", Button)
+            assert len(modal.query("#detail-edit-btn")) == 0
+            assert len(modal.query("#detail-delete-btn")) == 0
+
+    @pytest.mark.asyncio
+    async def test_active_tx_shows_edit_delete_buttons(self) -> None:
+        """Active transaction shows Edit and Delete, not Restore."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = TransactionDetailModal(self.ACTIVE_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            assert modal.query_one("#detail-edit-btn", Button)
+            assert modal.query_one("#detail-delete-btn", Button)
+            assert len(modal.query("#detail-restore-btn")) == 0
+
+    @pytest.mark.asyncio
+    async def test_restore_button_dismisses_with_restore(self) -> None:
+        """Restore button dismisses modal with 'restore' action."""
+        app = CryptoApp()
+        results = []
+        async with app.run_test() as pilot:
+            modal = TransactionDetailModal(self.DELETED_TX)
+
+            def capture(result):
+                results.append(result)
+
+            app.push_screen(modal, capture)
+            await pilot.pause()
+            modal.query_one("#detail-restore-btn", Button).press()
+            await pilot.pause()
+            assert results == ["restore"]
+
+
+class TestRestoreTransaction:
+    """Test restoring a deleted transaction via the TUI flow."""
+
+    @pytest.fixture
+    def crypto_with_deleted(self):
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend=backend)
+        crypto.deposit(exchange='Coinbase', deposit_date=datetime(2024, 1, 1), buy=1.0, buy_curr='BTC')
+        crypto.ledger_writer.soft_delete_transaction(1)
+        return crypto
+
+    @pytest.mark.asyncio
+    async def test_restore_undeletes_transaction(self, crypto_with_deleted) -> None:
+        """Restoring a transaction clears the deleted flag."""
+        # Verify it's deleted first
+        row = crypto_with_deleted.ledger_writer._get_transaction(1)
+        assert row['deleted'] == 1
+
+        # Restore it
+        crypto_with_deleted.ledger_writer.restore_transaction(1)
+        row = crypto_with_deleted.ledger_writer._get_transaction(1)
+        assert row['deleted'] == 0
+        assert row['deleted_date'] is None
