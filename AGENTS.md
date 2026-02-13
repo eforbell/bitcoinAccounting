@@ -2,6 +2,35 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-11: Wallet Management Screen - WM-006
+
+### Merge Wallets Modal
+- Created `MergeWalletsModal` following established modal patterns (ModalScreen[bool], centered Container, form + buttons)
+- Modal takes three parameters via `__init__`: source_wallet_id (str), transaction_count (int), available_targets (list[dict])
+- Shows transaction count warning: "⚠ This will merge X transaction(s)" and deletion notice
+- Select dropdown built from available_targets list, excluding the source wallet
+- Validates that user selected a target: `if target_select.value == Select.BLANK`
+- Calls `WalletQuery.merge_wallets(source_id, target_id)` which reassigns all ledger rows atomically
+- Integrated via 'm' keybinding; action handler filters targets before pushing modal
+
+### Multi-Parameter Modal Pattern
+- Pass complex state via `__init__` parameters and store as instance variables
+- For dynamic content (like target wallet list), compute in parent screen before pushing modal
+- Use conditional rendering: only show merge button if targets exist, show informative message otherwise
+- Select options can show metadata: `(f"{w['wallet_id']} ({w['type']})", w['wallet_id'])` displays type but returns ID
+
+### Early Validation in Action Handlers
+- Check preconditions (wallet selected, targets available) before pushing modal
+- Use early returns with notifications: `if not available_targets: notify(...); return`
+- Filter data lists before passing to modal: `[w for w in wallets if w['wallet_id'] != source_id]`
+- Query transaction count before modal to show in warning: `execute_scalar("SELECT COUNT(*) FROM ledger WHERE exchange = :id")`
+
+### Testing Modals with Parameters
+- Test modal instantiation with different parameter combinations (empty targets, non-zero tx count, etc.)
+- Verify instance variables are stored correctly: `assert modal._source_wallet_id == "Source"`
+- Check that modal handles edge cases gracefully (empty target list)
+- 8 structure tests covering existence, bindings, methods, parameter handling, edge cases
+
 ## Feature-11: Wallet Management Screen - WM-002
 
 ### Wallet Management TUI Screen

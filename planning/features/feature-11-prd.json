@@ -111,7 +111,8 @@
       ],
       "priority": 6,
       "estimatedLines": "+120 (modal + confirmation + tests)",
-      "testStrategy": "pytest tests/test_wallet_management.py -k merge -v"
+      "testStrategy": "pytest tests/test_wallet_management.py -k merge -v",
+      "passes": true
     },
     {
       "id": "WM-007",

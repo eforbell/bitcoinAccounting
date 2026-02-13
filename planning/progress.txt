@@ -1783,3 +1783,17 @@
   - Action stubs pattern: Show notify() "Feature coming in WM-XXX" for unimplemented features
   - sync_wallets_from_ledger() called in @work(thread=True) load method ensures wallets table synced before display
 ---
+
+## 2026-02-13 - WM-006
+- What was implemented: MergeWalletsModal for merging one wallet into another with confirmation
+- Files changed:
+  - `src/python/tui/screens/wallet_management.py` (added MergeWalletsModal class with source/target selection; updated action_merge_wallets to get source wallet, tx count, filter target list, push modal)
+  - `tests/test_wallet_screen.py` (added TestMergeWalletsModal class with 8 structure tests)
+- **Learnings:**
+  - Multi-parameter modal pattern: Pass source_wallet_id (str), transaction_count (int), and available_targets (list of dicts) via `__init__`
+  - Target selection: Filter available targets to exclude source wallet using list comprehension
+  - Select.BLANK check: Validate that user selected an option with `if target_select.value == Select.BLANK`
+  - Conditional UI: Only show merge button if targets are available; show informative message if no targets exist
+  - Select options with metadata: Use tuples like `(f"{w['wallet_id']} ({w['type']})", w['wallet_id'])` to show type in display but return clean ID as value
+  - Early return pattern: Check if no targets available in action handler and notify user before pushing modal
+---
