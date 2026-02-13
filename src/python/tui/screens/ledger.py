@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -11,7 +11,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select, Static
+from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select
 
 if TYPE_CHECKING:
     from tui.app import CryptoApp
@@ -402,6 +402,199 @@ class EditTransactionModal(ModalScreen[bool]):
         self.dismiss(False)
 
 
+def _detect_transfer_pair(
+    tx: dict[str, Any], all_transactions: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Heuristic transfer pair detection.
+
+    A transfer pair is a withdrawal on one wallet matched to a deposit on
+    another wallet within 72 hours with a similar BTC amount (within 1%).
+    Returns the matching transaction dict, or None.
+    """
+    tx_type = tx.get("Type", "")
+    if tx_type not in ("Deposit", "Withdrawal"):
+        return None
+
+    try:
+        tx_date = datetime.strptime(str(tx.get("Date", "")), "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return None
+
+    # Determine the amount and target type for matching
+    if tx_type == "Deposit":
+        tx_amount = float(tx.get("Buy") or 0)
+        match_type = "Withdrawal"
+    else:
+        tx_amount = float(tx.get("Sell") or 0)
+        match_type = "Deposit"
+
+    if tx_amount <= 0:
+        return None
+
+    tx_exchange = tx.get("Exchange", "")
+    tx_id = tx.get("ID")
+
+    for other in all_transactions:
+        if other.get("ID") == tx_id:
+            continue
+        if other.get("Type") != match_type:
+            continue
+        if other.get("Exchange") == tx_exchange:
+            continue  # Same wallet can't be a transfer pair
+
+        try:
+            other_date = datetime.strptime(
+                str(other.get("Date", "")), "%Y-%m-%d %H:%M:%S"
+            )
+        except (ValueError, TypeError):
+            continue
+
+        if abs((other_date - tx_date).total_seconds()) > 72 * 3600:
+            continue
+
+        if match_type == "Deposit":
+            other_amount = float(other.get("Buy") or 0)
+        else:
+            other_amount = float(other.get("Sell") or 0)
+
+        if other_amount <= 0:
+            continue
+
+        # Within 1% of each other
+        if abs(tx_amount - other_amount) / max(tx_amount, other_amount) <= 0.01:
+            return other
+
+    return None
+
+
+class DeleteConfirmModal(ModalScreen[bool]):
+    """Confirmation dialog for deleting a transaction with transfer pair warning."""
+
+    CSS = """
+    DeleteConfirmModal {
+        align: center middle;
+    }
+
+    #delete-container {
+        width: 65;
+        height: auto;
+        max-height: 70%;
+        background: $surface;
+        border: solid $error;
+        padding: 1 2;
+    }
+
+    #delete-title {
+        text-align: center;
+        color: $error;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    #delete-summary {
+        margin-bottom: 1;
+    }
+
+    #delete-warning {
+        color: $warning;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    #delete-prompt {
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #delete-button-row {
+        height: auto;
+        layout: horizontal;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #delete-button-row Button {
+        margin: 0 1;
+        min-width: 12;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def __init__(
+        self,
+        transaction: dict[str, Any],
+        transfer_match: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__()
+        self.transaction = transaction
+        self.transfer_match = transfer_match
+
+    def compose(self) -> ComposeResult:
+        tx = self.transaction
+        with Container(id="delete-container"):
+            yield Label("Delete Transaction", id="delete-title")
+
+            # Transaction summary
+            summary_lines = [
+                f"ID: {tx.get('ID', '?')}",
+                f"Date: {tx.get('Date', '?')}",
+                f"Type: {tx.get('Type', '?')}",
+            ]
+            if tx.get("Buy"):
+                summary_lines.append(
+                    f"Buy: {tx['Buy']} {tx.get('Buy Cur.', '')}"
+                )
+            if tx.get("Sell"):
+                summary_lines.append(
+                    f"Sell: {tx['Sell']} {tx.get('Sell Cur.', '')}"
+                )
+            summary_lines.append(f"Wallet: {tx.get('Exchange', '?')}")
+            yield Label("\n".join(summary_lines), id="delete-summary")
+
+            # Transfer pair warning
+            if self.transfer_match:
+                match = self.transfer_match
+                match_type = match.get("Type", "transaction")
+                yield Label(
+                    f"This transaction appears to be part of a transfer pair. "
+                    f"The matching {match_type.lower()} on "
+                    f"{match.get('Exchange', '?')} will NOT be automatically deleted.",
+                    id="delete-warning",
+                )
+
+            yield Label("Are you sure you want to delete this transaction?", id="delete-prompt")
+
+            with Horizontal(id="delete-button-row"):
+                yield Button("Delete", variant="error", id="delete-confirm-btn")
+                yield Button("Cancel", variant="default", id="delete-cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "delete-confirm-btn":
+            self._do_delete()
+        elif event.button.id == "delete-cancel-btn":
+            self.dismiss(False)
+
+    def _do_delete(self) -> None:
+        """Perform the soft delete."""
+        from tui.app import CryptoApp
+
+        app = self.app
+        assert isinstance(app, CryptoApp)
+
+        try:
+            tx_id = self.transaction.get("ID")
+            app.crypto.ledger_writer.soft_delete_transaction(tx_id)  # type: ignore[union-attr]
+            self.dismiss(True)
+        except Exception as e:
+            self.notify(f"Delete failed: {e}", severity="error")
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 class LedgerScreen(Screen[None]):
     """Screen displaying transaction ledger with filtering capabilities."""
 
@@ -784,8 +977,7 @@ class LedgerScreen(Screen[None]):
             if action == "edit":
                 self._open_edit_modal(tx)
             elif action == "delete":
-                # TXE-005 will implement delete flow
-                self.notify("Delete not yet implemented", severity="warning")
+                self._open_delete_modal(tx)
 
         self.app.push_screen(TransactionDetailModal(tx), handle_detail_result)
 
@@ -809,6 +1001,20 @@ class LedgerScreen(Screen[None]):
         self.app.push_screen(
             EditTransactionModal(tx, wallet_opts),
             handle_edit_result,
+        )
+
+    def _open_delete_modal(self, tx: dict[str, Any]) -> None:
+        """Open delete confirmation modal with transfer pair detection."""
+        transfer_match = _detect_transfer_pair(tx, self.filtered_transactions)
+
+        def handle_delete_result(deleted: bool) -> None:
+            if deleted:
+                self.notify("Transaction deleted", severity="information")
+                self.load_transactions()
+
+        self.app.push_screen(
+            DeleteConfirmModal(tx, transfer_match),
+            handle_delete_result,
         )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:

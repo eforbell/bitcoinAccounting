@@ -100,7 +100,8 @@
       ],
       "priority": 5,
       "estimatedLines": "+120 (confirmation dialog + transfer detection + tests)",
-      "testStrategy": "pytest tests/test_transaction_editor.py -k delete -v"
+      "testStrategy": "pytest tests/test_transaction_editor.py -k delete -v",
+      "passes": true
     },
     {
       "id": "TXE-006",

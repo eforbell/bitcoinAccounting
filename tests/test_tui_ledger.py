@@ -859,3 +859,315 @@ class TestEditTransactionSave:
 
             error = modal.query_one("#edit-tx-error", Label)
             assert "Invalid number" in error.content
+
+
+# ── TXE-005: Delete Transaction with confirmation ──────────────────────
+
+from tui.screens.ledger import DeleteConfirmModal, _detect_transfer_pair
+
+
+class TestDeleteConfirmModal:
+    """Test DeleteConfirmModal structure and behavior."""
+
+    SAMPLE_TX = {
+        "ID": 1,
+        "Date": "2024-01-15 10:00:00",
+        "Type": "Deposit",
+        "Buy": 1.0,
+        "Buy Cur.": "BTC",
+        "Sell": None,
+        "Sell Cur.": None,
+        "Fee": None,
+        "Fee Cur.": None,
+        "Exchange": "Coinbase",
+        "Group": "",
+        "Comment": "Test deposit",
+        "Deleted": 0,
+    }
+
+    @pytest.mark.asyncio
+    async def test_modal_mounts_successfully(self) -> None:
+        """Verify DeleteConfirmModal can be mounted."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = DeleteConfirmModal(self.SAMPLE_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            assert isinstance(app.screen, DeleteConfirmModal)
+
+    @pytest.mark.asyncio
+    async def test_modal_title(self) -> None:
+        """Verify delete modal shows title."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = DeleteConfirmModal(self.SAMPLE_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            title = modal.query_one("#delete-title", Label)
+            assert "Delete" in title.content
+
+    @pytest.mark.asyncio
+    async def test_modal_shows_transaction_summary(self) -> None:
+        """Verify modal shows transaction details in summary."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = DeleteConfirmModal(self.SAMPLE_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            summary = modal.query_one("#delete-summary", Label)
+            text = summary.content
+            assert "Coinbase" in text
+            assert "Deposit" in text
+
+    @pytest.mark.asyncio
+    async def test_modal_shows_prompt(self) -> None:
+        """Verify Are you sure? prompt is shown."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = DeleteConfirmModal(self.SAMPLE_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            prompt = modal.query_one("#delete-prompt", Label)
+            assert "Are you sure" in prompt.content
+
+    @pytest.mark.asyncio
+    async def test_modal_has_confirm_and_cancel_buttons(self) -> None:
+        """Verify delete and cancel buttons exist."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = DeleteConfirmModal(self.SAMPLE_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            assert modal.query_one("#delete-confirm-btn", Button)
+            assert modal.query_one("#delete-cancel-btn", Button)
+
+    @pytest.mark.asyncio
+    async def test_cancel_dismisses_modal(self) -> None:
+        """Cancel button dismisses without deleting."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = DeleteConfirmModal(self.SAMPLE_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            modal.action_cancel()
+            await pilot.pause()
+            assert not isinstance(app.screen, DeleteConfirmModal)
+
+    @pytest.mark.asyncio
+    async def test_escape_dismisses_modal(self) -> None:
+        """Escape key dismisses the modal."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = DeleteConfirmModal(self.SAMPLE_TX)
+            app.push_screen(modal)
+            await pilot.pause()
+            modal.action_cancel()
+            await pilot.pause()
+            assert not isinstance(app.screen, DeleteConfirmModal)
+
+    @pytest.mark.asyncio
+    async def test_no_warning_without_transfer_match(self) -> None:
+        """No transfer pair warning when no match provided."""
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = DeleteConfirmModal(self.SAMPLE_TX, transfer_match=None)
+            app.push_screen(modal)
+            await pilot.pause()
+            warnings = modal.query("#delete-warning")
+            assert len(warnings) == 0
+
+    @pytest.mark.asyncio
+    async def test_shows_transfer_pair_warning(self) -> None:
+        """Transfer pair warning shown when match is provided."""
+        match = {
+            "ID": 2, "Type": "Withdrawal", "Exchange": "Ledger",
+            "Date": "2024-01-15 11:00:00",
+        }
+        app = CryptoApp()
+        async with app.run_test() as pilot:
+            modal = DeleteConfirmModal(self.SAMPLE_TX, transfer_match=match)
+            app.push_screen(modal)
+            await pilot.pause()
+            warning = modal.query_one("#delete-warning", Label)
+            assert "transfer pair" in warning.content
+            assert "withdrawal" in warning.content
+            assert "Ledger" in warning.content
+
+
+class TestTransferPairDetection:
+    """Test the _detect_transfer_pair heuristic."""
+
+    def test_matching_deposit_withdrawal(self) -> None:
+        """Deposit on one wallet matches withdrawal on another within 72hrs."""
+        tx = {
+            "ID": 1, "Type": "Deposit", "Buy": 1.0, "Sell": None,
+            "Date": "2024-01-15 10:00:00", "Exchange": "Ledger",
+        }
+        others = [
+            {
+                "ID": 2, "Type": "Withdrawal", "Sell": 1.0, "Buy": None,
+                "Date": "2024-01-15 09:00:00", "Exchange": "Coinbase",
+            },
+        ]
+        result = _detect_transfer_pair(tx, others)
+        assert result is not None
+        assert result["ID"] == 2
+
+    def test_no_match_different_amount(self) -> None:
+        """No match when amounts differ by more than 1%."""
+        tx = {
+            "ID": 1, "Type": "Deposit", "Buy": 1.0, "Sell": None,
+            "Date": "2024-01-15 10:00:00", "Exchange": "Ledger",
+        }
+        others = [
+            {
+                "ID": 2, "Type": "Withdrawal", "Sell": 2.0, "Buy": None,
+                "Date": "2024-01-15 09:00:00", "Exchange": "Coinbase",
+            },
+        ]
+        assert _detect_transfer_pair(tx, others) is None
+
+    def test_no_match_outside_72_hours(self) -> None:
+        """No match when transactions are more than 72 hours apart."""
+        tx = {
+            "ID": 1, "Type": "Deposit", "Buy": 1.0, "Sell": None,
+            "Date": "2024-01-15 10:00:00", "Exchange": "Ledger",
+        }
+        others = [
+            {
+                "ID": 2, "Type": "Withdrawal", "Sell": 1.0, "Buy": None,
+                "Date": "2024-01-20 10:00:00", "Exchange": "Coinbase",
+            },
+        ]
+        assert _detect_transfer_pair(tx, others) is None
+
+    def test_no_match_same_wallet(self) -> None:
+        """No match when both transactions are on the same wallet."""
+        tx = {
+            "ID": 1, "Type": "Deposit", "Buy": 1.0, "Sell": None,
+            "Date": "2024-01-15 10:00:00", "Exchange": "Coinbase",
+        }
+        others = [
+            {
+                "ID": 2, "Type": "Withdrawal", "Sell": 1.0, "Buy": None,
+                "Date": "2024-01-15 09:00:00", "Exchange": "Coinbase",
+            },
+        ]
+        assert _detect_transfer_pair(tx, others) is None
+
+    def test_no_match_for_trade(self) -> None:
+        """Trade transactions are not transfer pairs."""
+        tx = {
+            "ID": 1, "Type": "Trade", "Buy": 1.0, "Sell": 50000.0,
+            "Date": "2024-01-15 10:00:00", "Exchange": "Coinbase",
+        }
+        others = [
+            {
+                "ID": 2, "Type": "Deposit", "Buy": 1.0, "Sell": None,
+                "Date": "2024-01-15 11:00:00", "Exchange": "Ledger",
+            },
+        ]
+        assert _detect_transfer_pair(tx, others) is None
+
+    def test_withdrawal_matches_deposit(self) -> None:
+        """Withdrawal on one wallet matches deposit on another."""
+        tx = {
+            "ID": 1, "Type": "Withdrawal", "Sell": 0.5, "Buy": None,
+            "Date": "2024-01-15 10:00:00", "Exchange": "Coinbase",
+        }
+        others = [
+            {
+                "ID": 2, "Type": "Deposit", "Buy": 0.5, "Sell": None,
+                "Date": "2024-01-15 12:00:00", "Exchange": "Ledger",
+            },
+        ]
+        result = _detect_transfer_pair(tx, others)
+        assert result is not None
+        assert result["ID"] == 2
+
+    def test_within_1_percent_tolerance(self) -> None:
+        """Amounts within 1% are considered matching (network fees)."""
+        tx = {
+            "ID": 1, "Type": "Deposit", "Buy": 0.999, "Sell": None,
+            "Date": "2024-01-15 10:00:00", "Exchange": "Ledger",
+        }
+        others = [
+            {
+                "ID": 2, "Type": "Withdrawal", "Sell": 1.0, "Buy": None,
+                "Date": "2024-01-15 09:00:00", "Exchange": "Coinbase",
+            },
+        ]
+        result = _detect_transfer_pair(tx, others)
+        assert result is not None
+
+    def test_skips_self(self) -> None:
+        """The transaction is not matched against itself."""
+        tx = {
+            "ID": 1, "Type": "Deposit", "Buy": 1.0, "Sell": None,
+            "Date": "2024-01-15 10:00:00", "Exchange": "Ledger",
+        }
+        assert _detect_transfer_pair(tx, [tx]) is None
+
+
+class TestDeleteTransactionSave:
+    """Test that delete confirmation actually soft-deletes in the database."""
+
+    @pytest.fixture
+    def crypto_with_data(self):
+        backend = SqliteBackend(':memory:', auto_create_tables=True)
+        crypto = CryptoAccounts(backend=backend)
+        crypto.deposit(exchange='Coinbase', deposit_date=datetime(2024, 1, 15, 10, 0), buy=1.0, buy_curr='BTC')
+        return crypto
+
+    @pytest.mark.asyncio
+    async def test_confirm_delete_soft_deletes(self, crypto_with_data) -> None:
+        """Confirm button soft-deletes the transaction."""
+        app = CryptoApp()
+
+        tx = {
+            "ID": 1, "Date": "2024-01-15 10:00:00", "Type": "Deposit",
+            "Buy": 1.0, "Buy Cur.": "BTC", "Sell": None, "Sell Cur.": None,
+            "Fee": None, "Fee Cur.": None, "Exchange": "Coinbase",
+            "Group": "", "Comment": "", "Deleted": 0,
+        }
+
+        async with app.run_test() as pilot:
+            app.crypto = crypto_with_data
+            modal = DeleteConfirmModal(tx)
+            app.push_screen(modal)
+            await pilot.pause()
+
+            # Confirm delete
+            modal._do_delete()
+            await pilot.pause()
+
+            # Verify soft-deleted via ledger_writer
+            row = crypto_with_data.ledger_writer._get_transaction(1)
+            assert row['deleted'] == 1
+            assert row['deleted_date'] is not None
+
+    @pytest.mark.asyncio
+    async def test_cancel_does_not_delete(self, crypto_with_data) -> None:
+        """Cancel button does not delete the transaction."""
+        app = CryptoApp()
+
+        tx = {
+            "ID": 1, "Date": "2024-01-15 10:00:00", "Type": "Deposit",
+            "Buy": 1.0, "Buy Cur.": "BTC", "Sell": None, "Sell Cur.": None,
+            "Fee": None, "Fee Cur.": None, "Exchange": "Coinbase",
+            "Group": "", "Comment": "", "Deleted": 0,
+        }
+
+        async with app.run_test() as pilot:
+            app.crypto = crypto_with_data
+            modal = DeleteConfirmModal(tx)
+            app.push_screen(modal)
+            await pilot.pause()
+
+            # Cancel
+            modal.action_cancel()
+            await pilot.pause()
+
+            # Verify NOT deleted
+            row = crypto_with_data.ledger_writer._get_transaction(1)
+            assert row['deleted'] == 0

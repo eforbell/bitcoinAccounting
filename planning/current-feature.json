@@ -10,7 +10,7 @@
     {"id": "TXE-002", "title": "Add transaction update and delete methods to LedgerWriter", "status": "complete"},
     {"id": "TXE-003", "title": "Transaction detail modal from Ledger screen", "status": "complete"},
     {"id": "TXE-004", "title": "Edit Transaction modal", "status": "complete"},
-    {"id": "TXE-005", "title": "Delete Transaction with confirmation", "status": "not_started"},
+    {"id": "TXE-005", "title": "Delete Transaction with confirmation", "status": "complete"},
     {"id": "TXE-006", "title": "Show deleted transactions toggle in Ledger", "status": "not_started"}
   ],
   "completedFeatures": [

@@ -1876,3 +1876,15 @@
   - Input.value can be set programmatically and `_get_changes()` picks up the diff correctly
   - ModalScreen chaining: Detail modal dismisses with "edit" string → parent handler opens Edit modal → Edit modal dismisses with True/False → parent reloads data
 ---
+
+## 2026-02-13 - TXE-005
+- What was implemented: Delete Transaction with confirmation dialog and transfer pair detection
+- Files changed:
+  - `src/python/tui/screens/ledger.py` (+120 lines: DeleteConfirmModal class, _detect_transfer_pair helper, _open_delete_modal on LedgerScreen, wired delete action from detail modal)
+  - `tests/test_tui_ledger.py` (+180 lines: 10 modal structure tests, 8 transfer pair detection unit tests, 2 save/cancel DB tests)
+- **Learnings:**
+  - Static widget has no `.renderable` or `.content` attribute; use Label instead for text content that tests need to read
+  - Transfer pair heuristic: match Deposit↔Withdrawal across different wallets within 72hrs with amount within 1% tolerance
+  - `timedelta` not needed since we compare `total_seconds()` directly against `72 * 3600`
+  - Remove unused imports (Static) to keep code clean
+---
