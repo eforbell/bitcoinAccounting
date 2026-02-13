@@ -1797,3 +1797,16 @@
   - Select options with metadata: Use tuples like `(f"{w['wallet_id']} ({w['type']})", w['wallet_id'])` to show type in display but return clean ID as value
   - Early return pattern: Check if no targets available in action handler and notify user before pushing modal
 ---
+
+## 2026-02-13 - WM-007
+- What was implemented: Documentation and navigation updates for Wallet Management feature
+- Files changed:
+  - `GETTING_STARTED.md` (added 'W' keybinding entry to keyboard navigation table)
+  - `src/python/tui/app.py` (added "Wallets" MenuButton to main menu between Import and Tax/Report)
+- **Learnings:**
+  - Documentation updates should be the final story in a feature to capture the complete implementation
+  - Main menu layout: MenuButton takes (label, description, key, action) - action maps to action_menu_{action} method
+  - Help screen was already updated in WM-002 when the screen was first created
+  - Feature summary documents can be written up-front to guide implementation (planning/features/feature-N-summary.md)
+  - Navigation exposure requires 3 touch points: GETTING_STARTED.md keyboard table, main menu button, help screen listing
+---

@@ -125,7 +125,8 @@
       ],
       "priority": 7,
       "estimatedLines": "+20 (documentation updates)",
-      "testStrategy": "Manual review"
+      "testStrategy": "Manual review",
+      "passes": true
     }
   ],
   "riskAssessment": {
