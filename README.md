@@ -23,6 +23,12 @@ and primarily focused on Bitcoin, with support for any cryptocurrency.
 
 ```bash
 python -m pip install -r requirements.txt
+python -m cryptoAccounting
+```
+
+Alternative launcher:
+
+```bash
 src/scripts/crypto_tui
 ```
 
@@ -445,6 +451,5 @@ python -m pytest --cov=src\python\db --cov-report=term-missing
 ```bash
 mypy --strict src/python/db/
 ```
-
 
 

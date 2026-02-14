@@ -18,7 +18,19 @@ No database setup required. A SQLite database is created automatically on first 
 ## Launch the TUI
 
 ```bash
+python -m cryptoAccounting
+```
+
+Alternative (direct script):
+
+```bash
 src/scripts/crypto_tui
+```
+
+Installed entrypoints (after `python -m pip install .`):
+
+```bash
+bitcoin-accounting
 ```
 
 You'll land on the **Dashboard**, which shows your BTC balance, cost basis, custody breakdown, and recent transactions. From here you can navigate to any screen using the keyboard shortcuts shown on the main menu.

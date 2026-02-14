@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bitcoin-accounting"
+version = "0.1.0"
+description = "Crypto accounting toolkit with an interactive Textual TUI."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "psycopg2-binary",
+    "pandas",
+    "matplotlib",
+    "prompt_toolkit",
+    "requests",
+    "python-dotenv",
+    "yfinance",
+    "pyarrow",
+    "reportlab",
+    "openpyxl",
+    "textual>=0.47.0",
+]
+
+[project.scripts]
+bitcoin-accounting = "cryptoAccounting:main"
+crypto-accounting = "cryptoAccounting:main"
+crypto-tui = "cryptoAccounting:main"
+
+[tool.setuptools]
+package-dir = {"" = "src/python"}
+py-modules = ["cryptoAccounts", "cryptoAccounting"]
+
+[tool.setuptools.packages.find]
+where = ["src/python"]
+include = ["db*", "imports*", "tui*", "viz*"]
