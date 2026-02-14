@@ -1,10 +1,9 @@
-# Crypto Accounting System
+# Bitcoin Accounting System
 
-Lightweight bookkeeping and reporting for cryptocurrency with SQLite or PostgreSQL.
+Lightweight bookkeeping and reporting for Bitcoin with SQLite or PostgreSQL.
 
 Includes an interactive terminal UI and CLI scripts for maintaining a transaction
-ledger and producing balance, cost-basis reports, and visualizations. Database-backed
-and primarily focused on Bitcoin, with support for any cryptocurrency.
+ledger and producing balance, cost-basis reports, and visualizations.
 
 ## Key Features
 - **Interactive Terminal UI** - Full-featured TUI for portfolio tracking, imports, tax reporting, and more
@@ -23,12 +22,22 @@ and primarily focused on Bitcoin, with support for any cryptocurrency.
 
 ```bash
 python -m pip install -r requirements.txt
-python -m cryptoAccounting
+python -m pip install .
+bitcoin-accounting
 ```
 
-Alternative launcher:
+Editable install option (recommended for users who pull updates):
 
 ```bash
+python -m pip install -e .
+```
+
+With `-e`, pulling new commits usually updates behavior immediately without reinstalling.
+
+Alternative launchers:
+
+```bash
+python -m cryptoAccounting
 src/scripts/crypto_tui
 ```
 
@@ -451,5 +460,3 @@ python -m pytest --cov=src\python\db --cov-report=term-missing
 ```bash
 mypy --strict src/python/db/
 ```
-
-

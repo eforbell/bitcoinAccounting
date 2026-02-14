@@ -1,6 +1,6 @@
 # Getting Started
 
-The fastest way to use Crypto Accounting is through the interactive **Terminal UI (TUI)**. It gives you access to everything -- portfolio tracking, transaction recording, CSV imports, tax reporting, and visualizations -- from a single interface. Navigate with keyboard shortcuts or use the mouse -- click buttons, select table rows, scroll, and interact with forms directly.
+The fastest way to use Bitcoin Accounting is through the interactive **Terminal UI (TUI)**. It gives you access to everything -- portfolio tracking, transaction recording, CSV imports, tax reporting, and visualizations -- from a single interface. Navigate with keyboard shortcuts or use the mouse -- click buttons, select table rows, scroll, and interact with forms directly.
 
 ## Install
 
@@ -11,9 +11,11 @@ cd cryptoAccounting
 
 # Install dependencies
 python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 No database setup required. A SQLite database is created automatically on first use at `~/.cryptoaccounting/ledger.db`.
+Using `-e` (editable install) means `git pull` updates are usually picked up without reinstalling.
 
 ## Launch the TUI
 
