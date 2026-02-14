@@ -86,10 +86,15 @@ class PostgresBackend(DatabaseBackend):
         except psycopg2.Error as e:
             raise DatabaseError(f"Failed to connect to PostgreSQL: {e}") from e
 
-        # Run schema migrations (idempotent)
-        from .schema import _migrate_ledger_soft_delete
-        _migrate_ledger_soft_delete(self)
-        self.commit()
+        # Attempt schema migrations (requires ALTER TABLE privilege).
+        # If the user lacks DDL privileges, run the migration script manually:
+        #   psql -U <owner> -d <db> -f migrations/001_add_soft_delete_columns.sql
+        try:
+            from .schema import _migrate_ledger_soft_delete
+            _migrate_ledger_soft_delete(self)
+            self.commit()
+        except (DatabaseError, psycopg2.Error):
+            self.connection.rollback()
 
     def execute(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Execute a query and return all results as list of dictionaries.

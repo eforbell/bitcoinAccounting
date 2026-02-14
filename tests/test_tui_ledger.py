@@ -193,12 +193,12 @@ class TestLedgerWithData:
         return crypto
 
     @pytest.mark.asyncio
-    async def test_table_populates_with_data(self, crypto_with_data, monkeypatch) -> None:
+    async def test_table_populates_with_data(self, crypto_with_data) -> None:
         """Verify table populates when transactions exist."""
         app = CryptoApp()
-        monkeypatch.setattr(app, "crypto", crypto_with_data)
 
         async with app.run_test() as pilot:
+            app.crypto = crypto_with_data
             app.push_screen(LedgerScreen())
             await pilot.pause(0.3)
 
@@ -206,12 +206,12 @@ class TestLedgerWithData:
             assert table.row_count > 0  # Should have rows
 
     @pytest.mark.asyncio
-    async def test_status_shows_row_count(self, crypto_with_data, monkeypatch) -> None:
+    async def test_status_shows_row_count(self, crypto_with_data) -> None:
         """Verify status bar shows transaction count."""
         app = CryptoApp()
-        monkeypatch.setattr(app, "crypto", crypto_with_data)
 
         async with app.run_test() as pilot:
+            app.crypto = crypto_with_data
             app.push_screen(LedgerScreen())
             await pilot.pause(0.3)
 

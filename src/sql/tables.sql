@@ -31,6 +31,8 @@ CREATE TABLE public.ledger (
 	"comment" varchar(5000) NULL,
 	transactionid varchar(5000) NULL,
 	id serial4 NOT NULL,
+	deleted int4 DEFAULT 0,
+	deleted_date text NULL,
 	CONSTRAINT ledger_pkey PRIMARY KEY (id)
 );
 -- public.pair_price definition
