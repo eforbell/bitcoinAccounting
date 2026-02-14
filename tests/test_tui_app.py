@@ -59,12 +59,12 @@ class TestMainMenu:
     """Tests for the main menu widget."""
 
     @pytest.mark.asyncio
-    async def test_menu_has_six_buttons(self) -> None:
-        """Main menu should have 6 navigation buttons."""
+    async def test_menu_has_seven_buttons(self) -> None:
+        """Main menu should have 7 navigation buttons."""
         app = CryptoApp()
         async with app.run_test() as pilot:
             buttons = app.query(MenuButton)
-            assert len(buttons) == 6
+            assert len(buttons) == 7
 
     @pytest.mark.asyncio
     async def test_menu_button_labels(self) -> None:
@@ -74,7 +74,7 @@ class TestMainMenu:
             buttons = app.query(MenuButton)
             # MenuButton stores label + key hint in renderable
             actions = [btn._action for btn in buttons]
-            assert actions == ["portfolio", "ledger", "record", "import", "tax", "viz"]
+            assert actions == ["portfolio", "ledger", "record", "import", "wallet", "tax", "viz"]
 
     @pytest.mark.asyncio
     async def test_menu_has_title(self) -> None:

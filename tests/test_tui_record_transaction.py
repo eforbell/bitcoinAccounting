@@ -2,7 +2,7 @@
 
 import pytest
 
-from textual.widgets import Button, Input, Label, RadioButton, RadioSet
+from textual.widgets import Button, Input, Label, RadioButton, RadioSet, Select
 from tui.screens.record_transaction import RecordTransactionScreen
 from tui.app import CryptoApp
 
@@ -130,7 +130,7 @@ class TestBuyForm:
             await pilot.pause(0.1)
 
             # Should have all buy form fields
-            exchange = app.screen.query_one("#exchange", Input)
+            exchange = app.screen.query_one("#exchange", Select)
             quantity = app.screen.query_one("#quantity", Input)
             total_cost = app.screen.query_one("#total_cost", Input)
             fee = app.screen.query_one("#fee", Input)
@@ -154,9 +154,9 @@ class TestBuyForm:
             app.push_screen(RecordTransactionScreen())
             await pilot.pause(0.1)
 
-            # Exchange should default to Strike
-            exchange = app.screen.query_one("#exchange", Input)
-            assert exchange.value == "Strike"
+            # Exchange selector should have a value selected
+            exchange = app.screen.query_one("#exchange", Select)
+            assert exchange.value is not Select.BLANK
 
             # Fee should default to 0
             fee = app.screen.query_one("#fee", Input)
@@ -181,7 +181,7 @@ class TestSellForm:
             await pilot.pause(0.1)
 
             # Should have sell form fields
-            exchange = app.screen.query_one("#exchange", Input)
+            exchange = app.screen.query_one("#exchange", Select)
             quantity = app.screen.query_one("#quantity", Input)
             total_proceeds = app.screen.query_one("#total_proceeds", Input)
             fee = app.screen.query_one("#fee", Input)
@@ -210,8 +210,8 @@ class TestTransferForm:
             await pilot.pause(0.1)
 
             # Should have transfer form fields
-            from_wallet = app.screen.query_one("#from_wallet", Input)
-            to_wallet = app.screen.query_one("#to_wallet", Input)
+            from_wallet = app.screen.query_one("#from_wallet", Select)
+            to_wallet = app.screen.query_one("#to_wallet", Select)
             amount = app.screen.query_one("#amount", Input)
             fee = app.screen.query_one("#fee", Input)
 
@@ -239,7 +239,7 @@ class TestInterestForm:
             await pilot.pause(0.1)
 
             # Should have interest form fields
-            exchange = app.screen.query_one("#exchange", Input)
+            exchange = app.screen.query_one("#exchange", Select)
             amount = app.screen.query_one("#amount", Input)
             currency = app.screen.query_one("#currency")
 
@@ -406,14 +406,14 @@ class TestRecordTransactionWithDatabase:
             await pilot.click("#type-transfer")
             await pilot.pause(0.1)
 
-            # Fill in form
-            from_wallet_input = app.screen.query_one("#from_wallet", Input)
-            to_wallet_input = app.screen.query_one("#to_wallet", Input)
+            # Fill in form - wallets are now Select dropdowns
+            from_wallet = app.screen.query_one("#from_wallet", Select)
+            to_wallet = app.screen.query_one("#to_wallet", Select)
             amount_input = app.screen.query_one("#amount", Input)
             fee_input = app.screen.query_one("#fee", Input)
 
-            from_wallet_input.value = "Ledger"
-            to_wallet_input.value = "Coldcard"
+            # "Ledger" should be available in the dropdown from test data
+            from_wallet.value = "Ledger"
             amount_input.value = "0.5"
             fee_input.value = "0.0001"
 

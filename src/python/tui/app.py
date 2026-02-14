@@ -238,17 +238,18 @@ class CryptoApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        try:
-            self.crypto = CryptoAccounts()
-            # Push dashboard as default screen (TUI-002)
-            self.push_screen(DashboardScreen())
-        except Exception as e:
-            self.notify(
-                f"Database connection failed: {e}\n"
-                "Check your .env file or database configuration and restart.",
-                severity="error",
-                timeout=10,
-            )
+        if self.crypto is None:
+            try:
+                self.crypto = CryptoAccounts()
+            except Exception as e:
+                self.notify(
+                    f"Database connection failed: {e}\n"
+                    "Check your .env file or database configuration and restart.",
+                    severity="error",
+                    timeout=10,
+                )
+        # Push dashboard as default screen (TUI-002)
+        self.push_screen(DashboardScreen())
 
     def on_unmount(self) -> None:
         if self.crypto is not None:
