@@ -86,6 +86,11 @@ class PostgresBackend(DatabaseBackend):
         except psycopg2.Error as e:
             raise DatabaseError(f"Failed to connect to PostgreSQL: {e}") from e
 
+        # Run schema migrations (idempotent)
+        from .schema import _migrate_ledger_soft_delete
+        _migrate_ledger_soft_delete(self)
+        self.commit()
+
     def execute(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Execute a query and return all results as list of dictionaries.
 
@@ -112,6 +117,7 @@ class PostgresBackend(DatabaseBackend):
             # Convert RealDictRow objects to regular dictionaries
             return [dict(row) for row in rows]
         except psycopg2.Error as e:
+            self.connection.rollback()
             raise DatabaseError(f"Query execution failed: {e}") from e
 
     def execute_one(self, query: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -139,6 +145,7 @@ class PostgresBackend(DatabaseBackend):
             row = cursor.fetchone()
             return dict(row) if row else None
         except psycopg2.Error as e:
+            self.connection.rollback()
             raise DatabaseError(f"Query execution failed: {e}") from e
 
     def execute_scalar(self, query: str, params: dict[str, Any] | None = None) -> Any:
