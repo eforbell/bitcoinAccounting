@@ -87,13 +87,20 @@ async def _detect_and_wait_next_enabled(
     file_input = screen.query_one("#input-file-path")
     file_input.value = file_path
     await pilot.click("#btn-detect")
+    await app.workers.wait_for_complete()
     await _wait_until(
         pilot,
-        lambda: isinstance(app.screen, ImportWizardScreen)
-        and app.screen.query_one("#btn-next").disabled is False,
-        message="Detect did not enable Next",
+        lambda: isinstance(app.screen, ImportWizardScreen),
+        message="Import wizard screen not active after detect",
     )
     assert isinstance(app.screen, ImportWizardScreen)
+    next_enabled = app.screen.query_one("#btn-next").disabled is False
+    has_error = _has_widget(app.screen, "#error-panel")
+    if not next_enabled and has_error:
+        error_text = str(app.screen.query_one("#error-panel").render())
+        raise AssertionError(f"Detect did not enable Next. Error: {error_text}")
+    if not next_enabled:
+        raise AssertionError("Detect did not enable Next")
     return app.screen
 
 
@@ -116,6 +123,7 @@ async def _go_step3(app: CryptoApp, pilot: Pilot, file_path: str) -> ImportWizar
     """Go to step 3 deterministically."""
     screen = await _go_step2(app, pilot, file_path)
     screen.prepare_preview()
+    await app.workers.wait_for_complete()
     await _wait_until(
         pilot,
         lambda: isinstance(app.screen, ImportWizardScreen)
@@ -441,6 +449,7 @@ class TestImportWizardExecution:
 
             assert isinstance(app.screen, ImportWizardScreen)
             app.screen.prepare_preview()
+            await app.workers.wait_for_complete()
             await _wait_until(
                 pilot,
                 lambda: isinstance(app.screen, ImportWizardScreen)
@@ -451,6 +460,7 @@ class TestImportWizardExecution:
             # Execute import
             assert isinstance(app.screen, ImportWizardScreen)
             app.screen.query_one("#btn-next").press()
+            await app.workers.wait_for_complete()
             await _wait_until(
                 pilot,
                 lambda: isinstance(app.screen, ImportWizardScreen)
@@ -595,6 +605,7 @@ class TestImportWizardDuplicateDetection:
             with patch(DETECT_DUPLICATES_PATCH, return_value=[sample_duplicate]):
                 assert isinstance(app.screen, ImportWizardScreen)
                 app.screen.prepare_preview()
+                await app.workers.wait_for_complete()
                 await _wait_until(
                     pilot,
                     lambda: isinstance(app.screen, ImportWizardScreen)
@@ -621,6 +632,7 @@ class TestImportWizardDuplicateDetection:
             with patch(DETECT_DUPLICATES_PATCH, return_value=[]):
                 assert isinstance(app.screen, ImportWizardScreen)
                 app.screen.prepare_preview()
+                await app.workers.wait_for_complete()
                 await _wait_until(
                     pilot,
                     lambda: isinstance(app.screen, ImportWizardScreen)
@@ -648,6 +660,7 @@ class TestImportWizardDuplicateDetection:
             with patch(DETECT_DUPLICATES_PATCH, return_value=[]):
                 assert isinstance(app.screen, ImportWizardScreen)
                 app.screen.prepare_preview()
+                await app.workers.wait_for_complete()
                 await _wait_until(
                     pilot,
                     lambda: isinstance(app.screen, ImportWizardScreen)
@@ -685,6 +698,7 @@ class TestImportWizardDuplicateDetection:
             with patch(DETECT_DUPLICATES_PATCH, return_value=[sample_duplicate]):
                 assert isinstance(app.screen, ImportWizardScreen)
                 app.screen.prepare_preview()
+                await app.workers.wait_for_complete()
                 await _wait_until(
                     pilot,
                     lambda: isinstance(app.screen, ImportWizardScreen)
@@ -696,6 +710,7 @@ class TestImportWizardDuplicateDetection:
                 # Execute dry-run import
                 assert isinstance(app.screen, ImportWizardScreen)
                 app.screen.query_one("#btn-next").press()
+                await app.workers.wait_for_complete()
                 await _wait_until(
                     pilot,
                     lambda: isinstance(app.screen, ImportWizardScreen)
@@ -727,6 +742,7 @@ class TestImportWizardDuplicateDetection:
             with patch(DETECT_DUPLICATES_PATCH, return_value=[sample_duplicate]):
                 assert isinstance(app.screen, ImportWizardScreen)
                 app.screen.prepare_preview()
+                await app.workers.wait_for_complete()
                 await _wait_until(
                     pilot,
                     lambda: isinstance(app.screen, ImportWizardScreen)
