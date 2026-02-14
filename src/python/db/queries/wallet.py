@@ -27,6 +27,11 @@ class WalletQuery:
         """
         self.backend = backend
 
+    def _wallet_exists(self, wallet_id: str) -> bool:
+        """Return True if a wallet record exists."""
+        query = "SELECT COUNT(*) FROM wallets WHERE wallet_id = :wallet_id"
+        return self.backend.execute_scalar(query, {"wallet_id": wallet_id}) > 0
+
     def get_balance_by_account(self, coin: str = 'BTC', account: str = 'Vault') -> float:
         """Get balance for a specific account/wallet.
 
@@ -255,6 +260,8 @@ class WalletQuery:
 
         if not update_fields:
             raise ValueError("No valid fields to update")
+        if not self._wallet_exists(wallet_id):
+            raise ValueError(f"Wallet '{wallet_id}' does not exist")
 
         # Build SET clause dynamically
         set_clause = ", ".join(f"{field} = :{field}" for field in update_fields)
@@ -280,10 +287,13 @@ class WalletQuery:
         """
         old_id = old_id.strip()
         new_id = new_id.strip()
+        if old_id == new_id:
+            raise ValueError("New wallet name must be different from current name")
+        if not self._wallet_exists(old_id):
+            raise ValueError(f"Wallet '{old_id}' does not exist")
 
         # Check if new_id already exists
-        check_query = "SELECT COUNT(*) FROM wallets WHERE wallet_id = :new_id"
-        if self.backend.execute_scalar(check_query, {"new_id": new_id}) > 0:
+        if self._wallet_exists(new_id):
             raise ValueError(f"Wallet '{new_id}' already exists")
 
         # Perform atomic rename in transaction
@@ -291,10 +301,17 @@ class WalletQuery:
         update_wallets = "UPDATE wallets SET wallet_id = :new_id WHERE wallet_id = :old_id"
         update_ledger = "UPDATE ledger SET exchange = :new_id WHERE exchange = :old_id"
 
-        # Execute both updates
-        self.backend.execute(update_wallets, {"old_id": old_id, "new_id": new_id})
-        self.backend.execute(update_ledger, {"old_id": old_id, "new_id": new_id})
-        self.backend.commit()
+        # Execute both updates as a single transaction.
+        try:
+            self.backend.execute(update_wallets, {"old_id": old_id, "new_id": new_id})
+            self.backend.execute(update_ledger, {"old_id": old_id, "new_id": new_id})
+            self.backend.commit()
+        except Exception:
+            try:
+                self.backend.rollback()
+            except Exception:
+                pass
+            raise
 
     def merge_wallets(self, source_id: str, target_id: str) -> None:
         """Merge two wallets by moving all transactions from source to target.
@@ -311,15 +328,28 @@ class WalletQuery:
         """
         source_id = source_id.strip()
         target_id = target_id.strip()
+        if source_id == target_id:
+            raise ValueError("Source and target wallets must be different")
+        if not self._wallet_exists(source_id):
+            raise ValueError(f"Source wallet '{source_id}' does not exist")
+        if not self._wallet_exists(target_id):
+            raise ValueError(f"Target wallet '{target_id}' does not exist")
 
         # Update all ledger rows to point to target
         update_ledger = "UPDATE ledger SET exchange = :target_id WHERE exchange = :source_id"
-        self.backend.execute(update_ledger, {"source_id": source_id, "target_id": target_id})
-
-        # Delete source wallet record
         delete_wallet = "DELETE FROM wallets WHERE wallet_id = :source_id"
-        self.backend.execute(delete_wallet, {"source_id": source_id})
-        self.backend.commit()
+
+        try:
+            self.backend.execute(update_ledger, {"source_id": source_id, "target_id": target_id})
+            # Delete source wallet record
+            self.backend.execute(delete_wallet, {"source_id": source_id})
+            self.backend.commit()
+        except Exception:
+            try:
+                self.backend.rollback()
+            except Exception:
+                pass
+            raise
 
     def sync_wallets_from_ledger(self) -> int:
         """Create wallet records for exchanges in ledger that lack wallet entries.
