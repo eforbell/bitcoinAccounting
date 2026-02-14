@@ -199,6 +199,11 @@ class TestUpdateWallet:
         wallets = wallet_query.get_wallets()
         assert wallets[0]['description'] == "Updated"
 
+    def test_update_wallet_missing_wallet_raises_error(self, wallet_query: WalletQuery) -> None:
+        """Test that updating a missing wallet raises ValueError."""
+        with pytest.raises(ValueError, match="does not exist"):
+            wallet_query.update_wallet("MissingWallet", description="Updated")
+
 
 class TestRenameWallet:
     """Test rename_wallet() method."""
@@ -266,6 +271,49 @@ class TestRenameWallet:
 
         wallets = wallet_query.get_wallets()
         assert wallets[0]['wallet_id'] == "NewName"
+
+    def test_rename_wallet_missing_source_raises_error(self, wallet_query: WalletQuery) -> None:
+        """Test that renaming a missing wallet raises ValueError."""
+        wallet_query.add_wallet(
+            wallet_id="Target",
+            wallet_type="exchange",
+            custody="custodial"
+        )
+        with pytest.raises(ValueError, match="does not exist"):
+            wallet_query.rename_wallet("Missing", "Target2")
+
+    def test_rename_wallet_same_name_raises_error(self, wallet_query: WalletQuery) -> None:
+        """Test that renaming to the same wallet name raises ValueError."""
+        wallet_query.add_wallet(
+            wallet_id="SameName",
+            wallet_type="exchange",
+            custody="custodial"
+        )
+        with pytest.raises(ValueError, match="must be different"):
+            wallet_query.rename_wallet("SameName", "SameName")
+
+    def test_rename_wallet_rolls_back_on_second_statement_failure(self, backend: DatabaseBackend) -> None:
+        """Test rename is rolled back if second update fails."""
+        wallet_query = WalletQuery(backend)
+        wallet_query.add_wallet(
+            wallet_id="OldName",
+            wallet_type="exchange",
+            custody="custodial"
+        )
+
+        # Force second statement failure by removing ledger table.
+        backend.execute("DROP TABLE ledger")
+        backend.commit()
+
+        with pytest.raises(Exception):
+            wallet_query.rename_wallet("OldName", "NewName")
+
+        # A later commit should not persist a partial rename.
+        backend.commit()
+        wallets = wallet_query.get_wallets()
+        wallet_ids = {w["wallet_id"] for w in wallets}
+        assert "OldName" in wallet_ids
+        assert "NewName" not in wallet_ids
 
 
 class TestMergeWallets:
@@ -363,6 +411,63 @@ class TestMergeWallets:
         assert target_wallet['description'] == "Keep this description"
         assert target_wallet['type'] == "hardware"
         assert target_wallet['custody'] == "self-custodied"
+
+    def test_merge_wallets_missing_source_raises_error(self, wallet_query: WalletQuery) -> None:
+        """Test merge raises ValueError when source wallet is missing."""
+        wallet_query.add_wallet(
+            wallet_id="Target",
+            wallet_type="exchange",
+            custody="custodial"
+        )
+        with pytest.raises(ValueError, match="Source wallet .* does not exist"):
+            wallet_query.merge_wallets("Missing", "Target")
+
+    def test_merge_wallets_missing_target_raises_error(self, wallet_query: WalletQuery) -> None:
+        """Test merge raises ValueError when target wallet is missing."""
+        wallet_query.add_wallet(
+            wallet_id="Source",
+            wallet_type="exchange",
+            custody="custodial"
+        )
+        with pytest.raises(ValueError, match="Target wallet .* does not exist"):
+            wallet_query.merge_wallets("Source", "Missing")
+
+    def test_merge_wallets_same_source_target_raises_error(self, wallet_query: WalletQuery) -> None:
+        """Test merge raises ValueError when source and target are identical."""
+        wallet_query.add_wallet(
+            wallet_id="Same",
+            wallet_type="exchange",
+            custody="custodial"
+        )
+        with pytest.raises(ValueError, match="must be different"):
+            wallet_query.merge_wallets("Same", "Same")
+
+    def test_merge_wallets_rolls_back_on_failure(self, backend: DatabaseBackend) -> None:
+        """Test merge rollback keeps source wallet and ledger references intact on failure."""
+        wallet_query = WalletQuery(backend)
+        ledger_writer = LedgerWriter(backend)
+
+        wallet_query.add_wallet("Source", "exchange", "custodial")
+        wallet_query.add_wallet("Target", "exchange", "custodial")
+        ledger_writer.deposit("2024-01-01", 1.0, "BTC", "Source")
+
+        # Force delete statement failure after ledger update succeeds.
+        original_execute = backend.execute
+
+        def flaky_execute(query: str, params: dict[str, object] | None = None):
+            if query.strip().upper().startswith("DELETE FROM WALLETS"):
+                raise RuntimeError("forced delete failure")
+            return original_execute(query, params)
+
+        backend.execute = flaky_execute  # type: ignore[method-assign]
+
+        with pytest.raises(Exception):
+            wallet_query.merge_wallets("Source", "Target")
+
+        # Verify ledger update was rolled back.
+        backend.commit()
+        rows = backend.execute("SELECT exchange FROM ledger")
+        assert rows[0]["exchange"] == "Source"
 
 
 class TestSyncWalletsFromLedger:

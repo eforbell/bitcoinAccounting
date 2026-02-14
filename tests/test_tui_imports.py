@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
-import pytest
+import time
 from pathlib import Path
-from textual.pilot import Pilot
 from unittest.mock import patch
 
+import pytest
+from textual.css.query import NoMatches
+from textual.pilot import Pilot
+
+from cryptoAccounts import CryptoAccounts
+from db import SqliteBackend
 from tui.app import CryptoApp
 from tui.screens.imports import FilePickerModal, ImportWizardScreen
+
+
+DETECT_DUPLICATES_PATCH = f"{ImportWizardScreen.__module__}.detect_duplicates"
 
 
 @pytest.fixture
@@ -21,6 +29,121 @@ def coinbase_sample_path() -> str:
 def ledger_sample_path() -> str:
     """Return path to Ledger sample CSV."""
     return str(Path(__file__).parent / "fixtures" / "csv_samples" / "ledger_sample.csv")
+
+
+async def _wait_until(
+    pilot: Pilot,
+    predicate,
+    *,
+    timeout: float = 8.0,
+    message: str = "Timed out waiting for test condition",
+) -> None:
+    """Wait for a condition by yielding to the app loop without fixed sleep durations."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            if predicate():
+                return
+        except NoMatches:
+            # Common while waiting for widgets to mount; keep polling.
+            pass
+        except Exception:
+            # Allow transient query/state errors during UI transitions.
+            pass
+        await pilot.pause(0)
+    raise AssertionError(message)
+
+
+def _has_widget(screen: ImportWizardScreen, selector: str) -> bool:
+    """Return True if a widget matching selector exists on the current screen."""
+    try:
+        screen.query_one(selector)
+        return True
+    except NoMatches:
+        return False
+    except Exception:
+        return False
+
+
+async def _open_wizard(app: CryptoApp, pilot: Pilot) -> ImportWizardScreen:
+    """Open wizard and wait for step 1 widgets."""
+    await pilot.press("i")
+    await _wait_until(
+        pilot,
+        lambda: isinstance(app.screen, ImportWizardScreen)
+        and app.screen.current_step == 1
+        and app.screen.query_one("#input-file-path") is not None,
+        message="Import wizard did not open on step 1",
+    )
+    assert isinstance(app.screen, ImportWizardScreen)
+    return app.screen
+
+
+async def _detect_and_wait_next_enabled(
+    app: CryptoApp, pilot: Pilot, file_path: str
+) -> ImportWizardScreen:
+    """Detect parser and wait until Next is enabled."""
+    screen = await _open_wizard(app, pilot)
+    file_input = screen.query_one("#input-file-path")
+    file_input.value = file_path
+    await pilot.click("#btn-detect")
+    await app.workers.wait_for_complete()
+    await _wait_until(
+        pilot,
+        lambda: isinstance(app.screen, ImportWizardScreen),
+        message="Import wizard screen not active after detect",
+    )
+    assert isinstance(app.screen, ImportWizardScreen)
+    next_enabled = app.screen.query_one("#btn-next").disabled is False
+    has_error = _has_widget(app.screen, "#error-panel")
+    if not next_enabled and has_error:
+        error_text = str(app.screen.query_one("#error-panel").render())
+        raise AssertionError(f"Detect did not enable Next. Error: {error_text}")
+    if not next_enabled:
+        raise AssertionError("Detect did not enable Next")
+    return app.screen
+
+
+async def _go_step2(app: CryptoApp, pilot: Pilot, file_path: str) -> ImportWizardScreen:
+    """Go to step 2 deterministically."""
+    await _detect_and_wait_next_enabled(app, pilot, file_path)
+    await pilot.click("#btn-next")
+    await _wait_until(
+        pilot,
+        lambda: isinstance(app.screen, ImportWizardScreen)
+        and app.screen.current_step == 2
+        and app.screen.query_one("#checkbox-dry-run") is not None,
+        message="Wizard did not reach step 2",
+    )
+    assert isinstance(app.screen, ImportWizardScreen)
+    return app.screen
+
+
+async def _go_step3(app: CryptoApp, pilot: Pilot, file_path: str) -> ImportWizardScreen:
+    """Go to step 3 deterministically."""
+    screen = await _go_step2(app, pilot, file_path)
+    screen.prepare_preview()
+    await app.workers.wait_for_complete()
+    await _wait_until(
+        pilot,
+        lambda: isinstance(app.screen, ImportWizardScreen)
+        and app.screen.current_step == 3,
+        message="Wizard did not reach step 3",
+    )
+    await _wait_until(
+        pilot,
+        lambda: isinstance(app.screen, ImportWizardScreen)
+        and _has_widget(app.screen, "#preview-table"),
+        message="Step 3 preview table was not rendered",
+    )
+    assert isinstance(app.screen, ImportWizardScreen)
+    return app.screen
+
+
+def _make_test_crypto() -> CryptoAccounts:
+    """Create an in-memory CryptoAccounts instance for TUI tests that need DB access."""
+    backend = SqliteBackend(":memory:", auto_create_tables=True)
+    return CryptoAccounts(backend=backend)
 
 
 class TestImportWizardScreenMount:
@@ -201,20 +324,7 @@ class TestImportWizardStep2:
         """Test step 2 has dry-run checkbox."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Detect file
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            # Go to step 2
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
+            await _go_step2(app, pilot, coinbase_sample_path)
 
             # Check for dry-run checkbox
             dry_run_cb = app.screen.query_one("#checkbox-dry-run")
@@ -227,20 +337,7 @@ class TestImportWizardStep2:
         """Test step 2 has withdraw-to selector."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Detect file
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            # Go to step 2
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
+            await _go_step2(app, pilot, coinbase_sample_path)
 
             # Check for withdraw-to selector
             withdraw_select = app.screen.query_one("#select-withdraw-to")
@@ -255,24 +352,7 @@ class TestImportWizardStep3:
         """Test step 3 shows preview table."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Step 1: Detect
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            # Step 2: Configure
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
-
-            # Step 3: Preview
-            await pilot.click("#btn-next")
-            await pilot.pause(0.5)
+            await _go_step3(app, pilot, coinbase_sample_path)
 
             # Check for preview table
             preview_table = app.screen.query_one("#preview-table")
@@ -283,22 +363,7 @@ class TestImportWizardStep3:
         """Test step 3 changes Next to Import button."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Navigate to step 3
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
-
-            await pilot.click("#btn-next")
-            await pilot.pause(0.5)
+            await _go_step3(app, pilot, coinbase_sample_path)
 
             # Check Import button label
             next_btn = app.screen.query_one("#btn-next")
@@ -314,19 +379,7 @@ class TestImportWizardNavigation:
         """Test Back button navigates between steps."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Navigate to step 2
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
+            await _go_step2(app, pilot, coinbase_sample_path)
 
             # Back button should be enabled
             back_btn = app.screen.query_one("#btn-back")
@@ -334,7 +387,12 @@ class TestImportWizardNavigation:
 
             # Click back
             await pilot.click("#btn-back")
-            await pilot.pause(0.2)
+            await _wait_until(
+                pilot,
+                lambda: isinstance(app.screen, ImportWizardScreen)
+                and app.screen.current_step == 1,
+                message="Back did not return to step 1",
+            )
 
             # Should be back at step 1
             steps = app.screen.query_one("#wizard-steps")
@@ -382,38 +440,35 @@ class TestImportWizardExecution:
         """Test dry-run import shows results without importing."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Navigate through wizard
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
+            app.crypto = _make_test_crypto()
+            await _go_step2(app, pilot, coinbase_sample_path)
 
             # Ensure dry-run is checked
             dry_run_cb = app.screen.query_one("#checkbox-dry-run")
             assert dry_run_cb.value is True
 
-            await pilot.click("#btn-next")
-            await pilot.pause(0.5)
+            assert isinstance(app.screen, ImportWizardScreen)
+            app.screen.prepare_preview()
+            await app.workers.wait_for_complete()
+            await _wait_until(
+                pilot,
+                lambda: isinstance(app.screen, ImportWizardScreen)
+                and app.screen.current_step == 3,
+                message="Did not reach step 3",
+            )
 
             # Execute import
-            await pilot.click("#btn-next")  # Import button
-            await pilot.pause(0.5)
-
-            # Should show results
-            try:
-                results_panel = app.screen.query_one("#results-panel")
-                assert results_panel is not None
-            except Exception:
-                # Results might not be rendered yet
-                pass
+            assert isinstance(app.screen, ImportWizardScreen)
+            app.screen.query_one("#btn-next").press()
+            await app.workers.wait_for_complete()
+            await _wait_until(
+                pilot,
+                lambda: isinstance(app.screen, ImportWizardScreen)
+                and _has_widget(app.screen, "#results-panel"),
+                message="Dry-run results did not render",
+            )
+            results_panel = app.screen.query_one("#results-panel")
+            assert results_panel is not None
 
 
 class TestFilePickerModal:
@@ -535,19 +590,8 @@ class TestImportWizardDuplicateDetection:
         """Test warning banner is shown when duplicates are detected."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Navigate to step 3
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
+            app.crypto = _make_test_crypto()
+            await _go_step2(app, pilot, coinbase_sample_path)
 
             # Mock detect_duplicates to return one duplicate
             sample_duplicate = {
@@ -558,9 +602,17 @@ class TestImportWizardDuplicateDetection:
                 'buy_curr': 'BTC'
             }
 
-            with patch('tui.screens.imports.detect_duplicates', return_value=[sample_duplicate]):
-                await pilot.click("#btn-next")
-                await pilot.pause(0.5)
+            with patch(DETECT_DUPLICATES_PATCH, return_value=[sample_duplicate]):
+                assert isinstance(app.screen, ImportWizardScreen)
+                app.screen.prepare_preview()
+                await app.workers.wait_for_complete()
+                await _wait_until(
+                    pilot,
+                    lambda: isinstance(app.screen, ImportWizardScreen)
+                    and app.screen.current_step == 3
+                    and _has_widget(app.screen, "#duplicate-warning"),
+                    message="Duplicate warning was not shown",
+                )
 
                 # Should show duplicate warning
                 warning = app.screen.query_one("#duplicate-warning")
@@ -573,32 +625,25 @@ class TestImportWizardDuplicateDetection:
         """Test no warning banner when no duplicates detected."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Navigate to step 3
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
+            app.crypto = _make_test_crypto()
+            await _go_step2(app, pilot, coinbase_sample_path)
 
             # Mock detect_duplicates to return empty list
-            with patch('tui.screens.imports.detect_duplicates', return_value=[]):
-                await pilot.click("#btn-next")
-                await pilot.pause(0.5)
+            with patch(DETECT_DUPLICATES_PATCH, return_value=[]):
+                assert isinstance(app.screen, ImportWizardScreen)
+                app.screen.prepare_preview()
+                await app.workers.wait_for_complete()
+                await _wait_until(
+                    pilot,
+                    lambda: isinstance(app.screen, ImportWizardScreen)
+                    and app.screen.current_step == 3
+                    and _has_widget(app.screen, "#preview-table"),
+                    message="Step 3 preview did not render",
+                )
 
                 # Should not show duplicate warning
-                try:
+                with pytest.raises(NoMatches):
                     app.screen.query_one("#duplicate-warning")
-                    pytest.fail("Warning should not be shown when no duplicates")
-                except Exception:
-                    # Expected - warning should not exist
-                    pass
 
     @pytest.mark.asyncio
     async def test_duplicate_transactions_marked_in_preview(
@@ -607,25 +652,22 @@ class TestImportWizardDuplicateDetection:
         """Test duplicate transactions are marked with warning icon in preview table."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Navigate to step 3
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
+            app.crypto = _make_test_crypto()
+            await _go_step2(app, pilot, coinbase_sample_path)
 
             # We can't easily mock duplicates and check table rows,
             # but we can verify the preview table exists
-            with patch('tui.screens.imports.detect_duplicates', return_value=[]):
-                await pilot.click("#btn-next")
-                await pilot.pause(0.5)
+            with patch(DETECT_DUPLICATES_PATCH, return_value=[]):
+                assert isinstance(app.screen, ImportWizardScreen)
+                app.screen.prepare_preview()
+                await app.workers.wait_for_complete()
+                await _wait_until(
+                    pilot,
+                    lambda: isinstance(app.screen, ImportWizardScreen)
+                    and app.screen.current_step == 3
+                    and _has_widget(app.screen, "#preview-table"),
+                    message="Preview table was not shown",
+                )
 
                 preview_table = app.screen.query_one("#preview-table")
                 assert preview_table is not None
@@ -637,19 +679,8 @@ class TestImportWizardDuplicateDetection:
         """Test dry-run results show duplicate count."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Navigate through wizard
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
+            app.crypto = _make_test_crypto()
+            await _go_step2(app, pilot, coinbase_sample_path)
 
             # Ensure dry-run is checked
             dry_run_cb = app.screen.query_one("#checkbox-dry-run")
@@ -664,21 +695,30 @@ class TestImportWizardDuplicateDetection:
                 'buy_curr': 'BTC'
             }
 
-            with patch('tui.screens.imports.detect_duplicates', return_value=[sample_duplicate]):
-                await pilot.click("#btn-next")
-                await pilot.pause(0.5)
+            with patch(DETECT_DUPLICATES_PATCH, return_value=[sample_duplicate]):
+                assert isinstance(app.screen, ImportWizardScreen)
+                app.screen.prepare_preview()
+                await app.workers.wait_for_complete()
+                await _wait_until(
+                    pilot,
+                    lambda: isinstance(app.screen, ImportWizardScreen)
+                    and app.screen.current_step == 3
+                    and _has_widget(app.screen, "#duplicate-warning"),
+                    message="Step 3 with duplicates was not shown",
+                )
 
                 # Execute dry-run import
-                await pilot.click("#btn-next")
-                await pilot.pause(0.5)
-
-                # Check results panel exists (duplicate count is shown there)
-                try:
-                    results_panel = app.screen.query_one("#results-panel")
-                    assert results_panel is not None
-                except Exception:
-                    # Results might not be rendered immediately
-                    pass
+                assert isinstance(app.screen, ImportWizardScreen)
+                app.screen.query_one("#btn-next").press()
+                await app.workers.wait_for_complete()
+                await _wait_until(
+                    pilot,
+                    lambda: isinstance(app.screen, ImportWizardScreen)
+                    and _has_widget(app.screen, "#results-panel"),
+                    message="Results panel was not shown",
+                )
+                results_panel = app.screen.query_one("#results-panel")
+                assert results_panel is not None
 
     @pytest.mark.asyncio
     async def test_import_proceeds_despite_duplicates(
@@ -687,19 +727,8 @@ class TestImportWizardDuplicateDetection:
         """Test user can still proceed with import when duplicates detected (warning, not blocker)."""
         app = CryptoApp()
         async with app.run_test(notifications=True) as pilot:
-            await pilot.pause(0.1)
-
-            await pilot.press("i")
-            await pilot.pause(0.2)
-
-            # Navigate to step 3
-            file_input = app.screen.query_one("#input-file-path")
-            file_input.value = coinbase_sample_path
-            await pilot.click("#btn-detect")
-            await pilot.pause(0.5)
-
-            await pilot.click("#btn-next")
-            await pilot.pause(0.3)
+            app.crypto = _make_test_crypto()
+            await _go_step2(app, pilot, coinbase_sample_path)
 
             # Mock detect_duplicates to return duplicates
             sample_duplicate = {
@@ -710,9 +739,17 @@ class TestImportWizardDuplicateDetection:
                 'buy_curr': 'BTC'
             }
 
-            with patch('tui.screens.imports.detect_duplicates', return_value=[sample_duplicate]):
-                await pilot.click("#btn-next")
-                await pilot.pause(0.5)
+            with patch(DETECT_DUPLICATES_PATCH, return_value=[sample_duplicate]):
+                assert isinstance(app.screen, ImportWizardScreen)
+                app.screen.prepare_preview()
+                await app.workers.wait_for_complete()
+                await _wait_until(
+                    pilot,
+                    lambda: isinstance(app.screen, ImportWizardScreen)
+                    and app.screen.current_step == 3
+                    and app.screen.query_one("#btn-next").disabled is False,
+                    message="Import button was disabled on step 3",
+                )
 
                 # Import button should still be enabled
                 next_btn = app.screen.query_one("#btn-next")
