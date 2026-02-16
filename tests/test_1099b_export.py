@@ -269,7 +269,8 @@ class Test1099BExport(unittest.TestCase):
             exchange='Exchange1'
         )
 
-        results, worksheet = self.crypto.get_sales_for_1099b('BTC', 2025)
+        # 2025+ uses per-wallet accounting; specify wallet to avoid warning-as-error.
+        results, worksheet = self.crypto.get_sales_for_1099b('BTC', 2025, wallet='Exchange1')
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]['Term'], 'Long')  # 366 days >= 365

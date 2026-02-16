@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from .backend import DatabaseBackend
@@ -69,6 +71,7 @@ class SqliteBackend(DatabaseBackend):
         """
         if params is None:
             params = {}
+        params = self._normalize_params(params)
 
         try:
             cursor = self.connection.cursor()
@@ -94,6 +97,7 @@ class SqliteBackend(DatabaseBackend):
         """
         if params is None:
             params = {}
+        params = self._normalize_params(params)
 
         try:
             cursor = self.connection.cursor()
@@ -121,6 +125,24 @@ class SqliteBackend(DatabaseBackend):
             return None
         # Get first value from the dictionary
         return next(iter(row.values())) if row else None
+
+    def _normalize_params(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Normalize parameter values for SQLite bindings.
+
+        Python 3.12+ deprecates sqlite3's implicit datetime adapter. Convert
+        datetime/date values to strings before binding to avoid warnings-as-errors.
+        """
+        normalized: dict[str, Any] = {}
+        for key, value in params.items():
+            if isinstance(value, datetime):
+                normalized[key] = value.strftime('%Y-%m-%d %H:%M:%S')
+            elif isinstance(value, date):
+                normalized[key] = value.isoformat()
+            elif isinstance(value, Decimal):
+                normalized[key] = float(value)
+            else:
+                normalized[key] = value
+        return normalized
 
     def commit(self) -> None:
         """Commit the current transaction.

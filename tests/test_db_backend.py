@@ -1,6 +1,7 @@
 """Unit tests for database backend abstraction layer."""
 
 import os
+from datetime import datetime
 import pytest
 
 from src.python.db import (
@@ -62,6 +63,23 @@ class TestSqliteBackend:
 
         assert len(results) == 1
         assert results[0]['name'] == 'Bob'
+
+        backend.close()
+
+    def test_execute_with_datetime_param(self):
+        """Datetime params are normalized before sqlite binding."""
+        backend = SqliteBackend(':memory:', auto_create_tables=False)
+        backend.execute("CREATE TABLE test (createddate TEXT)")
+
+        backend.execute(
+            "INSERT INTO test VALUES (:createddate)",
+            {"createddate": datetime(2024, 1, 1, 12, 30, 45)},
+        )
+        backend.commit()
+
+        row = backend.execute_one("SELECT createddate FROM test")
+        assert row is not None
+        assert row["createddate"] == "2024-01-01 12:30:45"
 
         backend.close()
 
