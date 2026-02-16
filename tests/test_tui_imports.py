@@ -12,11 +12,18 @@ from textual.pilot import Pilot
 
 from cryptoAccounts import CryptoAccounts
 from db import SqliteBackend
+from conftest import restore_default_parsers
 from tui.app import CryptoApp
 from tui.screens.imports import FilePickerModal, ImportWizardScreen
 
 
 DETECT_DUPLICATES_PATCH = f"{ImportWizardScreen.__module__}.detect_duplicates"
+
+
+@pytest.fixture(autouse=True)
+def _restore_parser_registry_if_needed() -> None:
+    """Ensure parser auto-detection tests are isolated from prior clear_registry() calls."""
+    restore_default_parsers()
 
 
 @pytest.fixture
