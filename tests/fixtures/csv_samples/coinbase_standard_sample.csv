@@ -1,0 +1,8 @@
+Transactions
+User,Test User,12345678-abcd-1111-2222-abcdefabcdef
+ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes
+id-buy-btc,2022-01-05 10:00:00 UTC,Buy,BTC,0.0100,USD,$42000.00,$420.00,$424.20,$4.20,DCA buy
+id-sell-btc,2022-02-10 08:15:00 UTC,Sell,BTC,0.0020,USD,$44000.00,$88.00,$87.12,$0.88,Took profit
+id-pro-withdraw-btc,2022-03-01 12:30:00 UTC,Pro Withdrawal,BTC,0.0010,USD,$43000.00,$43.00,$43.00,$0.00,Move to pro
+id-reward-btc,2022-03-12 07:45:00 UTC,Reward Income,BTC,0.000010,USD,$39000.00,$0.00,$0.00,$0.0000003900,Coinbase rewards
+id-alt-ignore,2022-03-15 07:45:00 UTC,Buy,ETH,1.0,USD,$3000.00,$3000.00,$3015.00,$15.00,Non-BTC row
