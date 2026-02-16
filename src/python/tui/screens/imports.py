@@ -560,14 +560,16 @@ class ImportWizardScreen(Screen[None]):
         """Show error message in content area."""
         content = self.query_one("#wizard-content", Vertical)
 
-        # Check if error panel already exists
+        # Reuse existing panel to avoid duplicate-ID races from async workers.
+        error_text = f"[bold]Error:[/bold] {message}"
         try:
-            error_panel = content.query_one("#error-panel")
-            error_panel.remove()
+            error_panel = content.query_one("#error-panel", Static)
+            error_panel.update(error_text)
+            return
         except Exception:
             pass
 
-        error_panel = Static(f"[bold]Error:[/bold] {message}", id="error-panel")
+        error_panel = Static(error_text, id="error-panel")
         content.mount(error_panel)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:

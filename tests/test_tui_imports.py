@@ -315,6 +315,25 @@ class TestImportWizardDetection:
                 # Error might be shown differently
                 pass
 
+    @pytest.mark.asyncio
+    async def test_show_error_is_idempotent(self) -> None:
+        """Repeated show_error calls should update one panel, not mount duplicates."""
+        app = CryptoApp()
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.pause(0.1)
+            await pilot.press("i")
+            await pilot.pause(0.2)
+
+            assert isinstance(app.screen, ImportWizardScreen)
+            screen = app.screen
+
+            screen.show_error("first")
+            screen.show_error("second")
+
+            assert len(screen.query("#error-panel")) == 1
+            error_panel = screen.query_one("#error-panel")
+            assert "second" in str(error_panel.render())
+
 
 class TestImportWizardStep2:
     """Test step 2: Configuration."""

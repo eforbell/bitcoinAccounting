@@ -79,6 +79,11 @@ class TestCoinbaseImporterDetection:
         finally:
             os.unlink(csv_path)
 
+    def test_detects_standard_export_with_metadata_rows(self):
+        """detect() returns True for standard Coinbase account exports with preamble lines."""
+        parser = CoinbaseImporter()
+        assert parser.detect(str(FIXTURES_DIR / "coinbase_standard_sample.csv")) is True
+
 
 class TestCoinbaseImporterParsing:
     """Tests for CoinbaseImporter parsing logic."""
@@ -108,6 +113,35 @@ class TestCoinbaseImporterParsing:
         assert buy_tx['fee'] == pytest.approx(10.0)
         assert buy_tx['exchange'] == 'Coinbase'
         assert buy_tx['comment'] == 'DCA purchase'
+
+    def test_parse_standard_fixture_with_metadata_rows(self):
+        """Parse standard Coinbase account export format with leading metadata rows."""
+        parser = CoinbaseImporter()
+        colnames, transactions = parser.parse(str(FIXTURES_DIR / "coinbase_standard_sample.csv"))
+
+        assert colnames
+        assert len(transactions) == 4  # ETH row filtered out
+
+        # Timestamps should normalize from "... UTC" to app-friendly format.
+        assert transactions[0]['created_date'] == "2022-01-05 10:00:00"
+
+        # Buy row (total includes fees/spread).
+        buy_tx = transactions[0]
+        assert buy_tx['trans_type'] == 'Trade'
+        assert buy_tx['buy'] == pytest.approx(0.01)
+        assert buy_tx['sell'] == pytest.approx(424.20)
+        assert buy_tx['fee'] == pytest.approx(4.20)
+
+        # Pro Withdrawal row should map as Withdrawal.
+        withdrawal_tx = transactions[2]
+        assert withdrawal_tx['trans_type'] == 'Withdrawal'
+        assert withdrawal_tx['sell'] == pytest.approx(0.001)
+        assert withdrawal_tx['sell_curr'] == 'BTC'
+
+        # Reward Income should map to Interest Income.
+        reward_tx = transactions[3]
+        assert reward_tx['trans_type'] == 'Interest Income'
+        assert reward_tx['buy'] == pytest.approx(0.00001)
 
     def test_parse_buy_transaction(self):
         """Buy transaction maps to Trade with BTC buy side."""
@@ -410,4 +444,3 @@ class TestCoinbaseImporterIntegration:
             crypto.close()
         finally:
             os.unlink(csv_path)
-
