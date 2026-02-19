@@ -19,7 +19,7 @@ import sys
 import csv
 from datetime import datetime, timedelta
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 
 def main():
@@ -59,7 +59,7 @@ def main():
     else:
         coin = "BTC"
     
-    crypto = CryptoAccounts()
+    crypto = BitcoinAccounts()
     
     try:
         wallet_label = f" from {wallet} wallet" if wallet else ""

@@ -3,7 +3,7 @@
 
 import sys
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 from prompt_toolkit import print_formatted_text as print
 from prompt_toolkit import PromptSession
@@ -46,7 +46,7 @@ while True:
         confirm = yes_no_dialog(title="Record Income", text="Is this correct?").run()
 
         if confirm:
-            crypto = CryptoAccounts()
+            crypto = BitcoinAccounts()
             try:
                 crypto.interest(
                     interest_date=tx_date,

@@ -9,7 +9,7 @@ Usage:
     migrate_to_sqlite [--output PATH] [--dry-run] [--force]
 
 Options:
-    --output PATH  Target SQLite file path (default: ~/.cryptoaccounting/ledger.db)
+    --output PATH  Target SQLite file path (default: ~/.bitcoinaccounting/ledger.db)
     --dry-run      Count rows and report what would be migrated, without writing
     --force        Overwrite target file if it exists
 
@@ -54,7 +54,7 @@ def main() -> int:
         '--output', '-o',
         metavar='PATH',
         default=None,
-        help='Target SQLite file path (default: ~/.cryptoaccounting/ledger.db)'
+        help='Target SQLite file path (default: ~/.bitcoinaccounting/ledger.db)'
     )
     parser.add_argument(
         '--dry-run', '-n',

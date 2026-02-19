@@ -36,7 +36,7 @@ import sys
 import csv
 from datetime import datetime
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 
 def format_currency(amount):
@@ -223,7 +223,7 @@ def main():
         print(f"   Example: gains_tracker {year} --wallet Strike")
         print()
     
-    crypto = CryptoAccounts()
+    crypto = BitcoinAccounts()
     
     try:
         print(f"\nCalculating {year} capital gains for {coin}...")

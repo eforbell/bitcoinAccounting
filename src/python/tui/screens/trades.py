@@ -21,7 +21,7 @@ from textual.widgets import (
 
 if TYPE_CHECKING:
     from tui.app import CryptoApp
-    from cryptoAccounts import CryptoAccounts
+    from bitcoinAccounts import BitcoinAccounts
 
 
 class TradesScreen(Screen[None]):

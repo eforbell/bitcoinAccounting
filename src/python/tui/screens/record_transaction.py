@@ -26,7 +26,7 @@ from textual.widgets import (
 
 if TYPE_CHECKING:
     from tui.app import CryptoApp
-    from cryptoAccounts import CryptoAccounts
+    from bitcoinAccounts import BitcoinAccounts
 
 
 NEW_WALLET_SENTINEL = "__new_wallet__"

@@ -3,11 +3,11 @@
 
 import sys
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 
 def main():
-    crypto = CryptoAccounts()
+    crypto = BitcoinAccounts()
     
     if len(sys.argv) > 1:
         coin = sys.argv[1]

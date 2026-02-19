@@ -22,7 +22,7 @@ Examples:
 
 import sys
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 from datetime import datetime, timedelta
 
 
@@ -109,7 +109,7 @@ def main():
         if not arg.startswith('--'):
             coin = arg.upper()
     
-    crypto = CryptoAccounts()
+    crypto = BitcoinAccounts()
     
     try:
         print(f"\n{'=' * 90}")

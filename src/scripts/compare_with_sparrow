@@ -4,7 +4,7 @@
 import sys
 import csv
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 from decimal import Decimal
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -33,7 +33,7 @@ def parse_sparrow_csv(filepath):
 
 def get_db_transactions(wallet, coin='BTC'):
     """Get all database transactions for a wallet."""
-    crypto = CryptoAccounts()
+    crypto = BitcoinAccounts()
 
     query = """
         SELECT

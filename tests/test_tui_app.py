@@ -52,7 +52,7 @@ class TestAppLaunch:
         """App should have correct title."""
         app = CryptoApp()
         async with app.run_test() as pilot:
-            assert app.TITLE == "Crypto Accounting"
+            assert app.TITLE == "Bitcoin Accounting"
 
 
 class TestMainMenu:
@@ -82,7 +82,7 @@ class TestMainMenu:
         app = CryptoApp()
         async with app.run_test() as pilot:
             title = app.query_one("#menu-title")
-            assert "Crypto Accounting" in title.content
+            assert "Bitcoin Accounting" in title.content
 
     @pytest.mark.asyncio
     async def test_menu_has_hint(self) -> None:

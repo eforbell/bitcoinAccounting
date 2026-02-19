@@ -19,7 +19,7 @@ Examples:
 
 import sys
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 
 def get_all_purchase_data(crypto, coin):
@@ -59,7 +59,7 @@ def main():
         elif not arg.startswith('--'):
             coin = arg.upper()
     
-    crypto = CryptoAccounts()
+    crypto = BitcoinAccounts()
     
     try:
         print(f"\n{'=' * 100}")

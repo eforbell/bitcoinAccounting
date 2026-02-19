@@ -8,7 +8,7 @@ Also loads environment variables from .env file in repository root.
 
 Usage in scripts:
     import _bootstrap
-    from cryptoAccounts import CryptoAccounts
+    from bitcoinAccounts import BitcoinAccounts
 """
 import sys
 from pathlib import Path

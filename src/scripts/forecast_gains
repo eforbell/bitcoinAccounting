@@ -16,7 +16,7 @@ Examples:
 import sys
 from datetime import datetime
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 
 def main():
@@ -64,7 +64,7 @@ def main():
 
     price_source = "specified"
     
-    crypto = CryptoAccounts()
+    crypto = BitcoinAccounts()
     
     try:
         # Get current balance

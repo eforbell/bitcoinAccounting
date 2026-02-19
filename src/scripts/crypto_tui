@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Crypto Accounting TUI - Interactive terminal interface.
+"""Bitcoin Accounting TUI - Interactive terminal interface.
 
-Provides a menu-driven interface to all crypto accounting functionality:
+Provides a menu-driven interface to all bitcoin accounting functionality:
 portfolio views, transaction recording, CSV imports, tax reporting,
 and visualizations.
 

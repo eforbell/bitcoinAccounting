@@ -6,21 +6,21 @@ The fastest way to use Bitcoin Accounting is through the interactive **Terminal 
 
 ```bash
 # Clone the repo
-git clone https://github.com/eforbell/cryptoAccounting.git
-cd cryptoAccounting
+git clone https://github.com/eforbell/bitcoinAccounting.git
+cd bitcoinAccounting
 
 # Install dependencies
 python -m pip install -r requirements.txt
 python -m pip install -e .
 ```
 
-No database setup required. A SQLite database is created automatically on first use at `~/.cryptoaccounting/ledger.db`.
+No database setup required. A SQLite database is created automatically on first use at `~/.bitcoinaccounting/ledger.db`.
 Using `-e` (editable install) means `git pull` updates are usually picked up without reinstalling.
 
 ## Launch the TUI
 
 ```bash
-python -m cryptoAccounting
+python -m bitcoinAccounting
 ```
 
 Alternative (direct script):
@@ -33,6 +33,14 @@ Installed entrypoints (after `python -m pip install .`):
 
 ```bash
 bitcoin-accounting
+```
+
+Legacy aliases (still supported during migration window):
+
+```bash
+python -m cryptoAccounting
+crypto-accounting
+crypto-tui
 ```
 
 You'll land on the **Dashboard**, which shows your BTC balance, cost basis, custody breakdown, and recent transactions. From here you can navigate to any screen using the keyboard shortcuts shown on the main menu.
@@ -114,3 +122,10 @@ The same functionality is also available as individual CLI scripts in `src/scrip
 - **PostgreSQL** -- For multi-user or network access
 
 See the [README](README.md#environment-variables) for PostgreSQL setup and configuration details.
+
+## Rebrand Compatibility Notes
+
+- Canonical module names are now `bitcoinAccounting` and `bitcoinAccounts`.
+- Canonical default SQLite path is `~/.bitcoinaccounting/ledger.db`.
+- If your existing data is in `~/.cryptoaccounting/ledger.db`, the app falls back automatically when `SQLITE_DB_PATH` is unset.
+- Legacy `crypto*` aliases are currently kept for compatibility while migration is in progress.

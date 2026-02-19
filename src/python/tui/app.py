@@ -1,4 +1,4 @@
-"""Main Textual application for Crypto Accounting."""
+"""Main Textual application for Bitcoin Accounting."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 from tui.screens import DashboardScreen, ExportScreen, ImportWizardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TaxReportingScreen, TradesScreen, VisualizationScreen, WalletManagementScreen
 
 
@@ -75,7 +75,7 @@ class HelpScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         with Container(id="help-dialog"):
             with VerticalScroll(id="help-scroll"):
-                yield Label("Crypto Accounting TUI", classes="help-header")
+                yield Label("Bitcoin Accounting TUI", classes="help-header")
                 yield Label("")
 
                 yield Label("Navigation", classes="help-section")
@@ -187,7 +187,7 @@ class MainMenu(Widget):
     """
 
     def compose(self) -> ComposeResult:
-        yield Label("Crypto Accounting", id="menu-title")
+        yield Label("Bitcoin Accounting", id="menu-title")
         yield Label("Bitcoin Portfolio Management & Tax Reporting", id="menu-subtitle")
         with Center():
             with Horizontal(id="menu-grid-top"):
@@ -204,9 +204,9 @@ class MainMenu(Widget):
 
 
 class CryptoApp(App[None]):
-    """Crypto Accounting TUI application."""
+    """Bitcoin Accounting TUI application."""
 
-    TITLE = "Crypto Accounting"
+    TITLE = "Bitcoin Accounting"
     SUB_TITLE = "Bitcoin Portfolio Management"
 
     # Load centralized theme from .tcss file (TUI-003)
@@ -230,7 +230,7 @@ class CryptoApp(App[None]):
 
     def __init__(self) -> None:
         super().__init__()
-        self.crypto: CryptoAccounts | None = None
+        self.crypto: BitcoinAccounts | None = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -240,7 +240,7 @@ class CryptoApp(App[None]):
     def on_mount(self) -> None:
         if self.crypto is None:
             try:
-                self.crypto = CryptoAccounts()
+                self.crypto = BitcoinAccounts()
             except Exception as e:
                 self.notify(
                     f"Database connection failed: {e}\n"

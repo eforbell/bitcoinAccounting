@@ -1,0 +1,199 @@
+{
+  "branchName": "feature/bitcoin-accounting-rebrand",
+  "projectName": "Bitcoin Accounting Rebrand and Compatibility Migration",
+  "description": "Migrate project identity and code-level naming from cryptoAccounting/CryptoAccounts to bitcoinAccounting/BitcoinAccounts across runtime modules, entrypoints, tests, package metadata, and documentation, while preserving backward compatibility for existing users and automation.",
+  "rolloutContext": {
+    "repoVisibility": "Private (planned to become public soon)",
+    "currentExternalUsers": 1,
+    "implication": "Use compatibility-first rollout now, then clean up legacy names after public launch stabilization."
+  },
+  "principles": [
+    "Backward Compatibility First - Existing imports, CLI commands, and module entrypoints continue to work during migration",
+    "Safe Defaults and Data Continuity - New default paths prefer ~/.bitcoinaccounting with transparent fallback to existing ~/.cryptoaccounting locations",
+    "Incremental Refactor - Deliver rename work in staged stories with clear verification gates",
+    "Bitcoin-First Language - Product copy and UX prioritize Bitcoin and fiat-to-Bitcoin workflows without breaking multi-asset internals",
+    "Defer Breaking Changes - Hard removals of legacy names happen in a later cleanup feature after deprecation period"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest + mypy --strict",
+    "packaging": "setuptools / pyproject.toml console scripts",
+    "runtime": "CLI scripts + Textual TUI",
+    "database": "SQLite + PostgreSQL via DatabaseBackend abstraction"
+  },
+  "stages": [
+    {
+      "id": "stage-1",
+      "name": "Compatibility Foundation",
+      "goal": "Introduce bitcoin* canonical modules and class aliases while keeping legacy crypto* imports operational."
+    },
+    {
+      "id": "stage-2",
+      "name": "Adoption Across Codebase",
+      "goal": "Move internal imports, scripts, tests, and packaging to bitcoin* canonical names."
+    },
+    {
+      "id": "stage-3",
+      "name": "UX, Docs, and Path Migration",
+      "goal": "Complete user-facing rebrand, update default directories, and document migration/deprecation policy."
+    }
+  ],
+  "userStories": [
+    {
+      "id": "BRD-001",
+      "title": "Add canonical bitcoin modules with legacy shims",
+      "acceptanceCriteria": [
+        "Create canonical modules: src/python/bitcoinAccounts.py and src/python/bitcoinAccounting.py",
+        "Define canonical class name BitcoinAccounts and preserve CryptoAccounts as alias for compatibility",
+        "Retain legacy modules src/python/cryptoAccounts.py and src/python/cryptoAccounting.py as compatibility shims forwarding to canonical modules",
+        "Top-level module launcher remains operational for both python -m cryptoAccounting and python -m bitcoinAccounting",
+        "Add lightweight deprecation warnings in legacy entrypoints/import paths (non-fatal)"
+      ],
+      "priority": 1,
+      "estimatedLines": "+180",
+      "testStrategy": "pytest tests/test_cli_scripts.py tests/test_tui_app.py -v",
+      "passes": true
+    },
+    {
+      "id": "BRD-002",
+      "title": "Migrate internal imports and type references to bitcoin canonical names",
+      "acceptanceCriteria": [
+        "All src/python and src/scripts imports use bitcoinAccounts/BitcoinAccounts as canonical path/type",
+        "TYPE_CHECKING imports in TUI screens and scripts updated to canonical naming",
+        "Legacy imports remain accepted via shims for third-party or user scripts"
+      ],
+      "priority": 2,
+      "estimatedLines": "+140/-140",
+      "testStrategy": "pytest tests/test_tui_*.py tests/test_cli_scripts.py -v",
+      "passes": true
+    },
+    {
+      "id": "BRD-003",
+      "title": "Update package metadata and console entrypoints",
+      "acceptanceCriteria": [
+        "pyproject.toml py-modules include canonical bitcoin modules",
+        "Console script bitcoin-accounting resolves to canonical bitcoinAccounting:main",
+        "Legacy console scripts (crypto-accounting, crypto-tui) remain available and forward to canonical entrypoint",
+        "Project description updated to Bitcoin-first wording without changing backend capabilities"
+      ],
+      "priority": 3,
+      "estimatedLines": "+20/-10",
+      "testStrategy": "python -m pip install -e . && python -m bitcoinAccounting && python -m cryptoAccounting",
+      "passes": true
+    },
+    {
+      "id": "BRD-004",
+      "title": "Migrate default local data/cache paths with fallback",
+      "acceptanceCriteria": [
+        "Default SQLite path becomes ~/.bitcoinaccounting/ledger.db when SQLITE_DB_PATH is unset",
+        "If ~/.bitcoinaccounting path does not exist but ~/.cryptoaccounting data exists, application can still read legacy location safely (documented precedence)",
+        "Default cache path for visualization/data fetcher becomes ~/.bitcoinaccounting/cache",
+        "Migration behavior covered by tests for path resolution and cache directory defaults"
+      ],
+      "priority": 4,
+      "estimatedLines": "+80",
+      "testStrategy": "pytest tests/test_db_backend.py tests/test_viz.py -v",
+      "passes": true
+    },
+    {
+      "id": "BRD-005",
+      "title": "Rebrand TUI and user-facing strings to Bitcoin Accounting",
+      "acceptanceCriteria": [
+        "TUI app title, help text, splash/menu copy, and theme comments updated from Crypto Accounting to Bitcoin Accounting",
+        "Product copy emphasizes Bitcoin-first accounting and fiat swapping where relevant",
+        "Tests asserting UI strings updated accordingly"
+      ],
+      "priority": 5,
+      "estimatedLines": "+40/-40",
+      "testStrategy": "pytest tests/test_tui_app.py tests/test_tui_theme.py -v",
+      "passes": true
+    },
+    {
+      "id": "BRD-006",
+      "title": "Update documentation and migration guidance",
+      "acceptanceCriteria": [
+        "README.md, GETTING_STARTED.md, .env.example, and script docs use bitcoinAccounting naming and ~/.bitcoinaccounting defaults",
+        "Add explicit migration section: old command/module/path compatibility and recommended updates",
+        "Clarify deprecation window for legacy crypto* names and when removal will occur"
+      ],
+      "priority": 6,
+      "estimatedLines": "+120/-90",
+      "testStrategy": "Manual documentation review + smoke run of documented commands",
+      "passes": true
+    },
+    {
+      "id": "BRD-007",
+      "title": "Planning and governance updates",
+      "acceptanceCriteria": [
+        "Add Feature-13 section to AGENTS.md with migration learnings and compatibility decisions",
+        "Update planning/current-feature.json to track Feature-13 while active",
+        "Append implementation notes and reusable patterns to planning/progress.txt"
+      ],
+      "priority": 7,
+      "estimatedLines": "+80",
+      "testStrategy": "Planning artifact review",
+      "passes": true
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Hard renaming module files without shims will break existing user scripts and tests importing cryptoAccounts",
+      "Default path migration may lead users to think historical SQLite data is missing if fallback is not explicit",
+      "Entry point migration can break packaging if console scripts and module list are not coordinated",
+      "Public launch timing increases impact of breaking changes if rebrand lands without a compatibility period"
+    ],
+    "medium": [
+      "Broad import churn across tests and scripts can hide regressions in less-used workflows",
+      "User-facing copy changes may invalidate brittle string-based TUI tests"
+    ],
+    "low": [
+      "Most rebrand work is deterministic search/replace with controlled compatibility wrappers",
+      "Existing test coverage is strong across CLI imports and TUI flows"
+    ]
+  },
+  "metrics": {
+    "estimatedTotalLines": "+660/-280",
+    "storiesCount": 7,
+    "filesModified": [
+      "pyproject.toml",
+      "src/python/db/schema.py",
+      "src/python/viz/data_fetcher.py",
+      "src/python/tui/app.py",
+      "README.md",
+      "GETTING_STARTED.md",
+      ".env.example",
+      "tests/test_db_backend.py",
+      "tests/test_tui_app.py",
+      "tests/test_viz.py"
+    ],
+    "filesCreated": [
+      "src/python/bitcoinAccounts.py",
+      "src/python/bitcoinAccounting.py",
+      "planning/features/feature-13-prd.json",
+      "planning/features/feature-13-summary.md"
+    ]
+  },
+  "followOnFeature": {
+    "proposedFeatureId": "feature-14",
+    "proposedName": "Legacy Name Removal (Post-Deprecation)",
+    "scope": [
+      "Remove cryptoAccounts/cryptoAccounting shims after deprecation window",
+      "Drop legacy console script aliases",
+      "Remove legacy path fallback if desired"
+    ],
+    "timing": "After at least one stable release cycle with deprecation notices and initial public-release feedback"
+  },
+  "releaseStrategy": {
+    "phaseA_private": [
+      "Ship Feature-13 while repo is private with compatibility shims enabled",
+      "Ask current external user to test their existing commands/imports unchanged"
+    ],
+    "phaseB_public": [
+      "Open repository publicly after Feature-13 docs and migration guidance are merged",
+      "Keep legacy aliases active during initial public adoption window"
+    ],
+    "phaseC_cleanup": [
+      "Execute Feature-14 only after compatibility window and user feedback indicate low risk"
+    ]
+  }
+}

@@ -37,11 +37,51 @@ With `-e`, pulling new commits usually updates behavior immediately without rein
 Alternative launchers:
 
 ```bash
-python -m cryptoAccounting
+python -m bitcoinAccounting
 src/scripts/crypto_tui
 ```
 
+Legacy compatibility launchers (still supported during migration window):
+
+```bash
+python -m cryptoAccounting
+crypto-accounting
+crypto-tui
+```
+
 See the **[Getting Started Guide](GETTING_STARTED.md)** for a walkthrough of the TUI, keyboard shortcuts, and common workflows.
+
+---
+
+## Rebrand Migration (Feature-13)
+
+As of **February 19, 2026**, the canonical project/runtime names are:
+
+- Module entrypoint: `bitcoinAccounting`
+- Core API module: `bitcoinAccounts`
+- Default SQLite path: `~/.bitcoinaccounting/ledger.db`
+
+Legacy `crypto*` names remain supported for compatibility during the current transition.
+
+### Command and Module Mapping
+
+| Legacy | Canonical |
+|--------|-----------|
+| `python -m cryptoAccounting` | `python -m bitcoinAccounting` |
+| `from cryptoAccounts import CryptoAccounts` | `from bitcoinAccounts import BitcoinAccounts` |
+| `~/.cryptoaccounting/ledger.db` | `~/.bitcoinaccounting/ledger.db` |
+
+### Legacy Support Window
+
+- Legacy aliases are planned to remain available through at least **June 30, 2026**.
+- Removal is planned in a follow-on cleanup feature after public-release stabilization.
+- New scripts, automation, and documentation should use canonical `bitcoin*` names now.
+
+### Data Path Compatibility
+
+- If `SQLITE_DB_PATH` is set, it always wins.
+- If unset, the app prefers `~/.bitcoinaccounting/ledger.db`.
+- If the new path does not exist but `~/.cryptoaccounting/ledger.db` exists, it falls back automatically to the legacy database.
 
 ---
 
@@ -72,7 +112,7 @@ src/scripts/balance
 src/scripts/trades BTC
 ```
 
-The database file will be automatically created at `~/.cryptoaccounting/ledger.db` on first use.
+The database file will be automatically created at `~/.bitcoinaccounting/ledger.db` on first use.
 
 ### Option 2: PostgreSQL (For Advanced Users)
 
@@ -136,7 +176,7 @@ The `.env` file is automatically loaded by all scripts and is in `.gitignore` to
   - `postgres` - PostgreSQL database
 
 - **`SQLITE_DB_PATH`**: Path to SQLite database file
-  - Default: `~/.cryptoaccounting/ledger.db`
+  - Default: `~/.bitcoinaccounting/ledger.db`
   - Use `:memory:` for in-memory database (testing only)
 
 ### PostgreSQL Configuration
@@ -184,7 +224,7 @@ export PGDATABASE=crypto
 src/scripts/migrate_to_sqlite --dry-run
 
 # Run actual migration
-src/scripts/migrate_to_sqlite --output ~/.cryptoaccounting/ledger.db
+src/scripts/migrate_to_sqlite --output ~/.bitcoinaccounting/ledger.db
 ```
 
 2. Verify the migration:
@@ -192,7 +232,7 @@ src/scripts/migrate_to_sqlite --output ~/.cryptoaccounting/ledger.db
 ```bash
 # Set SQLite as the backend
 export DB_BACKEND=sqlite
-export SQLITE_DB_PATH=~/.cryptoaccounting/ledger.db
+export SQLITE_DB_PATH=~/.bitcoinaccounting/ledger.db
 
 # Check balances match
 src/scripts/balance
@@ -213,13 +253,13 @@ src/scripts/trades BTC
 ```bash
 # Add to ~/.bashrc or ~/.zshrc
 export DB_BACKEND=sqlite
-export SQLITE_DB_PATH=~/.cryptoaccounting/ledger.db
+export SQLITE_DB_PATH=~/.bitcoinaccounting/ledger.db
 ```
 
 ### Migration Options
 
 - **`--dry-run`**: Preview what will be migrated without writing any data
-- **`--output PATH`**: Specify custom SQLite file path (default: `~/.cryptoaccounting/ledger.db`)
+- **`--output PATH`**: Specify custom SQLite file path (default: `~/.bitcoinaccounting/ledger.db`)
 - **`--force`**: Overwrite existing SQLite file if it exists
 
 The migration tool copies all data from these tables:
@@ -239,15 +279,15 @@ The migration tool copies all data from these tables:
 - Wait for the other process to finish, or close it
 - For concurrent access needs, consider PostgreSQL instead
 
-### "Permission denied" on ~/.cryptoaccounting/
+### "Permission denied" on ~/.bitcoinaccounting/
 
 **Cause**: The scripts can't create the database directory.
 
 **Solution**:
 ```bash
 # Create directory manually with correct permissions
-mkdir -p ~/.cryptoaccounting
-chmod 755 ~/.cryptoaccounting
+mkdir -p ~/.bitcoinaccounting
+chmod 755 ~/.bitcoinaccounting
 ```
 
 ### Migration Verification Steps

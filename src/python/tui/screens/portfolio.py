@@ -22,7 +22,7 @@ from textual.widgets import (
 
 if TYPE_CHECKING:
     from tui.app import CryptoApp
-    from cryptoAccounts import CryptoAccounts
+    from bitcoinAccounts import BitcoinAccounts
 
 
 class CustodyBar(Static):
@@ -321,7 +321,7 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
 
         app = self.app
         assert isinstance(app, CryptoApp)
-        crypto: CryptoAccounts = app.crypto
+        crypto: BitcoinAccounts = app.crypto
 
         if crypto is None:
             self.app.call_from_thread(self._show_error, "Database connection not available")
@@ -415,7 +415,7 @@ Press [bold]I[/bold] to import transactions, or [bold]R[/bold] to record manuall
 
         app = self.app
         assert isinstance(app, CryptoApp)
-        crypto: CryptoAccounts = app.crypto
+        crypto: BitcoinAccounts = app.crypto
 
         if crypto is None:
             return

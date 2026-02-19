@@ -13,7 +13,7 @@ from textual.widgets import Button, DataTable, Footer, Header, Label, Static
 if TYPE_CHECKING:
     from tui.app import CryptoApp
     from tui.screens.record_transaction import RecordTransactionScreen
-    from cryptoAccounts import CryptoAccounts
+    from bitcoinAccounts import BitcoinAccounts
 
 
 class StatCard(Static):
@@ -351,7 +351,7 @@ class DashboardScreen(Screen[None]):
         container = self.query_one("#dashboard-container", Container)
         self._sync_clear_children(container)
 
-        empty_msg = """[bold]Welcome to Crypto Accounting![/bold]
+        empty_msg = """[bold]Welcome to Bitcoin Accounting![/bold]
 
 Your database is empty. To get started:
 
@@ -491,14 +491,14 @@ Press [bold]?[/bold] for help anytime."""
 
         app = self.app
         assert isinstance(app, CryptoApp)
-        crypto: CryptoAccounts = app.crypto  # type: ignore[assignment]
+        crypto: BitcoinAccounts = app.crypto  # type: ignore[assignment]
 
         if crypto is None:
             self.app.call_from_thread(self._show_error, "Database connection not available")
             return
 
         try:
-            # Fetch all data (CryptoAccounts methods are untyped legacy code)
+            # Fetch all data (BitcoinAccounts methods are untyped legacy code)
             balance = crypto.get_balance('BTC')  # type: ignore[no-untyped-call]
             basis = crypto.get_basis('BTC')  # type: ignore[no-untyped-call]
 

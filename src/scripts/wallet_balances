@@ -15,7 +15,7 @@ Examples:
 
 import sys
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 def usage():
     print("Usage: wallet_balances [COIN] [--all]")
@@ -36,7 +36,7 @@ def main():
         else:
             coin = arg.upper()
     
-    crypto = CryptoAccounts()
+    crypto = BitcoinAccounts()
     
     try:
         # Get total balance

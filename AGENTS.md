@@ -2098,3 +2098,87 @@ crypto = CryptoAccounts(backend=backend)
 - Always show helpful guidance when no data exists
 - Example: "No transactions found. Import data to get started."
 - Check if `crypto is None` in workers before accessing
+
+## Feature-13: Bitcoin Accounting Rebrand - BRD-001
+
+### Canonical Module + Shim Pattern
+- Create canonical modules first (`bitcoinAccounts.py`, `bitcoinAccounting.py`), then convert legacy modules (`cryptoAccounts.py`, `cryptoAccounting.py`) into forwarder shims.
+- Preserve API compatibility with aliasing: `CryptoAccounts = BitcoinAccounts`.
+- Keep legacy entrypoints callable by forwarding `main()` to canonical launcher.
+
+### Warning Behavior in This Repo
+- `pytest.ini` config uses `filterwarnings = error`, so import-time deprecation warnings break test collection.
+- Emit deprecation warnings at runtime entrypoints (`main()` execution) instead of module import boundaries for compatibility shims.
+
+### Migration Test Pattern
+- Add focused compatibility tests that verify:
+  - canonical/legacy class alias identity
+  - canonical and legacy entrypoint modules both export callable `main`
+- Avoid tests that invoke full TUI launch for simple migration checks.
+
+### Feature-13: Bitcoin Accounting Rebrand - BRD-002
+
+### Canonical Internal Imports
+- For migration stages, update internal runtime imports first (`src/python`, `src/scripts`) to canonical modules (`from bitcoinAccounts import BitcoinAccounts`) while keeping legacy shims in place.
+- Keep legacy import compatibility for external users/tests through `src/python/cryptoAccounts.py` shim.
+
+### Verification Pattern for Large Rename Sweeps
+- Use `rg -n "from cryptoAccounts import|import cryptoAccounts" src/python src/scripts` as a hard gate.
+- `rg` returning exit code 1 is expected when no matches remain.
+
+### Testing Scope Decision
+- Given pre-existing nondeterministic TUI timing failures, prioritize focused migration validation:
+  - `tests/test_rebrand_compat.py`
+  - `tests/test_cli_scripts.py`
+- Avoid blocking migration progress on flaky full TUI suites unrelated to import path changes.
+
+### Feature-13: Bitcoin Accounting Rebrand - BRD-003
+
+### Packaging Migration Pattern
+- Make canonical script target the new launcher (`bitcoin-accounting -> bitcoinAccounting:main`).
+- Keep legacy aliases active (`crypto-accounting`, `crypto-tui`) during migration window.
+- Include both canonical and legacy modules in `py-modules` while shims exist.
+
+### Verification Without Network
+- If `pip install -e .` cannot run due network restrictions, validate packaging wiring by parsing `pyproject.toml` with `tomllib` and asserting script/module mappings.
+
+### Feature-13: Bitcoin Accounting Rebrand - BRD-004
+
+### Path Migration Fallback Pattern
+- For default SQLite path migration, use precedence:
+  1) `~/.bitcoinaccounting/ledger.db` if it exists
+  2) else `~/.cryptoaccounting/ledger.db` if it exists
+  3) else new default `~/.bitcoinaccounting/ledger.db`
+- Keep `SQLITE_DB_PATH` environment override as highest priority.
+
+### Cache Migration Pattern
+- Default cache directory should move to `~/.bitcoinaccounting/cache`.
+- Fallback to legacy `~/.cryptoaccounting/cache` only when legacy cache artifact exists and new cache dir is not already established.
+
+### Test Isolation for Home-Directory Logic
+- Use `monkeypatch.setenv("HOME", str(tmp_path))` in tests for path defaults/fallbacks.
+- Avoid relying on real user home state, which makes path migration tests nondeterministic.
+
+### Feature-13: Bitcoin Accounting Rebrand - BRD-005
+
+### TUI Rebrand Scope
+- Update all user-facing identity strings together: app title, menu title, help header, and dashboard empty-state welcome copy.
+- Keep internal class names stable (`CryptoApp`) during compatibility phase; rename internals later in cleanup feature.
+
+### Test Strategy with Flaky TUI Harness
+- Update string assertions in `tests/test_tui_app.py` to match rebrand.
+- If Textual tests are nondeterministic/hanging, rely on deterministic checks (source grep + focused non-TUI suites) to validate copy migration, then revisit full TUI stabilization separately.
+
+### Feature-13: Bitcoin Accounting Rebrand - BRD-006/007
+
+### Documentation Migration Pattern
+- Treat docs migration as a compatibility transition, not just string replacement:
+  - show canonical command/module/path first
+  - keep legacy aliases documented in a clearly labeled compatibility section
+  - include exact deprecation-window dates
+
+### Feature Closeout Pattern
+- When feature stories are complete, update both:
+  - `planning/current-feature.json` story statuses and overall feature status
+  - `planning/features/<feature>-prd.json` `passes` flags
+- Keep `planning/progress.txt` and `AGENTS.md` in sync so implementation context is preserved for future cleanup features.

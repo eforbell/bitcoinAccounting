@@ -19,7 +19,7 @@ Examples:
 
 import sys
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 from decimal import Decimal
 
 def usage():
@@ -37,7 +37,7 @@ def main():
     wallet = sys.argv[1]
     coin = sys.argv[2].upper() if len(sys.argv) > 2 else 'BTC'
     
-    crypto = CryptoAccounts()
+    crypto = BitcoinAccounts()
 
     try:
         # Get all transactions for this wallet/coin, ordered by date ASC for balance calculation

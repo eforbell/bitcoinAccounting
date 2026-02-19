@@ -451,18 +451,42 @@ class TestSchemaCreation:
 
         backend.close()
 
-    def test_get_sqlite_path_default(self):
-        """Test get_sqlite_path returns default path."""
-        # Clear env var to test default
-        old_val = os.environ.pop('SQLITE_DB_PATH', None)
+    def test_get_sqlite_path_default(self, tmp_path, monkeypatch):
+        """Test get_sqlite_path returns new default path."""
+        monkeypatch.delenv('SQLITE_DB_PATH', raising=False)
+        monkeypatch.setenv('HOME', str(tmp_path))
 
-        try:
-            path = get_sqlite_path()
-            assert path.endswith('.cryptoaccounting/ledger.db')
-            assert '~' not in path  # Should be expanded
-        finally:
-            if old_val:
-                os.environ['SQLITE_DB_PATH'] = old_val
+        path = get_sqlite_path()
+        assert path.endswith('.bitcoinaccounting/ledger.db')
+        assert '~' not in path  # Should be expanded
+
+    def test_get_sqlite_path_falls_back_to_legacy(self, tmp_path, monkeypatch):
+        """Test get_sqlite_path falls back when legacy DB exists."""
+        monkeypatch.delenv('SQLITE_DB_PATH', raising=False)
+        monkeypatch.setenv('HOME', str(tmp_path))
+
+        legacy_path = tmp_path / ".cryptoaccounting" / "ledger.db"
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_path.write_text("")
+
+        path = get_sqlite_path()
+        assert path == str(legacy_path)
+
+    def test_get_sqlite_path_prefers_new_over_legacy(self, tmp_path, monkeypatch):
+        """Test get_sqlite_path prefers new path when both exist."""
+        monkeypatch.delenv('SQLITE_DB_PATH', raising=False)
+        monkeypatch.setenv('HOME', str(tmp_path))
+
+        legacy_path = tmp_path / ".cryptoaccounting" / "ledger.db"
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_path.write_text("")
+
+        new_path = tmp_path / ".bitcoinaccounting" / "ledger.db"
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        new_path.write_text("")
+
+        path = get_sqlite_path()
+        assert path == str(new_path)
 
     def test_get_sqlite_path_from_env(self):
         """Test get_sqlite_path reads from environment variable."""

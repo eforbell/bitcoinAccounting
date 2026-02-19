@@ -3,7 +3,7 @@
 
 import sys
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 from prompt_toolkit import print_formatted_text as print
 from prompt_toolkit import HTML, PromptSession
@@ -62,7 +62,7 @@ while True:
 		
 		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
 		if record_tx.lower() in ('y', 'yes'):
-			crypto = CryptoAccounts()
+			crypto = BitcoinAccounts()
 			try:
 				# Step 1: Deposit USD to exchange
 				crypto.deposit(exchange=exchange, deposit_date=tx_date, buy=total_usd)

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bitcoin-accounting"
 version = "0.1.0"
-description = "Crypto accounting toolkit with an interactive Textual TUI."
+description = "Bitcoin accounting toolkit with an interactive Textual TUI."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -23,13 +23,13 @@ dependencies = [
 ]
 
 [project.scripts]
-bitcoin-accounting = "cryptoAccounting:main"
+bitcoin-accounting = "bitcoinAccounting:main"
 crypto-accounting = "cryptoAccounting:main"
 crypto-tui = "cryptoAccounting:main"
 
 [tool.setuptools]
 package-dir = {"" = "src/python"}
-py-modules = ["cryptoAccounts", "cryptoAccounting"]
+py-modules = ["bitcoinAccounts", "bitcoinAccounting", "cryptoAccounts", "cryptoAccounting"]
 
 [tool.setuptools.packages.find]
 where = ["src/python"]

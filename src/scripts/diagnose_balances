@@ -17,14 +17,14 @@ Examples:
 
 import sys
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 from datetime import datetime, timedelta
 
 
 def main():
     coin = sys.argv[1].upper() if len(sys.argv) > 1 else 'BTC'
     
-    crypto = CryptoAccounts()
+    crypto = BitcoinAccounts()
     
     try:
         print(f"\n{'=' * 80}")

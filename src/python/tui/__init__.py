@@ -1,4 +1,4 @@
-"""Textual TUI application for Crypto Accounting."""
+"""Textual TUI application for Bitcoin Accounting."""
 
 from tui.app import CryptoApp
 

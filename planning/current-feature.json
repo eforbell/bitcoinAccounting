@@ -1,17 +1,46 @@
 {
-  "currentFeature": "feature-12",
-  "featureName": "Transaction Editor",
-  "prdPath": "planning/features/feature-12-prd.json",
-  "summaryPath": "planning/features/feature-12-summary.md",
-  "branch": "feature/transaction-editor",
+  "currentFeature": "feature-13",
+  "featureName": "Bitcoin Accounting Rebrand and Compatibility Migration",
+  "prdPath": "planning/features/feature-13-prd.json",
+  "summaryPath": "planning/features/feature-13-summary.md",
+  "branch": "feature/bitcoin-accounting-rebrand",
   "status": "complete",
   "stories": [
-    {"id": "TXE-001", "title": "Add soft-delete column to ledger schema", "status": "complete"},
-    {"id": "TXE-002", "title": "Add transaction update and delete methods to LedgerWriter", "status": "complete"},
-    {"id": "TXE-003", "title": "Transaction detail modal from Ledger screen", "status": "complete"},
-    {"id": "TXE-004", "title": "Edit Transaction modal", "status": "complete"},
-    {"id": "TXE-005", "title": "Delete Transaction with confirmation", "status": "complete"},
-    {"id": "TXE-006", "title": "Show deleted transactions toggle in Ledger", "status": "complete"}
+    {
+      "id": "BRD-001",
+      "title": "Add canonical bitcoin modules with legacy shims",
+      "status": "complete"
+    },
+    {
+      "id": "BRD-002",
+      "title": "Migrate internal imports and type references to bitcoin canonical names",
+      "status": "complete"
+    },
+    {
+      "id": "BRD-003",
+      "title": "Update package metadata and console entrypoints",
+      "status": "complete"
+    },
+    {
+      "id": "BRD-004",
+      "title": "Migrate default local data/cache paths with fallback",
+      "status": "complete"
+    },
+    {
+      "id": "BRD-005",
+      "title": "Rebrand TUI and user-facing strings to Bitcoin Accounting",
+      "status": "complete"
+    },
+    {
+      "id": "BRD-006",
+      "title": "Update documentation and migration guidance",
+      "status": "complete"
+    },
+    {
+      "id": "BRD-007",
+      "title": "Planning and governance updates",
+      "status": "complete"
+    }
   ],
   "completedFeatures": [
     {

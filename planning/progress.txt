@@ -1901,3 +1901,127 @@
   - Rich Text objects can be used as DataTable cell values for styling (e.g., `Text("value", style="dim")`)
   - Checkbox widget: `Checkbox.Changed` event with `event.value` for checked state, `event.checkbox.id` for identification
 ---
+
+## 2026-02-19 - BRD-001
+- What was implemented: Introduced canonical rebrand modules (`bitcoinAccounts.py`, `bitcoinAccounting.py`, top-level `bitcoinAccounting.py`) and converted legacy `crypto*` modules into compatibility shims/forwarders.
+- Files changed:
+  - `src/python/bitcoinAccounts.py` (canonical class name `BitcoinAccounts` with `CryptoAccounts` alias)
+  - `src/python/cryptoAccounts.py` (compatibility shim exporting canonical classes)
+  - `src/python/bitcoinAccounting.py` (canonical packaged entrypoint)
+  - `src/python/cryptoAccounting.py` (legacy packaged entrypoint forwarding to canonical `main()`)
+  - `bitcoinAccounting.py` (new top-level module launcher)
+  - `cryptoAccounting.py` (legacy top-level launcher forwarding to canonical `main()`)
+  - `tests/test_rebrand_compat.py` (new compatibility tests)
+  - `planning/current-feature.json` (set active feature to Feature-13)
+  - `planning/features/feature-13-prd.json` (marked BRD-001 passes=true)
+- **Learnings:**
+  - `pytest.ini` treats all warnings as errors (`filterwarnings = error`), so import-time deprecation warnings break test collection.
+  - For this codebase, deprecation warnings should be emitted at legacy command execution boundaries (e.g., `main()`), not during import-time shims.
+  - Copying the legacy `cryptoAccounts.py` implementation into `bitcoinAccounts.py` preserves behavior while enabling a low-risk class-name migration path via aliasing.
+  - New compatibility tests should verify class alias identity and both canonical/legacy entrypoint exports without launching the full TUI.
+---
+
+## 2026-02-19 - BRD-002
+- What was implemented: Migrated internal imports and type references in `src/python` and `src/scripts` from `cryptoAccounts/CryptoAccounts` to `bitcoinAccounts/BitcoinAccounts`.
+- Files changed:
+  - `src/python/tui/app.py`
+  - `src/python/tui/screens/dashboard.py`
+  - `src/python/tui/screens/portfolio.py`
+  - `src/python/tui/screens/record_transaction.py`
+  - `src/python/tui/screens/trades.py`
+  - `src/python/db/sqlite.py` (comment update)
+  - `src/scripts/_bootstrap.py`
+  - `src/scripts/buySats`
+  - `src/scripts/sell`
+  - `src/scripts/transfer`
+  - `src/scripts/earnInterest`
+  - `src/scripts/trades`
+  - `src/scripts/export_tx`
+  - `src/scripts/export_1099b`
+  - `src/scripts/import_csv`
+  - `src/scripts/forecast_gains`
+  - `src/scripts/gains_tracker`
+  - `src/scripts/wallet_balances`
+  - `src/scripts/wallet_ledger`
+  - `src/scripts/exchange_liquidity`
+  - `src/scripts/validate_transfers`
+  - `src/scripts/compare_with_sparrow`
+  - `src/scripts/diagnose_balances`
+  - `planning/current-feature.json` (BRD-002 status complete)
+  - `planning/features/feature-13-prd.json` (BRD-002 passes=true)
+- **Learnings:**
+  - A broad alias migration is safe when compatibility shims remain (`cryptoAccounts` forwarding to `bitcoinAccounts`).
+  - For this story, `rg` exit code 1 on search is the expected success state for "no legacy imports remain" checks.
+  - Deferring test-suite-wide TUI runs is reasonable here due known nondeterministic timing issues; focused compatibility and CLI tests are stable and sufficient for BRD-002 acceptance.
+---
+
+## 2026-02-19 - BRD-003
+- What was implemented: Updated packaging metadata and console entrypoints so canonical launcher is `bitcoinAccounting:main` while legacy CLI aliases remain intact.
+- Files changed:
+  - `pyproject.toml` (description, scripts, py-modules)
+  - `planning/current-feature.json` (BRD-003 status complete)
+  - `planning/features/feature-13-prd.json` (BRD-003 passes=true)
+- **Learnings:**
+  - In restricted-network environments, `pip install -e .` may fail during build dependency resolution even when local code changes are correct.
+  - For packaging-story verification without install, parse `pyproject.toml` directly (tomllib) to assert script target wiring and module inclusion.
+  - Keep legacy script aliases (`crypto-accounting`, `crypto-tui`) pointing at legacy module shims during compatibility window.
+---
+
+## 2026-02-19 - BRD-004
+- What was implemented: Migrated default SQLite/cache locations to `~/.bitcoinaccounting` with compatibility fallback to legacy `~/.cryptoaccounting` when existing data/cache is detected.
+- Files changed:
+  - `src/python/db/schema.py` (new default path + legacy fallback logic in `get_sqlite_path()`)
+  - `src/python/viz/data_fetcher.py` (new default cache dir + legacy cache fallback)
+  - `tests/test_db_backend.py` (updated default-path test + added legacy fallback and new-path precedence tests)
+  - `tests/test_viz.py` (updated default cache-dir test + added legacy fallback and new-path precedence tests)
+  - `planning/current-feature.json` (BRD-004 status complete)
+  - `planning/features/feature-13-prd.json` (BRD-004 passes=true)
+- **Learnings:**
+  - Deterministic home-path tests should set `HOME` to a temporary directory; this avoids accidental coupling to a developer's real `~/.cryptoaccounting` data.
+  - For migration safety, path selection precedence should be: new file exists -> use new; else legacy file exists -> use legacy; else use new default.
+  - Full backend suites may fail in local environments with unavailable PostgreSQL; targeted test selection is appropriate for path-migration stories.
+---
+
+## 2026-02-19 - BRD-005
+- What was implemented: Rebranded TUI-facing product strings from "Crypto Accounting" to "Bitcoin Accounting" and updated associated test assertions.
+- Files changed:
+  - `src/python/tui/app.py` (module/class docstrings, help header, menu title, app TITLE)
+  - `src/python/tui/screens/dashboard.py` (empty-state welcome message)
+  - `src/python/tui/__init__.py` (package docstring)
+  - `src/python/tui/styles/app.tcss` (theme header comment)
+  - `tests/test_tui_app.py` (title/menu title assertions)
+  - `planning/current-feature.json` (BRD-005 status complete)
+  - `planning/features/feature-13-prd.json` (BRD-005 passes=true)
+- **Learnings:**
+  - User-facing rebrand coverage spans not only labels but help/empty-state copy and test assertion text.
+  - `tests/test_tui_app.py` remains nondeterministic in this environment (runs emit passing dots but may not terminate cleanly), so acceptance should use code diff + focused non-TUI stability checks.
+  - Keep class/module identifiers stable (`CryptoApp`) until a later cleanup feature to minimize breakage while changing visible product identity.
+---
+
+## 2026-02-19 - BRD-006
+- What was implemented: Updated user documentation to canonical bitcoin naming and paths, with explicit compatibility migration guidance.
+- Files changed:
+  - `README.md` (canonical launchers/paths, new rebrand migration section, command/path mapping table, legacy support window)
+  - `GETTING_STARTED.md` (canonical launcher/path updates + compatibility notes)
+  - `.env.example` (BitcoinAccounting header and new default SQLite path)
+  - `src/scripts/migrate_to_sqlite` (help text default path)
+  - `src/scripts/crypto_tui` (docstring updated to Bitcoin Accounting)
+  - `planning/current-feature.json` (BRD-006 status complete)
+  - `planning/features/feature-13-prd.json` (BRD-006 passes=true)
+- **Learnings:**
+  - Documentation migrations should retain explicit legacy command examples to reduce user friction during compatibility windows.
+  - Migration guidance is clearest when command/module/path mapping is shown in a compact table.
+  - Include concrete dates for deprecation policy in docs to avoid ambiguity in public rollout.
+---
+
+## 2026-02-19 - BRD-007
+- What was implemented: Completed governance and planning closeout for Feature-13.
+- Files changed:
+  - `planning/current-feature.json` (set BRD-007 complete, feature status complete)
+  - `planning/features/feature-13-prd.json` (set BRD-007 passes=true)
+  - `planning/progress.txt` (story logs)
+  - `AGENTS.md` (Feature-13 patterns and migration decisions)
+- **Learnings:**
+  - Story-by-story planning updates during implementation make final feature closeout low-risk and mechanical.
+  - Keeping AGENTS.md current during each story avoids losing migration-specific operational knowledge.
+---

@@ -3,7 +3,7 @@
 
 import sys
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 from prompt_toolkit import print_formatted_text as print
 from prompt_toolkit import HTML, PromptSession
@@ -41,7 +41,7 @@ while True:
 		print("TX time: %s" % tx_date)
 		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
 		if record_tx == 'Y' or record_tx == 'y':
-			crypto = CryptoAccounts()
+			crypto = BitcoinAccounts()
 			crypto.transfer_funds(withdraw_date=tx_date, deposit_date=None, from_account=from_wallet, tx_coin='BTC', tx_amount=amount, to_account=to_wallet, fee_coin='BTC', fee_amount=fee)
 			print("Recorded transaction.")
 			print("New balance (Destination): " + str(crypto.get_balance_by_account("BTC", to_wallet)))

@@ -16,7 +16,7 @@ import sys
 from datetime import datetime
 from collections import defaultdict
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 
 def parse_arguments():
@@ -214,8 +214,8 @@ def main():
         print("Error: --start-date cannot be after --end-date", file=sys.stderr)
         sys.exit(1)
 
-    # Initialize CryptoAccounts
-    crypto = CryptoAccounts()
+    # Initialize BitcoinAccounts
+    crypto = BitcoinAccounts()
 
     try:
         # Get transactions with filters

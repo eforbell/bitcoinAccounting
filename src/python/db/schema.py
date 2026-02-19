@@ -79,9 +79,22 @@ def get_sqlite_path() -> str:
 
     Returns:
         Path from SQLITE_DB_PATH environment variable or default
-        ~/.cryptoaccounting/ledger.db
+        ~/.bitcoinaccounting/ledger.db. Falls back to legacy
+        ~/.cryptoaccounting/ledger.db when present.
     """
-    return os.getenv('SQLITE_DB_PATH', os.path.expanduser('~/.cryptoaccounting/ledger.db'))
+    env_path = os.getenv('SQLITE_DB_PATH')
+    if env_path:
+        return env_path
+
+    new_default = os.path.expanduser('~/.bitcoinaccounting/ledger.db')
+    legacy_default = os.path.expanduser('~/.cryptoaccounting/ledger.db')
+
+    # Compatibility fallback for existing users with legacy database location.
+    if os.path.exists(new_default):
+        return new_default
+    if os.path.exists(legacy_default):
+        return legacy_default
+    return new_default
 
 
 def _migrate_ledger_soft_delete(backend: DatabaseBackend) -> None:

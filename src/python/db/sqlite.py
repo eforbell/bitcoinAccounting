@@ -45,7 +45,7 @@ class SqliteBackend(DatabaseBackend):
         try:
             # Allow cross-thread access for TUI worker threads (TUI-004 fix)
             # SQLite is safe for multiple readers, and we serialize writes through
-            # the main CryptoAccounts instance
+            # the main BitcoinAccounts instance
             self.connection = sqlite3.connect(db_path, check_same_thread=False)
             self.connection.row_factory = sqlite3.Row  # Enable column access by name
         except sqlite3.Error as e:

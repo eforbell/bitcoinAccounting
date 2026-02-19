@@ -3,7 +3,7 @@
 
 import sys
 import _bootstrap
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 
 from prompt_toolkit import PromptSession
 from datetime import datetime, timedelta
@@ -61,7 +61,7 @@ while True:
 
 		record_tx = session.prompt("Do you want to record this transaction? (Y/N) ")
 		if record_tx == 'Y' or record_tx == 'y':
-			crypto = CryptoAccounts()
+			crypto = BitcoinAccounts()
 			try:
 				# Step 1: Transfer BTC from wallet to exchange if source != exchange
 				# (done before the trade, with slight time delays)

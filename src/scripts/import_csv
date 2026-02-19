@@ -20,7 +20,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import BitcoinAccounts
 from db import get_backend
 from imports import (
     detect_duplicates,
@@ -224,7 +224,7 @@ def main() -> None:
 
     # Import
     try:
-        crypto = CryptoAccounts(backend=backend)
+        crypto = BitcoinAccounts(backend=backend)
         result = crypto.import_transactions(transactions)
         crypto.close()
     except Exception as e:
