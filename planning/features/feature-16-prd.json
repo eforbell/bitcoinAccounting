@@ -1,0 +1,132 @@
+{
+  "branchName": "feature/treasury-attestation-monitoring",
+  "projectName": "Treasury Attestation and Monitoring UX",
+  "description": "Build operator-facing attestation and monitoring surfaces on top of integrity foundations, including monthly snapshots, dashboard visibility, alerting rules, and exportable evidence artifacts.",
+  "timing": {
+    "draftedOn": "2026-02-24",
+    "plannedEarliestExecution": "2026-03-15",
+    "gatingCondition": "Proceed after Feature-15 reaches stable baseline and integrity score thresholds are calibrated."
+  },
+  "principles": [
+    "Evidence over intuition - produce durable, reviewable treasury attestations",
+    "Actionable UX - surface only what informs next steps",
+    "Low-friction operation - monthly routine should be one command or one screen flow",
+    "Canonical artifacts - all exports align with bitcoin* naming and paths",
+    "Progressive enhancement - preserve CLI parity with richer TUI affordances"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "runtime": "Textual TUI + CLI",
+    "testing": "pytest + TUI structure tests",
+    "reporting": "JSON/CSV/PDF artifacts",
+    "storage": "SQLite + PostgreSQL"
+  },
+  "userStories": [
+    {
+      "id": "TAM-001",
+      "title": "Monthly attestation artifact generation",
+      "acceptanceCriteria": [
+        "Generate month-end attestation bundle with integrity snapshot, unresolved findings, and metadata",
+        "Support JSON and CSV outputs by default",
+        "Include deterministic run identifiers for audit traceability"
+      ],
+      "priority": 1,
+      "estimatedLines": "+200/-0",
+      "testStrategy": "pytest tests/test_attestation_generation.py -v",
+      "passes": true
+    },
+    {
+      "id": "TAM-002",
+      "title": "Attestation PDF/report formatting",
+      "acceptanceCriteria": [
+        "Provide optional PDF summary for archival and sharing",
+        "Render score trends, top findings, and remediation checklist",
+        "Gracefully degrade when optional PDF dependency is unavailable"
+      ],
+      "priority": 2,
+      "estimatedLines": "+160/-0",
+      "testStrategy": "pytest tests/test_attestation_report.py -v",
+      "passes": true
+    },
+    {
+      "id": "TAM-003",
+      "title": "TUI monitoring dashboard enhancements",
+      "acceptanceCriteria": [
+        "Add treasury integrity panel to dashboard with latest score and deltas",
+        "Provide drill-down screen for unresolved findings and filters",
+        "Expose quick actions to export or acknowledge findings"
+      ],
+      "priority": 3,
+      "estimatedLines": "+220/-0",
+      "testStrategy": "pytest tests/test_tui_treasury_monitoring.py -v",
+      "passes": true
+    },
+    {
+      "id": "TAM-004",
+      "title": "Rule-based alerts and status transitions",
+      "acceptanceCriteria": [
+        "Allow user-defined alert rules from integrity severities/score thresholds",
+        "Track finding lifecycle states (new, acknowledged, resolved)",
+        "Emit concise notifications in TUI and CLI outputs"
+      ],
+      "priority": 4,
+      "estimatedLines": "+190/-0",
+      "testStrategy": "pytest tests/test_attestation_alerts.py -v",
+      "passes": true
+    },
+    {
+      "id": "TAM-005",
+      "title": "Operational workflow docs and closeout",
+      "acceptanceCriteria": [
+        "Document monthly attestation workflow in README and GETTING_STARTED",
+        "Add troubleshooting guidance for common integrity findings",
+        "Update planning metadata and progress log with feature completion"
+      ],
+      "priority": 5,
+      "estimatedLines": "+80/-0",
+      "testStrategy": "Manual doc review + targeted smoke checks",
+      "passes": true
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Attestation artifacts could be misunderstood as formal tax/legal opinions",
+      "Notification overload may reduce practical usefulness"
+    ],
+    "medium": [
+      "Optional PDF/report dependencies can vary by environment",
+      "TUI complexity can introduce regressions in navigation and responsiveness"
+    ],
+    "low": [
+      "Most capabilities compose directly from Feature-15 integrity outputs",
+      "Export formats are familiar and operationally simple"
+    ]
+  },
+  "preFlightChecklist": [
+    "Define attestation disclaimer language and evidence scope",
+    "Confirm monthly artifact directory naming and retention policy",
+    "Validate TUI navigation model for new monitoring screens",
+    "Establish default alert rules with low false-positive rates"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+850/-0",
+    "storiesCount": 5,
+    "filesLikelyModified": [
+      "src/python/attestation/generator.py",
+      "src/python/attestation/reports.py",
+      "src/python/attestation/alerts.py",
+      "src/python/tui/screens/dashboard.py",
+      "src/python/tui/screens/attestation.py",
+      "src/python/tui/styles/app.tcss",
+      "tests/test_attestation_generation.py",
+      "tests/test_attestation_report.py",
+      "tests/test_tui_treasury_monitoring.py",
+      "tests/test_attestation_alerts.py",
+      "README.md",
+      "GETTING_STARTED.md",
+      "planning/current-feature.json",
+      "planning/progress.txt",
+      "AGENTS.md"
+    ]
+  }
+}
