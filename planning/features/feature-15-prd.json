@@ -1,0 +1,131 @@
+{
+  "branchName": "feature/treasury-integrity-foundations",
+  "projectName": "Treasury Integrity Foundations",
+  "description": "Add a deterministic integrity layer for long-hold bitcoin treasury workflows, including reconciliation checks, transfer-pair validation, cost-basis continuity checks, and a composable health score.",
+  "timing": {
+    "draftedOn": "2026-02-24",
+    "plannedEarliestExecution": "2026-03-01",
+    "gatingCondition": "Proceed after Feature-14 completion and after confirming baseline import/parser stability."
+  },
+  "principles": [
+    "Trust Through Verification - prioritize ledger correctness before adding new analytics",
+    "Deterministic Output - integrity checks must produce repeatable results from identical inputs",
+    "Operator First - findings should be actionable for a single primary user",
+    "Fail Loudly, Never Silently - classify and surface integrity risks clearly",
+    "Incremental Delivery - ship checks in narrow stories with measurable confidence gains"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest + targeted integration tests",
+    "runtime": "CLI + Textual TUI",
+    "database": "SQLite + PostgreSQL via DatabaseBackend abstraction",
+    "reporting": "JSON/CSV export with optional markdown summary"
+  },
+  "userStories": [
+    {
+      "id": "TIF-001",
+      "title": "Ledger reconciliation engine",
+      "acceptanceCriteria": [
+        "Add reconciliation service that computes expected vs observed balances by coin and wallet over a selected date range",
+        "Support deterministic reconciliation snapshots with timestamped metadata",
+        "Expose reconciliation output through a typed result object consumable by CLI and TUI"
+      ],
+      "priority": 1,
+      "estimatedLines": "+220/-0",
+      "testStrategy": "pytest tests/test_integrity_reconciliation.py -v",
+      "passes": true
+    },
+    {
+      "id": "TIF-002",
+      "title": "Transfer-pair integrity checks",
+      "acceptanceCriteria": [
+        "Detect likely broken internal transfers (one-sided withdrawal/deposit, amount mismatch, fee anomaly)",
+        "Return severity tiers for each finding (info, warning, critical)",
+        "Allow configurable tolerances for timing and amount matching"
+      ],
+      "priority": 2,
+      "estimatedLines": "+180/-0",
+      "testStrategy": "pytest tests/test_integrity_transfer_pairs.py -v",
+      "passes": true
+    },
+    {
+      "id": "TIF-003",
+      "title": "Cost-basis continuity monitor",
+      "acceptanceCriteria": [
+        "Identify holdings/lots with missing or ambiguous cost basis",
+        "Summarize impacted coins, wallets, and dates",
+        "Generate remediation hints tied to import sources or transaction classes"
+      ],
+      "priority": 3,
+      "estimatedLines": "+160/-0",
+      "testStrategy": "pytest tests/test_integrity_basis_continuity.py -v",
+      "passes": true
+    },
+    {
+      "id": "TIF-004",
+      "title": "Treasury health score and policy thresholds",
+      "acceptanceCriteria": [
+        "Produce a weighted health score with sub-scores for reconciliation, transfer integrity, and basis continuity",
+        "Support user-configurable warning/critical thresholds",
+        "Persist score snapshots for trend tracking"
+      ],
+      "priority": 4,
+      "estimatedLines": "+140/-0",
+      "testStrategy": "pytest tests/test_integrity_health_score.py -v",
+      "passes": true
+    },
+    {
+      "id": "TIF-005",
+      "title": "Integrity CLI report and planning closeout",
+      "acceptanceCriteria": [
+        "Add canonical CLI command to run integrity checks and export JSON/CSV reports",
+        "Include concise terminal summary with top issues and remediation counts",
+        "Update planning metadata and progress artifacts with feature learnings"
+      ],
+      "priority": 5,
+      "estimatedLines": "+120/-0",
+      "testStrategy": "pytest tests/test_integrity_cli.py -v",
+      "passes": true
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "False positives in transfer matching could reduce trust in integrity output",
+      "Performance regressions on large ledgers if reconciliation is not query-efficient"
+    ],
+    "medium": [
+      "Differences between SQLite and PostgreSQL behavior in timestamp comparisons",
+      "Unclear severity tuning may lead to alert fatigue"
+    ],
+    "low": [
+      "Reporting/export surfaces can be layered on existing query abstractions",
+      "Most logic can be validated with deterministic fixture-led tests"
+    ]
+  },
+  "preFlightChecklist": [
+    "Confirm naming and command surface are canonical-only",
+    "Define initial threshold defaults for health score severity",
+    "Prepare fixture datasets covering transfers, fees, and basis gaps",
+    "Document expected runtime on representative ledger sizes"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+820/-0",
+    "storiesCount": 5,
+    "filesLikelyModified": [
+      "src/python/integrity/reconciliation.py",
+      "src/python/integrity/transfer_pairs.py",
+      "src/python/integrity/basis_continuity.py",
+      "src/python/integrity/health_score.py",
+      "src/python/bitcoinAccounting.py",
+      "src/python/tui/screens/dashboard.py",
+      "tests/test_integrity_reconciliation.py",
+      "tests/test_integrity_transfer_pairs.py",
+      "tests/test_integrity_basis_continuity.py",
+      "tests/test_integrity_health_score.py",
+      "tests/test_integrity_cli.py",
+      "planning/current-feature.json",
+      "planning/progress.txt",
+      "AGENTS.md"
+    ]
+  }
+}
