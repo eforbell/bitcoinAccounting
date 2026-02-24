@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'python'))
 
 from db import SqliteBackend
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import CryptoAccounts
 from tui.app import CryptoApp
 from tui.screens.dashboard import DashboardScreen, StatCard, CustodyBreakdown, RecentTransactions
 from textual.widgets import Label, DataTable

@@ -7,7 +7,7 @@ from pathlib import Path
 from textual.pilot import Pilot
 
 from db import SqliteBackend
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import CryptoAccounts
 from tui.app import CryptoApp
 
 

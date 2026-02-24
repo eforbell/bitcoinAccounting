@@ -12,7 +12,7 @@ from imports.exchanges.gemini import GeminiImporter, _parse_number, _to_float, _
 from imports.registry import register, get_parser, get_all_parsers, clear_registry
 from imports.validation import validate_batch
 from db import SqliteBackend
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import CryptoAccounts
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "csv_samples"
 

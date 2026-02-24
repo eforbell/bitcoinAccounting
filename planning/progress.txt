@@ -2025,3 +2025,81 @@
   - Story-by-story planning updates during implementation make final feature closeout low-risk and mechanical.
   - Keeping AGENTS.md current during each story avoids losing migration-specific operational knowledge.
 ---
+## 2026-02-19 - LNR-001
+- What was implemented: Removed legacy module shim files and migrated tests to canonical module imports.
+- Files changed:
+  - `src/python/cryptoAccounts.py` (deleted)
+  - `src/python/cryptoAccounting.py` (deleted)
+  - `cryptoAccounting.py` (deleted)
+  - `tests/test_rebrand_compat.py` (converted to canonical-only checks)
+  - `tests/test_cli_scripts.py` and other test modules (import path migrated from `cryptoAccounts` to `bitcoinAccounts`)
+  - `src/scripts/_bootstrap.py` (docstring naming cleanup)
+  - `planning/features/feature-14-prd.json` (LNR-001 passes=true)
+  - `planning/current-feature.json` (LNR-001 status=completed)
+  - `AGENTS.md` (added Feature-14 learnings)
+- **Learnings:**
+  - Legacy module file removal can be staged safely by first migrating import sites to canonical modules while preserving class aliases.
+  - Compatibility tests should evolve from legacy-path assertions to canonical-surface assertions as deprecations are removed.
+  - `mypy --strict` requires `mypy` to be installed in `.venv`; after virtualenv rebuild, verify tooling availability before relying on typecheck gates.
+---
+## 2026-02-19 - LNR-002
+- What was implemented: Removed legacy console script aliases and updated docs to canonical launch commands.
+- Files changed:
+  - `pyproject.toml` (removed `crypto-accounting`/`crypto-tui` scripts; canonical-only `py-modules`)
+  - `README.md` (removed legacy command references, updated launcher/deprecation text)
+  - `GETTING_STARTED.md` (removed legacy alias command block)
+  - `planning/features/feature-14-prd.json` (LNR-002 passes=true)
+  - `planning/current-feature.json` (LNR-002 status=completed)
+  - `AGENTS.md` (added Feature-14 LNR-002 learnings)
+- **Learnings:**
+  - Keep packaging metadata synchronized with file removals; deleted modules left in `py-modules` can break editable installs.
+  - In offline CI/dev environments, use `tomllib` metadata checks when isolated build dependency fetch blocks `pip install -e .`.
+  - The `bitcoin-accounting`/`python -m bitcoinAccounting` launcher is a TUI entrypoint, not an argparse CLI with `--help` output.
+---
+## 2026-02-19 - LNR-003
+- What was implemented: Finalized canonical-only data path policy by removing automatic fallback to legacy `~/.cryptoaccounting` paths.
+- Files changed:
+  - `src/python/db/schema.py` (removed legacy fallback logic from `get_sqlite_path()`)
+  - `src/python/viz/data_fetcher.py` (removed legacy cache fallback logic)
+  - `tests/test_db_backend.py` (updated sqlite path tests for no-fallback policy)
+  - `tests/test_viz.py` (updated default cache-dir tests for no-fallback policy)
+  - `README.md` (documented fallback removal date and canonical-only default behavior)
+  - `GETTING_STARTED.md` (documented fallback removal date)
+  - `planning/features/feature-14-prd.json` (LNR-003 passes=true)
+  - `planning/current-feature.json` (LNR-003 status=completed)
+  - `AGENTS.md` (added Feature-14 LNR-003 learnings)
+- **Learnings:**
+  - Path policy cleanup should remove both DB and cache fallback branches in the same story to avoid split behavior.
+  - Direct execution of `tests/test_db_backend.py` and `tests/test_viz.py` requires `PYTHONPATH=.` in this environment because those tests import `src.python...` modules.
+  - `mypy --strict src/python` currently reports broad pre-existing strictness issues unrelated to LNR-003; keep it as a non-blocking informational gate for this story.
+---
+## 2026-02-19 - LNR-004
+- What was implemented: Purged legacy brand references from docs and script headers, and converted migration guidance into historical status text.
+- Files changed:
+  - `README.md` (replaced migration compatibility section with historical rebrand status; removed legacy command/module/path references)
+  - `GETTING_STARTED.md` (replaced compatibility notes with completed rebrand status)
+  - `src/python/imports/exchanges/native.py` (canonical parser naming)
+  - `src/scripts/crypto_tui` (usage string updated to canonical launcher)
+  - `src/scripts/forecast_gains` (header wording updated)
+  - `src/scripts/export_1099b` (header wording updated)
+  - `src/scripts/wallet_balances` (header wording updated)
+  - `planning/features/feature-14-prd.json` (LNR-004 passes=true)
+  - `planning/current-feature.json` (LNR-004 status=completed)
+  - `AGENTS.md` (added Feature-14 LNR-004 learnings)
+- **Learnings:**
+  - A deterministic `rg` gate is the fastest validation method for branding-language cleanup stories.
+  - Rebrand docs should preserve concrete completion dates while removing obsolete compatibility instructions.
+  - Script header wording can be modernized independently from script filename cleanup to keep scope tight.
+---
+## 2026-02-19 - LNR-005
+- What was implemented: Finalized canonical-only regression tests and completed Feature-14 planning metadata.
+- Files changed:
+  - `tests/test_rebrand_compat.py` (added negative tests for removed legacy modules and packaging alias checks via `tomllib`)
+  - `planning/features/feature-14-prd.json` (LNR-005 passes=true)
+  - `planning/current-feature.json` (LNR-005 status=completed, feature status=complete)
+  - `AGENTS.md` (added Feature-14 LNR-005 learnings)
+- **Learnings:**
+  - Canonical-only migrations benefit from explicit negative import tests to prevent accidental reintroduction of deprecated module files.
+  - Packaging metadata tests can enforce script/module surface contracts quickly without requiring editable-install success.
+  - Feature closeout should mark both final story completion and top-level feature status in planning metadata.
+---

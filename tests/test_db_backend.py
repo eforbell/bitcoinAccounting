@@ -460,8 +460,8 @@ class TestSchemaCreation:
         assert path.endswith('.bitcoinaccounting/ledger.db')
         assert '~' not in path  # Should be expanded
 
-    def test_get_sqlite_path_falls_back_to_legacy(self, tmp_path, monkeypatch):
-        """Test get_sqlite_path falls back when legacy DB exists."""
+    def test_get_sqlite_path_ignores_legacy_path(self, tmp_path, monkeypatch):
+        """Test get_sqlite_path does not fall back to legacy DB path."""
         monkeypatch.delenv('SQLITE_DB_PATH', raising=False)
         monkeypatch.setenv('HOME', str(tmp_path))
 
@@ -470,10 +470,10 @@ class TestSchemaCreation:
         legacy_path.write_text("")
 
         path = get_sqlite_path()
-        assert path == str(legacy_path)
+        assert path.endswith('.bitcoinaccounting/ledger.db')
 
-    def test_get_sqlite_path_prefers_new_over_legacy(self, tmp_path, monkeypatch):
-        """Test get_sqlite_path prefers new path when both exist."""
+    def test_get_sqlite_path_uses_new_when_both_paths_exist(self, tmp_path, monkeypatch):
+        """Test get_sqlite_path always uses canonical path."""
         monkeypatch.delenv('SQLITE_DB_PATH', raising=False)
         monkeypatch.setenv('HOME', str(tmp_path))
 

@@ -24,12 +24,10 @@ dependencies = [
 
 [project.scripts]
 bitcoin-accounting = "bitcoinAccounting:main"
-crypto-accounting = "cryptoAccounting:main"
-crypto-tui = "cryptoAccounting:main"
 
 [tool.setuptools]
 package-dir = {"" = "src/python"}
-py-modules = ["bitcoinAccounts", "bitcoinAccounting", "cryptoAccounts", "cryptoAccounting"]
+py-modules = ["bitcoinAccounts", "bitcoinAccounting"]
 
 [tool.setuptools.packages.find]
 where = ["src/python"]

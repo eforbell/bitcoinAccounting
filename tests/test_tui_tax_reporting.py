@@ -6,7 +6,7 @@ import pytest
 from datetime import datetime
 
 from db import SqliteBackend
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import CryptoAccounts
 from tui.app import CryptoApp
 from tui.screens import TaxReportingScreen
 

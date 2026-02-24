@@ -2,6 +2,63 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-14: Legacy Name Removal - LNR-001
+
+### Legacy Module Shim Removal
+- Deleted compatibility shim modules: `src/python/cryptoAccounts.py`, `src/python/cryptoAccounting.py`, and top-level `cryptoAccounting.py`
+- Migrated all test imports from legacy module path to canonical module path (`from bitcoinAccounts import CryptoAccounts`)
+- Updated compatibility tests to validate canonical-only imports and canonical entrypoint export
+
+### Canonical-Only Test Transition
+- In this phase, keep class alias compatibility (`CryptoAccounts` alias in `bitcoinAccounts.py`) while removing legacy module file names
+- Remove tests that import deprecated module names; replace with tests that verify callable canonical `bitcoinAccounting.main`
+- Use `rg` gates to verify there are no remaining code/test imports of legacy module names
+
+## Feature-14: Legacy Name Removal - LNR-002
+
+### Console Script Alias Cleanup
+- Removed legacy entrypoints `crypto-accounting` and `crypto-tui` from `[project.scripts]` in `pyproject.toml`
+- Updated `tool.setuptools.py-modules` to canonical-only modules (`bitcoinAccounts`, `bitcoinAccounting`) after shim deletion
+- Removed legacy command references from `README.md` and `GETTING_STARTED.md`
+
+### Offline Packaging Validation Pattern
+- In restricted-network environments, `python -m pip install -e .` may fail during isolated build dependency fetch even when metadata is valid
+- Fallback validation: parse `pyproject.toml` with `tomllib` to assert script map and module list match canonical-only policy
+- `python -m bitcoinAccounting --help` does not print CLI help; it launches the TUI entrypoint, so command-level help checks should use packaging metadata instead
+
+## Feature-14: Legacy Name Removal - LNR-003
+
+### Canonical Data Path Policy
+- Removed legacy SQLite fallback from `get_sqlite_path()`; default is now always `~/.bitcoinaccounting/ledger.db` unless `SQLITE_DB_PATH` is set
+- Removed legacy cache fallback in `PriceDataFetcher`; default cache dir is now always `~/.bitcoinaccounting/cache`
+- Updated README and Getting Started compatibility notes to explicitly state fallback removal date
+
+### Deterministic Path Testing
+- Replace fallback-positive tests with fallback-removal assertions (legacy files may exist, but canonical path must still win)
+- For this repo's test layout, use `PYTHONPATH=.` when running `tests/test_db_backend.py` and `tests/test_viz.py` directly to satisfy `from src.python...` imports
+
+## Feature-14: Legacy Name Removal - LNR-004
+
+### Docs and Script Header Cleanup
+- Replaced migration-era compatibility language in `README.md` and `GETTING_STARTED.md` with historical "Rebrand Status" notes
+- Removed explicit legacy command/module/path references from user-facing docs
+- Updated script/parser headers to canonical wording (`native.py`, `src/scripts/crypto_tui`, `src/scripts/forecast_gains`, `src/scripts/export_1099b`, `src/scripts/wallet_balances`)
+
+### Search-Gate Pattern for Branding Cleanup
+- Use `rg` with explicit legacy-term patterns (`cryptoAccounting`, `cryptoAccounts`, `crypto-accounting`, `crypto-tui`, `.cryptoaccounting`, `crypto*`) to validate purge completion
+- Keep completed deprecation dates in docs (February 19, 2026) while avoiding obsolete runtime guidance
+
+## Feature-14: Legacy Name Removal - LNR-005
+
+### Canonical-Only Guard Tests
+- Extended `tests/test_rebrand_compat.py` with explicit negative tests that `cryptoAccounts` and `cryptoAccounting` imports raise `ModuleNotFoundError`
+- Added packaging guard test to assert `pyproject.toml` contains only canonical console scripts/modules (`bitcoin-accounting`, `bitcoinAccounts`, `bitcoinAccounting`)
+- Used `tomllib` in tests to validate packaging metadata without requiring networked installation steps
+
+### Feature Closeout Metadata Pattern
+- Final story closes both story-level status (`LNR-005`) and feature-level status (`planning/current-feature.json` -> `status: complete`)
+- Keep typecheck as informational when strict-mode debt is pre-existing and unrelated to the incremental story changes
+
 ## Feature-11: Wallet Management Screen - WM-006
 
 ### Merge Wallets Modal

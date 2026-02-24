@@ -141,22 +141,23 @@ class TestPriceDataFetcher:
         assert fetcher.cache_dir == expected_dir
         assert fetcher.cache_file == expected_dir / 'btc_prices.parquet'
 
-    def test_init_default_cache_dir_falls_back_to_legacy(
+    def test_init_default_cache_dir_ignores_legacy_cache(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Test default cache falls back when legacy cache file exists."""
+        """Test default cache does not fall back to legacy cache path."""
         monkeypatch.setenv("HOME", str(tmp_path))
         legacy_cache_dir = tmp_path / ".cryptoaccounting" / "cache"
         legacy_cache_dir.mkdir(parents=True, exist_ok=True)
         (legacy_cache_dir / "btc_prices.parquet").write_text("x")
 
         fetcher = PriceDataFetcher()
-        assert fetcher.cache_dir == legacy_cache_dir
+        expected_dir = tmp_path / ".bitcoinaccounting" / "cache"
+        assert fetcher.cache_dir == expected_dir
 
-    def test_init_default_cache_dir_prefers_new_when_present(
+    def test_init_default_cache_dir_uses_new_when_both_present(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Test new cache dir is preferred when both new and legacy exist."""
+        """Test new cache dir is used when both new and legacy cache exist."""
         monkeypatch.setenv("HOME", str(tmp_path))
         legacy_cache_dir = tmp_path / ".cryptoaccounting" / "cache"
         legacy_cache_dir.mkdir(parents=True, exist_ok=True)

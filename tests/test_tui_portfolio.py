@@ -2,7 +2,7 @@
 
 import pytest
 
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import CryptoAccounts
 from db import SqliteBackend
 from tui.app import CryptoApp
 from tui.screens.portfolio import CustodyBar, PortfolioScreen

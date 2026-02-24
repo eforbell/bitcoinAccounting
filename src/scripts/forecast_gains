@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Forecast capital gains for hypothetical crypto sales using FIFO basis.
+"""Forecast capital gains for hypothetical Bitcoin sales using FIFO basis.
 
 Simulates a sale without recording any transactions. Shows which lots would be
 sold, cost basis, proceeds, and tax implications (short vs long-term).

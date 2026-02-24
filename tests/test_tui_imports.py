@@ -10,7 +10,7 @@ import pytest
 from textual.css.query import NoMatches
 from textual.pilot import Pilot
 
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import CryptoAccounts
 from db import SqliteBackend
 from conftest import restore_default_parsers
 from tui.app import CryptoApp

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Show balance breakdown by wallet/account for a cryptocurrency.
+"""Show balance breakdown by wallet/account for Bitcoin.
 
 Helps understand your holdings distribution across different wallets/exchanges.
 Useful for understanding IRS "per-wallet" accounting requirements (2025+).

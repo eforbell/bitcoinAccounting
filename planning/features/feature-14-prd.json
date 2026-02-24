@@ -1,0 +1,134 @@
+{
+  "branchName": "feature/legacy-name-removal",
+  "projectName": "Legacy Name Removal (Post-Deprecation)",
+  "description": "Remove legacy crypto* compatibility layers introduced during Feature-13 after the deprecation window, making bitcoin* naming the only supported runtime, packaging, and documentation surface.",
+  "timing": {
+    "draftedOn": "2026-02-19",
+    "plannedEarliestExecution": "2026-07-01",
+    "gatingCondition": "Proceed only after deprecation window ends and no critical users depend on legacy aliases."
+  },
+  "principles": [
+    "Finalize the Canonical Surface - bitcoin* names become the only supported names",
+    "No Silent Breakage - removal must be announced clearly with migration guidance",
+    "Deterministic Cleanup - remove all shims, aliases, and fallback branches in one coordinated pass",
+    "Data Safety First - do not break existing databases or data access paths without explicit migration path",
+    "Keep Scope Tight - cleanup legacy naming only; defer unrelated refactors"
+  ],
+  "techStack": {
+    "language": "Python 3.11+",
+    "testing": "pytest + mypy --strict",
+    "packaging": "setuptools / pyproject.toml console scripts",
+    "runtime": "CLI scripts + Textual TUI",
+    "database": "SQLite + PostgreSQL via DatabaseBackend abstraction"
+  },
+  "userStories": [
+    {
+      "id": "LNR-001",
+      "title": "Remove legacy module shims",
+      "acceptanceCriteria": [
+        "Delete legacy shim modules: src/python/cryptoAccounts.py, src/python/cryptoAccounting.py, and top-level cryptoAccounting.py",
+        "Remove legacy alias exports tied to compatibility-only behavior where safe",
+        "Canonical modules bitcoinAccounts.py and bitcoinAccounting.py remain fully functional",
+        "Tests and imports are updated to avoid any dependency on legacy module names"
+      ],
+      "priority": 1,
+      "estimatedLines": "-120/+20",
+      "testStrategy": "pytest tests/test_rebrand_compat.py tests/test_cli_scripts.py -v",
+      "passes": true
+    },
+    {
+      "id": "LNR-002",
+      "title": "Remove legacy console script aliases",
+      "acceptanceCriteria": [
+        "pyproject.toml keeps only canonical script target(s) for Bitcoin naming",
+        "Remove crypto-accounting and crypto-tui alias entries",
+        "README and GETTING_STARTED remove legacy command references"
+      ],
+      "priority": 2,
+      "estimatedLines": "-12/+4",
+      "testStrategy": "python -m pip install -e . && bitcoin-accounting --help",
+      "passes": true
+    },
+    {
+      "id": "LNR-003",
+      "title": "Finalize data path policy",
+      "acceptanceCriteria": [
+        "Decide and document whether legacy fallback to ~/.cryptoaccounting remains or is removed",
+        "If removed: get_sqlite_path() defaults exclusively to ~/.bitcoinaccounting unless SQLITE_DB_PATH is set",
+        "If retained: docs clearly define long-term support policy for legacy path fallback",
+        "Tests reflect the final policy and pass deterministically"
+      ],
+      "priority": 3,
+      "estimatedLines": "-20/+40",
+      "testStrategy": "pytest tests/test_db_backend.py tests/test_viz.py -k 'sqlite_path or default_cache_dir' -v",
+      "passes": true
+    },
+    {
+      "id": "LNR-004",
+      "title": "Purge legacy language from docs and scripts",
+      "acceptanceCriteria": [
+        "README, GETTING_STARTED, .env.example, and script headers contain no legacy crypto* identity references",
+        "Migration section is updated from compatibility mode to historical note or removed",
+        "Deprecation timeline is reflected as completed with concrete dates"
+      ],
+      "priority": 4,
+      "estimatedLines": "-60/+40",
+      "testStrategy": "Manual review + rg search gates",
+      "passes": true
+    },
+    {
+      "id": "LNR-005",
+      "title": "Cleanup tests and planning metadata",
+      "acceptanceCriteria": [
+        "Update or remove compatibility tests that intentionally reference legacy modules/commands",
+        "Add/update tests for canonical-only behavior",
+        "Update planning/current-feature.json, planning/progress.txt, and AGENTS.md with cleanup learnings"
+      ],
+      "priority": 5,
+      "estimatedLines": "-30/+60",
+      "testStrategy": "pytest targeted suites + planning artifact validation",
+      "passes": true
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Breaking external scripts still importing cryptoAccounts after aliases are removed",
+      "Unexpected operational disruption if legacy CLI aliases are removed before users update automation"
+    ],
+    "medium": [
+      "Path fallback removal can confuse users who still rely on ~/.cryptoaccounting",
+      "Documentation drift during transition from compatibility mode to canonical-only mode"
+    ],
+    "low": [
+      "Most cleanup is deterministic removal and search/replace",
+      "Feature-13 migration already moved internal code to canonical names"
+    ]
+  },
+  "preFlightChecklist": [
+    "Confirm no active consumers rely on legacy module/CLI names",
+    "Confirm public documentation has advertised cutoff date",
+    "Create release note section specifically for breaking changes",
+    "Prepare rollback patch that reintroduces shims if needed"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "-240/+164",
+    "storiesCount": 5,
+    "filesLikelyModified": [
+      "pyproject.toml",
+      "src/python/db/schema.py",
+      "src/python/viz/data_fetcher.py",
+      "README.md",
+      "GETTING_STARTED.md",
+      ".env.example",
+      "tests/test_rebrand_compat.py",
+      "planning/current-feature.json",
+      "planning/progress.txt",
+      "AGENTS.md"
+    ],
+    "filesLikelyDeleted": [
+      "src/python/cryptoAccounts.py",
+      "src/python/cryptoAccounting.py",
+      "cryptoAccounting.py"
+    ]
+  }
+}

@@ -31,9 +31,7 @@ class PriceDataFetcher:
 
         Args:
             cache_dir: Directory for caching price data.
-                      Defaults to ~/.bitcoinaccounting/cache/ with
-                      fallback to ~/.cryptoaccounting/cache/ when
-                      legacy cache data exists.
+                      Defaults to ~/.bitcoinaccounting/cache/.
         """
         if pd is None or yf is None:
             raise ImportError(
@@ -42,16 +40,7 @@ class PriceDataFetcher:
             )
 
         if cache_dir is None:
-            new_cache_dir = Path.home() / '.bitcoinaccounting' / 'cache'
-            legacy_cache_dir = Path.home() / '.cryptoaccounting' / 'cache'
-            legacy_cache_file = legacy_cache_dir / 'btc_prices.parquet'
-
-            if new_cache_dir.exists():
-                cache_dir = new_cache_dir
-            elif legacy_cache_file.exists():
-                cache_dir = legacy_cache_dir
-            else:
-                cache_dir = new_cache_dir
+            cache_dir = Path.home() / '.bitcoinaccounting' / 'cache'
 
         self.cache_dir = Path(cache_dir)
         self.cache_file = self.cache_dir / 'btc_prices.parquet'

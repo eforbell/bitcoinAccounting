@@ -6,7 +6,7 @@ portfolio views, transaction recording, CSV imports, tax reporting,
 and visualizations.
 
 Usage:
-    crypto_tui
+    python -m bitcoinAccounting
 """
 
 import sys

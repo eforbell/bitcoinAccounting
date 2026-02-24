@@ -373,7 +373,7 @@ class TestRecordTransactionWithDatabase:
         """Test recording a simple transfer transaction."""
         # Create in-memory database
         backend = SqliteBackend(':memory:', auto_create_tables=True)
-        from cryptoAccounts import CryptoAccounts
+        from bitcoinAccounts import CryptoAccounts
         crypto = CryptoAccounts(backend=backend)
 
         # Add initial balance to source wallet

@@ -38,50 +38,36 @@ Alternative launchers:
 
 ```bash
 python -m bitcoinAccounting
-src/scripts/crypto_tui
 ```
 
-Legacy compatibility launchers (still supported during migration window):
+Installed entrypoint launcher:
 
 ```bash
-python -m cryptoAccounting
-crypto-accounting
-crypto-tui
+bitcoin-accounting
 ```
 
 See the **[Getting Started Guide](GETTING_STARTED.md)** for a walkthrough of the TUI, keyboard shortcuts, and common workflows.
 
 ---
 
-## Rebrand Migration (Feature-13)
+## Rebrand Status
 
-As of **February 19, 2026**, the canonical project/runtime names are:
+As of **February 19, 2026**, the canonical runtime names are:
 
 - Module entrypoint: `bitcoinAccounting`
 - Core API module: `bitcoinAccounts`
 - Default SQLite path: `~/.bitcoinaccounting/ledger.db`
 
-Legacy `crypto*` names remain supported for compatibility during the current transition.
+Rebrand deprecation milestones completed on **February 19, 2026**:
 
-### Command and Module Mapping
+- Legacy runtime command aliases removed
+- Legacy module shim files removed
+- Legacy home-directory fallback removed
 
-| Legacy | Canonical |
-|--------|-----------|
-| `python -m cryptoAccounting` | `python -m bitcoinAccounting` |
-| `from cryptoAccounts import CryptoAccounts` | `from bitcoinAccounts import BitcoinAccounts` |
-| `~/.cryptoaccounting/ledger.db` | `~/.bitcoinaccounting/ledger.db` |
-
-### Legacy Support Window
-
-- Legacy aliases are planned to remain available through at least **June 30, 2026**.
-- Removal is planned in a follow-on cleanup feature after public-release stabilization.
-- New scripts, automation, and documentation should use canonical `bitcoin*` names now.
-
-### Data Path Compatibility
+Current path policy:
 
 - If `SQLITE_DB_PATH` is set, it always wins.
-- If unset, the app prefers `~/.bitcoinaccounting/ledger.db`.
-- If the new path does not exist but `~/.cryptoaccounting/ledger.db` exists, it falls back automatically to the legacy database.
+- If unset, the app uses `~/.bitcoinaccounting/ledger.db`.
 
 ---
 
@@ -122,16 +108,16 @@ If you need multi-user access, network access, or have existing PostgreSQL infra
 
 ```sql
 -- Run in psql as a DB admin
-CREATE DATABASE crypto;
-CREATE USER bitcoin_accounting WITH PASSWORD 'strong-password';
-GRANT ALL PRIVILEGES ON DATABASE crypto TO bitcoin_accounting;
+CREATE DATABASE bitcoin_accounting;
+CREATE USER bitcoin_accountant WITH PASSWORD 'strong-password';
+GRANT ALL PRIVILEGES ON DATABASE bitcoin_accounting TO bitcoin_accountant;
 ```
 
 2. Apply the schema:
 
 ```bash
 # From the repository root - creates all 4 tables (coins, ledger, pair_price, wallets)
-psql -U <db-admin> -d crypto -f src/sql/tables.sql
+psql -U <db-admin> -d bitcoin_accounting -f src/sql/tables.sql
 ```
 
 The `tables.sql` file creates all required tables:
@@ -160,9 +146,9 @@ cp .env.example .env
 # DB_BACKEND=postgres
 # PGHOST=localhost
 # PGPORT=5432
-# PGUSER=bitcoin_accounting
+# PGUSER=bitcoin_accountant
 # PGPASSWORD=your-secure-password
-# PGDATABASE=crypto
+# PGDATABASE=bitcoin_accounting
 ```
 
 The `.env` file is automatically loaded by all scripts and is in `.gitignore` to prevent accidental commits.
@@ -205,7 +191,7 @@ Required when `DB_BACKEND=postgres`:
 - Need advanced backup/replication features
 - Are already using PostgreSQL for other projects
 
-**Performance note**: For typical personal cryptocurrency portfolios (< 100k transactions), SQLite and PostgreSQL perform identically. SQLite is actually faster for single-user workloads.
+**Performance note**: For typical personal Bitcoin portfolios (< 100k transactions), SQLite and PostgreSQL perform identically. SQLite is actually faster for single-user workloads.
 
 ## Migrating from PostgreSQL to SQLite
 
@@ -216,9 +202,9 @@ If you're currently using PostgreSQL and want to switch to SQLite:
 ```bash
 # Ensure PostgreSQL environment variables are set
 export PGHOST=localhost
-export PGUSER=bitcoin_accounting
+export PGUSER=bitcoin_accountant
 export PGPASSWORD=your-password
-export PGDATABASE=crypto
+export PGDATABASE=bitcoin_accounting
 
 # Run migration (dry-run to preview)
 src/scripts/migrate_to_sqlite --dry-run

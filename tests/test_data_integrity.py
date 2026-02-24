@@ -12,7 +12,7 @@ import pytest
 # Add src/python to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'python'))
 
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import CryptoAccounts
 from db import SqliteBackend
 from db.queries.ledger import LedgerWriter
 from db.queries.wallet import WalletQuery

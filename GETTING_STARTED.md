@@ -26,21 +26,13 @@ python -m bitcoinAccounting
 Alternative (direct script):
 
 ```bash
-src/scripts/crypto_tui
+python -m bitcoinAccounting
 ```
 
 Installed entrypoints (after `python -m pip install .`):
 
 ```bash
 bitcoin-accounting
-```
-
-Legacy aliases (still supported during migration window):
-
-```bash
-python -m cryptoAccounting
-crypto-accounting
-crypto-tui
 ```
 
 You'll land on the **Dashboard**, which shows your BTC balance, cost basis, custody breakdown, and recent transactions. From here you can navigate to any screen using the keyboard shortcuts shown on the main menu.
@@ -123,9 +115,11 @@ The same functionality is also available as individual CLI scripts in `src/scrip
 
 See the [README](README.md#environment-variables) for PostgreSQL setup and configuration details.
 
-## Rebrand Compatibility Notes
+## Rebrand Status
 
 - Canonical module names are now `bitcoinAccounting` and `bitcoinAccounts`.
 - Canonical default SQLite path is `~/.bitcoinaccounting/ledger.db`.
-- If your existing data is in `~/.cryptoaccounting/ledger.db`, the app falls back automatically when `SQLITE_DB_PATH` is unset.
-- Legacy `crypto*` aliases are currently kept for compatibility while migration is in progress.
+- Rebrand deprecations completed on February 19, 2026:
+  - Legacy CLI aliases removed
+  - Legacy module shim files removed
+  - Legacy data path fallback removed

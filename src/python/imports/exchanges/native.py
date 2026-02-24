@@ -1,4 +1,4 @@
-"""Native format parser for cryptoAccounting CSV exports.
+"""Native format parser for bitcoinAccounting CSV exports.
 
 Supports two column layouts:
 
@@ -77,12 +77,12 @@ def _detect_format(fieldnames: list[str]) -> dict[str, str] | None:
 
 @register
 class NativeImporter(BaseImporter):
-    """Parser for cryptoAccounting's native CSV export format."""
+    """Parser for bitcoinAccounting native CSV export format."""
 
     name = "Native"
     source_type = "native"
     file_patterns = ["*.csv"]
-    description = "Native cryptoAccounting format (clean or legacy)"
+    description = "Native bitcoinAccounting format (clean or legacy)"
     expected_columns = [
         "trans_type", "buy", "buy_curr", "sell", "sell_curr",
         "fee", "fee_curr", "exchange", "group", "comment", "created_date",

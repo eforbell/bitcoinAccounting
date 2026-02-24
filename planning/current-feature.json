@@ -1,45 +1,35 @@
 {
-  "currentFeature": "feature-13",
-  "featureName": "Bitcoin Accounting Rebrand and Compatibility Migration",
-  "prdPath": "planning/features/feature-13-prd.json",
-  "summaryPath": "planning/features/feature-13-summary.md",
-  "branch": "feature/bitcoin-accounting-rebrand",
+  "currentFeature": "feature-14",
+  "featureName": "Legacy Name Removal (Post-Deprecation)",
+  "prdPath": "planning/features/feature-14-prd.json",
+  "summaryPath": "planning/features/feature-14-summary.md",
+  "branch": "feature/legacy-name-removal",
   "status": "complete",
   "stories": [
     {
-      "id": "BRD-001",
-      "title": "Add canonical bitcoin modules with legacy shims",
-      "status": "complete"
+      "id": "LNR-001",
+      "title": "Remove legacy module shims",
+      "status": "completed"
     },
     {
-      "id": "BRD-002",
-      "title": "Migrate internal imports and type references to bitcoin canonical names",
-      "status": "complete"
+      "id": "LNR-002",
+      "title": "Remove legacy console script aliases",
+      "status": "completed"
     },
     {
-      "id": "BRD-003",
-      "title": "Update package metadata and console entrypoints",
-      "status": "complete"
+      "id": "LNR-003",
+      "title": "Finalize data path policy",
+      "status": "completed"
     },
     {
-      "id": "BRD-004",
-      "title": "Migrate default local data/cache paths with fallback",
-      "status": "complete"
+      "id": "LNR-004",
+      "title": "Purge legacy language from docs and scripts",
+      "status": "completed"
     },
     {
-      "id": "BRD-005",
-      "title": "Rebrand TUI and user-facing strings to Bitcoin Accounting",
-      "status": "complete"
-    },
-    {
-      "id": "BRD-006",
-      "title": "Update documentation and migration guidance",
-      "status": "complete"
-    },
-    {
-      "id": "BRD-007",
-      "title": "Planning and governance updates",
-      "status": "complete"
+      "id": "LNR-005",
+      "title": "Cleanup tests and planning metadata",
+      "status": "completed"
     }
   ],
   "completedFeatures": [
@@ -130,13 +120,20 @@
       "mergedDate": "2026-02-13",
       "stories": 7,
       "notes": "Dedicated TUI screen for wallet CRUD operations: create, edit, rename, merge, toggle active. WalletQuery extensions with atomic rename/merge. Transaction count warnings for destructive operations. Dashboard wallet card with clickable link."
+    },
+    {
+      "featureId": "feature-13",
+      "featureName": "Bitcoin Accounting Rebrand and Compatibility Migration",
+      "branch": "feature/bitcoin-accounting-rebrand",
+      "mergedDate": "2026-02-19",
+      "stories": 7,
+      "notes": "Completed staged rebrand from crypto* to bitcoin* with compatibility shims, canonical entrypoints, path/cache migration fallback, and documentation migration guidance."
     }
   ],
   "futureEnhancements": [
-    "Feature #12: Transaction Editor (view, edit, soft-delete, restore transactions from Ledger screen)",
-    "Feature #13: Multi-coin support (ETH, other assets)",
-    "Feature #14: Web UI layer (Flask/FastAPI)",
-    "Feature #15: Tax optimization tools",
-    "Feature #16: Pair price management (import/export)"
+    "Feature #15: Web UI layer (Flask/FastAPI)",
+    "Feature #16: Tax optimization tools",
+    "Feature #17: Pair price management (import/export)",
+    "Feature #18: Multi-coin support (ETH, other assets)"
   ]
 }

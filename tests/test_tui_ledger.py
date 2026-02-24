@@ -8,7 +8,7 @@ import pytest
 from textual.pilot import Pilot
 from textual.widgets import Button, DataTable, Input, Label, Select
 
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import CryptoAccounts
 from db import SqliteBackend
 from tui.app import CryptoApp
 from tui.screens.ledger import EditTransactionModal, LedgerScreen, TransactionDetailModal

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Export 1099-B tax form data for TaxAct import.
 
-Exports capital gains/losses from cryptocurrency sales for the specified tax year.
+Exports capital gains/losses from Bitcoin sales for the specified tax year.
 Uses FIFO (First-In-First-Out) method for cost basis calculation.
 
 Usage:

@@ -12,7 +12,7 @@ from imports.base import BaseImporter
 from imports.registry import register, get_parser, clear_registry
 from imports.validation import validate_batch, detect_duplicates
 from db import SqliteBackend
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import CryptoAccounts
 
 
 SCRIPT_PATH = Path(__file__).parent.parent / "src" / "scripts" / "import_csv"

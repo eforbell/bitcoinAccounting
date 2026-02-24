@@ -1,7 +1,7 @@
-"""Bootstrap module path for cryptoAccounting scripts.
+"""Bootstrap module path for bitcoinAccounting scripts.
 
 This module automatically adds src/python to sys.path so scripts
-can import cryptoAccounting modules without manual path manipulation
+can import bitcoinAccounting modules without manual path manipulation
 or environment variables.
 
 Also loads environment variables from .env file in repository root.

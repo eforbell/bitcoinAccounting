@@ -24,7 +24,7 @@ class Test1099BExport(unittest.TestCase):
 
     def setUp(self):
         """Set up real backend and CryptoAccounts instance."""
-        from cryptoAccounts import CryptoAccounts
+        from bitcoinAccounts import CryptoAccounts
         from db import SqliteBackend
 
         # Create real backend with in-memory database for testing

@@ -10,7 +10,7 @@ from imports.exchanges.coinbase_pro import CoinbaseProImporter, _parse_number
 from imports.registry import register, get_parser, get_all_parsers, clear_registry
 from imports.validation import validate_batch
 from db import SqliteBackend
-from cryptoAccounts import CryptoAccounts
+from bitcoinAccounts import CryptoAccounts
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "csv_samples"
 
