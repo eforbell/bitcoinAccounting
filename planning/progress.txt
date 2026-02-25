@@ -1,3 +1,74 @@
+## 2026-02-24 - TAM-005 (Feature-16 COMPLETE)
+- What was implemented: Operational workflow documentation for the monthly attestation routine; troubleshooting guidance for the four most common integrity finding categories; planning metadata closeout (current-feature.json updated to idle, all stories marked complete in PRD)
+- Files changed:
+  - `README.md` — Added "Monthly Treasury Attestation" subsection under Treasury Integrity; added "Common Integrity Findings" troubleshooting entries for one_sided_send, missing_cost, discrepancy, and score alerts; updated Key Features bullet
+  - `GETTING_STARTED.md` — Added dashboard panel note to keyboard table; added workflow section #6 "Monthly treasury attestation"
+  - `planning/features/feature-16-prd.json` (TAM-005 passes: true; all 5 stories now pass)
+  - `planning/current-feature.json` (status: idle; feature-16 moved to completedFeatures)
+- **Learnings:**
+  - TUI-only screens (no keybinding) should be documented via their entry-point widget (the dashboard panel "View Details →" pattern is self-describing)
+  - Attestation disclaimer language matters: clearly state bundles are operational artifacts, not legal/tax opinions
+  - Monthly workflow is three steps at its core: `--persist` → `generate()` → `export_bundle_*()` or `generate_pdf()`
+
+## 2026-02-25 - TAM-004
+- What was implemented: Rule-based alert engine (`AlertEngine`, `AlertRule`, `AlertFired`) with score-threshold and finding-level conditions; finding lifecycle tracker (`FindingTracker`, `FindingRecord`, `FindingState`) with new→acknowledged→resolved transitions and re-emergence detection; `_stable_finding_id()` using MD5→UUID; `attestation_findings` persistence table
+- Files changed:
+  - `src/python/attestation/alerts.py` (AlertEngine, AlertRule, AlertFired, FindingTracker, FindingRecord, FindingState, _stable_finding_id)
+  - `tests/test_attestation_alerts.py` (49 tests across 8 test classes)
+  - `planning/features/feature-16-prd.json` (TAM-004 passes: true)
+- **Learnings:**
+  - Byte-truncation for UUID keys (`key[:16]`) causes collisions for strings sharing the same prefix; always use MD5 hash to derive UUID from arbitrary string keys
+  - `sqlite3.Row` objects support `.keys()` method; detect with `hasattr(row, "keys")` and `dict(row)` for portable row-to-dict conversion
+  - Finding ID stability: use source+category+coin+wallet as the composite key (NOT description which varies per-run); this ensures same finding = same row across runs
+---
+
+## 2026-02-25 - TAM-003
+- What was implemented: TUI monitoring — `TreasuryIntegrityPanel` widget (loads recent health snapshots, shows score/tier/delta, "View Details" button); `AttestationScreen` (drill-down with DataTable, source+severity filter buttons, Export JSON/CSV quick actions, status line); added to dashboard `_show_success()`; `action_menu_attestation()` in app; `attestation*` added to pyproject.toml packages.find.include
+- Files changed:
+  - `src/python/tui/screens/attestation.py` (TreasuryIntegrityPanel, AttestationScreen)
+  - `src/python/tui/screens/dashboard.py` (import TreasuryIntegrityPanel, mount in _show_success)
+  - `src/python/tui/screens/__init__.py` (export AttestationScreen)
+  - `src/python/tui/app.py` (import AttestationScreen, action_menu_attestation)
+  - `src/python/attestation/generator.py` (absolute imports for thread safety)
+  - `src/python/attestation/reports.py` (absolute imports for thread safety)
+  - `pyproject.toml` (added attestation* to packages.find.include)
+  - `tests/test_tui_treasury_monitoring.py` (27 tests across 5 test classes)
+- **Learnings:**
+  - `attestation*` missing from pyproject.toml packages.find.include caused "attempted relative import beyond top-level package" in @work(thread=True); fix: add package + switch to absolute imports
+  - All cross-package runtime imports must be absolute (`from integrity.cli import ...`); relative imports safe only within same package or TYPE_CHECKING blocks
+  - DataTable column labels: use `col.label` not `str(col.key)` (ColumnKey object repr is not the label string)
+  - `app.sub_title` set in on_mount is on the app, not on the screen; test with `app.sub_title`, not `screen.sub_title`
+  - `pilot.click()` raises OutOfBounds when button is off-screen at 80x24; use `run_test(size=(160, 40))` for wide filter bars
+---
+
+## 2026-02-25 - TAM-002
+- What was implemented: Attestation PDF formatter — `AttestationReportFormatter.generate_pdf()` producing a multi-section reportlab PDF (header, score badge, sub-score table, optional trend table, top findings, remediation checklist); `PDFNotAvailableError` for graceful degradation; `_build_remediation_checklist()` helper; `REPORTLAB_AVAILABLE` module flag
+- Files changed:
+  - `src/python/attestation/reports.py` (AttestationReportFormatter, PDFNotAvailableError, REPORTLAB_AVAILABLE, helpers)
+  - `tests/test_attestation_report.py` (26 tests across 5 test classes)
+  - `planning/features/feature-16-prd.json` (TAM-002 passes: true)
+- **Learnings:**
+  - Use `unittest.mock.patch("module.BOOL_FLAG", False)` to test graceful degradation of optional imports without actually uninstalling the package
+  - `reportlab.pdfgen.canvas.Canvas(str(path))` requires a string path (not Path); wrap with `str()` for portability
+  - Score tier color is stored in `_TIER_COLORS` dict and applies to PDF badge and trend table; use `_TIER_COLORS.get(tier, fallback)` for safe lookup
+  - Trend section is conditional on `self._backend` being non-None and having persisted snapshots — always test "no backend" path for no-crash guarantee
+---
+
+## 2026-02-25 - TAM-001
+- What was implemented: Monthly attestation artifact generator — `AttestationGenerator` class with `generate(year, month, ...)` returning `AttestationBundle`; `_period_bounds()` for correct month-end dates; `_period_run_id()` for deterministic UUID run IDs via MD5; `_extract_unresolved()` flattening all integrity check findings; `export_bundle_json()` and `export_bundle_csv()` serializers
+- Files changed:
+  - `src/python/attestation/__init__.py` (new package)
+  - `src/python/attestation/generator.py` (AttestationGenerator, AttestationBundle, AttestationMetadata, helpers)
+  - `tests/test_attestation_generation.py` (45 tests across 6 test classes)
+  - `planning/features/feature-16-prd.json` (reset all passes to false; TAM-001 set to true)
+  - `AGENTS.md` (TAM-001 learnings)
+- **Learnings:**
+  - Deterministic run IDs via `hashlib.md5(key).hexdigest()` → `uuid.UUID(digest)` — same period+filters always produce same UUID without DB round-trip
+  - `calendar.monthrange(year, month)` correctly handles leap years (returns last day of month)
+  - Reconciliation engine short-circuit: `total_coins_checked >= 1` even when coin filter matches nothing — assert `is_clean` instead of `== 0` in tests
+  - `_extract_unresolved` only captures reconciliation `coin_summaries` that are not `is_reconciled`; negative balances from `wallet_balances` are not included (only discrepancies)
+---
+
 ## Codebase Patterns
 - Whitespace normalization: LedgerWriter.strip() on exchange param at top of each method; guard None with isinstance check in import_transactions
 - Wallet selector pattern: Use `_mount_wallet_selector(container, label, select_id)` shared helper; IDs from `_WALLET_SELECT_MAP`; `_get_exchange_value(select_id)` reads from Select or Input

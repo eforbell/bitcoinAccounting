@@ -208,7 +208,7 @@ class RecordTransactionScreen(Screen[None]):
         try:
             sel = self.query_one(f"#{select_id}", Select)
             val = sel.value
-            if val == NEW_WALLET_SENTINEL or val is Select.BLANK:
+            if val == NEW_WALLET_SENTINEL or val is None:
                 inp = self.query_one(f"#{input_id}", Input)
                 return inp.value.strip()
             return str(val).strip()

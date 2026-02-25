@@ -54,6 +54,8 @@ You'll land on the **Dashboard**, which shows your BTC balance, cost basis, cust
 | **Esc** | -- | Go back to previous screen |
 | **Q** | -- | Quit |
 
+> **Treasury Integrity panel**: The Dashboard displays a **Treasury Integrity** panel with the latest health score. Click **View Details →** to open the Attestation screen (finding drill-down, filters, and export).
+
 ## Common Workflows
 
 ### 1. Import your exchange history
@@ -95,6 +97,52 @@ All tools support per-wallet FIFO accounting (required for IRS 2025+ compliance)
 ### 5. Generate charts
 
 Press **V** to open Visualizations. Choose a chart type (Orange Plot, Balance, Custody, or PDF Report), set a date range and DPI, then generate. Open the results directly from the TUI.
+
+### 6. Monthly treasury attestation
+
+At the end of each month, produce a durable evidence bundle for your treasury.
+
+**Quick start (CLI + Python):**
+
+```bash
+# 1. Persist this month's health snapshot
+bitcoin-integrity --persist
+
+# 2. Generate a JSON attestation bundle via Python
+python - <<'EOF'
+from db.backend import get_backend
+from attestation.generator import AttestationGenerator
+import datetime, json
+
+backend = get_backend()
+gen = AttestationGenerator(backend)
+today = datetime.date.today()
+bundle = gen.generate(year=today.year, month=today.month)
+print(json.loads(gen.export_bundle_json(bundle))["metadata"])
+EOF
+```
+
+**From the TUI:**
+
+1. The Dashboard shows the **Treasury Integrity** panel with your latest health score.
+2. Click **View Details →** to open the Attestation screen.
+3. Use the source and severity filter buttons to focus on critical findings.
+4. Click **Export JSON** or **Export CSV** to save the finding list.
+
+**Optional PDF summary (requires `reportlab`):**
+
+```bash
+pip install reportlab
+```
+
+```python
+from attestation.reports import AttestationReportFormatter
+from pathlib import Path
+formatter = AttestationReportFormatter(backend=backend)
+formatter.generate_pdf(bundle, Path("attestation.pdf"))
+```
+
+See the [Monthly Treasury Attestation](README.md#monthly-treasury-attestation) section in the README for the full workflow including alert rules and finding lifecycle management.
 
 ## Supported Exchanges & Wallets
 

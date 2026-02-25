@@ -2,6 +2,50 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-16: Treasury Attestation and Monitoring UX - TAM-004
+
+### Alert Engine + Finding Lifecycle
+- `AlertEngine(rules).evaluate(bundle)` returns `list[AlertFired]`; rules are OR'd across conditions (score_below, severity, category, source)
+- `AlertRule` is a simple dataclass; multiple conditions in one rule fire if ANY match
+- `FindingTracker` persists findings in `attestation_findings` table; lazy `_ensure_table()` on construction
+- `_stable_finding_id()` uses `md5(source:category:coin:wallet).hexdigest()` → UUID — never truncate bytes, use hash to avoid prefix collisions
+- Lifecycle: new → acknowledged → resolved; re-observing a RESOLVED finding resets it to new (re-emergence)
+- `load_all(state=FindingState.NEW)` to filter by lifecycle state
+
+## Feature-16: Treasury Attestation and Monitoring UX - TAM-003
+
+### TUI Treasury Monitoring
+- `TreasuryIntegrityPanel` (`tui/screens/attestation.py`): dashboard widget loading health snapshots via `@work(thread=True)`; shows score badge, tier color, delta vs prev, "View Details" button
+- `AttestationScreen`: full drill-down with DataTable, source/severity filter buttons, Export JSON/CSV via `self.notify()`, `action_dismiss_screen()` on Esc
+- Filter button `id` scheme: `src-{value}` and `sev-{value}` — clicking updates state and re-renders table via `_refresh_table()`
+- **Package discovery**: add `attestation*` to pyproject.toml `packages.find.include` — missing causes "attempted relative import beyond top-level package" in `@work` threads
+- All cross-package runtime imports must be absolute; relative imports only in TYPE_CHECKING blocks or within the same package
+- `import-untyped` mypy errors for cross-package absolute imports are pre-existing codebase debt (no py.typed markers)
+- `col.label` (not `str(col.key)`) gives the display text for DataTable columns
+- `app.sub_title` set in `on_mount` lives on the app; test with `app.sub_title`, not `screen.sub_title`
+- `pilot.click()` raises OutOfBounds for off-screen elements at 80x24; use `run_test(size=(160, 40))`
+
+## Feature-16: Treasury Attestation and Monitoring UX - TAM-002
+
+### Attestation PDF Formatter
+- `AttestationReportFormatter` in `src/python/attestation/reports.py`; wraps reportlab canvas to produce multi-section PDF
+- `REPORTLAB_AVAILABLE: bool` module flag; constructor raises `PDFNotAvailableError(ImportError)` when False
+- Test graceful degradation with `patch("src.python.attestation.reports.REPORTLAB_AVAILABLE", False)` — no need to uninstall
+- PDF sections: header (metadata), score badge (tier-colored), sub-score table, optional trend table (requires backend with persisted snapshots), top findings (up to 10), remediation checklist
+- `_build_remediation_checklist()` deduplicates by (source, category) pair; maps known categories to actionable strings
+- Page overflow handled with `c.showPage()` + y reset in findings/trend loops
+
+## Feature-16: Treasury Attestation and Monitoring UX - TAM-001
+
+### Attestation Generator
+- `AttestationGenerator` in `src/python/attestation/generator.py`; generates month-end bundles wrapping `run_integrity_check()`
+- `generate(year, month, coin, wallet, persist)` returns `AttestationBundle(metadata, report, unresolved_findings)`
+- Run IDs are **deterministic**: `_period_run_id(period_label, coin, wallet)` uses MD5 → UUID so same period always maps to same ID — enables audit traceability across re-runs
+- `_period_bounds(year, month)` uses `calendar.monthrange` to handle leap years correctly
+- `_extract_unresolved(report)` flattens all three integrity check findings into a uniform dict list with keys: `source`, `severity`, `category`, `coin`, `wallet`, `tx_id`, `description`
+- `export_bundle_json()` embeds full integrity report via `export_json()` from `integrity.cli`; `export_bundle_csv()` emits findings flat with `attestation_run_id` and `period_label` columns
+- Reconciliation engine short-circuit: when a coin filter is given, `total_coins_checked >= 1` even with zero matching transactions; test `is_clean` instead of `== 0`
+
 ## Feature-15: Treasury Integrity Foundations - TIF-005
 
 ### Integrity CLI

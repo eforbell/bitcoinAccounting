@@ -12,7 +12,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Header, Label, Static
 
 from bitcoinAccounts import BitcoinAccounts
-from tui.screens import DashboardScreen, ExportScreen, ImportWizardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TaxReportingScreen, TradesScreen, VisualizationScreen, WalletManagementScreen
+from tui.screens import AttestationScreen, DashboardScreen, ExportScreen, ImportWizardScreen, LedgerScreen, PortfolioScreen, RecordTransactionScreen, TaxReportingScreen, TradesScreen, VisualizationScreen, WalletManagementScreen
 
 
 class HelpScreen(ModalScreen[None]):
@@ -318,6 +318,9 @@ class CryptoApp(App[None]):
     def action_menu_viz(self) -> None:
         # TUI-011: Visualization screen with chart generation
         self.push_screen(VisualizationScreen())
+
+    def action_menu_attestation(self) -> None:
+        self.push_screen(AttestationScreen())
 
     def action_menu_wallet(self) -> None:
         # WM-002: Wallet Management screen

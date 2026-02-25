@@ -16,6 +16,7 @@ ledger and producing balance, cost-basis reports, and visualizations.
 - Chart generation and PDF reports
 - Bulk import from exchanges (Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini) and wallets (Ledger, Trezor, Sparrow, Coldcard) with auto-detection
 - **Treasury integrity checks** - Deterministic ledger reconciliation, transfer-pair validation, cost-basis continuity, and a weighted health score via `bitcoin-integrity`
+- **Monthly attestation workflow** - Generate durable month-end evidence bundles (JSON/CSV/PDF), track finding lifecycle (new → acknowledged → resolved), and monitor score trends from the TUI
 
 ## Getting Started
 
@@ -308,6 +309,45 @@ After migrating from PostgreSQL to SQLite, verify:
    - Check earliest and latest transaction dates match
    - Verify timestamps are formatted correctly (ISO 8601)
 
+### Common Integrity Findings
+
+**`one_sided_send` / `one_sided_receive` (transfer_integrity)**
+
+**Cause**: A withdrawal in one wallet has no matching deposit in another wallet (or vice versa), usually because the receiving transaction wasn't imported yet.
+
+**Resolution**:
+1. Import the missing side: `import_csv --wallet-name DestWallet file.csv`
+2. Ensure both wallets use matching coin/amount/date
+3. Re-run `bitcoin-integrity` to verify the pair resolves
+
+**`missing_cost` (basis_continuity)**
+
+**Cause**: A transaction references a lot whose cost basis was never established — common when on-chain receives are imported without a paired buy record.
+
+**Resolution**:
+1. Find the originating purchase and add it: `buySats` or `import_csv`
+2. If the asset was mined or gifted, record it with `earnInterest` (FMV at receipt)
+3. Re-run `bitcoin-integrity --coin BTC` to confirm the finding clears
+
+**`discrepancy` (reconciliation)**
+
+**Cause**: The calculated ledger balance differs from the declared wallet balance. Often caused by an import gap, a rounding error, or an un-imported fee.
+
+**Resolution**:
+1. Compare with wallet export: `compare_with_sparrow` or `bitcoin-integrity --wallet WALLET_NAME --format json`
+2. Check for missing fee records or duplicate rows in the ledger
+3. Use `diagnose_balances` to isolate the calculation discrepancy
+
+**Score below threshold (alert: `critical-score`)**
+
+**Cause**: Accumulated unresolved findings have driven the health score below your configured minimum.
+
+**Resolution**:
+1. Run `bitcoin-integrity --format json --output report.json` for the full finding list
+2. Prioritize `critical` severity findings first
+3. Acknowledge known issues with `FindingTracker.acknowledge()` to keep noise low
+4. After fixing root causes, re-run `bitcoin-integrity --persist` to record the improved score
+
 ### "No module named 'psycopg2'" when using SQLite
 
 **Cause**: PostgreSQL driver is an optional dependency for SQLite-only users.
@@ -404,6 +444,98 @@ bitcoin-integrity --warning-min 90 --critical-min 70
 ```
 
 The command exits with a concise summary showing an overall health score (0–100), sub-scores for each check, top findings, and remediation counts. Use `--persist` to build a score history queryable via the TUI or the `integrity_health_snapshots` table directly.
+
+### Monthly Treasury Attestation
+
+The monthly attestation workflow produces a durable, reviewable evidence bundle for a calendar month. It composes integrity check results, finding metadata, and a deterministic run ID into JSON or CSV artifacts suitable for archival and audit.
+
+**Step 1 — Run and persist the integrity check**
+
+```bash
+# Store a health snapshot for the period you want to attest
+bitcoin-integrity --persist
+```
+
+**Step 2 — Generate an attestation bundle (Python API)**
+
+```python
+from db.backend import get_backend
+from attestation.generator import AttestationGenerator
+
+backend = get_backend()
+gen = AttestationGenerator(backend)
+bundle = gen.generate(year=2026, month=1)   # January 2026
+
+# Export as JSON
+print(gen.export_bundle_json(bundle))
+
+# Export as CSV (one row per finding)
+print(gen.export_bundle_csv(bundle))
+```
+
+The bundle includes:
+- `metadata` — period label, run ID (deterministic UUID), generation timestamp
+- `report` — full integrity report (health score, sub-scores, findings)
+- `unresolved_findings` — flat list of unresolved findings for export
+
+**Step 3 — Optional PDF summary**
+
+```python
+from attestation.reports import AttestationReportFormatter, PDFNotAvailableError
+from pathlib import Path
+
+formatter = AttestationReportFormatter(backend=backend)
+try:
+    out = formatter.generate_pdf(bundle, Path("attestation-2026-01.pdf"))
+    print(f"PDF written to {out}")
+except PDFNotAvailableError:
+    print("Install reportlab for PDF output: pip install reportlab")
+```
+
+The PDF renders score trends, a top-findings summary, and a remediation checklist.
+
+**Step 4 — Track finding lifecycle**
+
+```python
+from attestation.alerts import FindingTracker, FindingState
+
+tracker = FindingTracker(backend)
+tracker.sync_findings(bundle.unresolved_findings)
+
+# Acknowledge a finding you are aware of
+tracker.acknowledge(finding_id)
+
+# Mark resolved once fixed
+tracker.resolve(finding_id)
+
+# Query by state
+open_findings = tracker.load_all(state=FindingState.NEW)
+```
+
+**Step 5 — Configure alert rules**
+
+```python
+from attestation.alerts import AlertEngine, AlertRule
+
+rules = [
+    AlertRule("critical-score", score_below=60.0),
+    AlertRule("critical-findings", severity="critical"),
+    AlertRule("missing-cost", category="missing_cost"),
+]
+engine = AlertEngine(rules)
+alerts = engine.evaluate(bundle)
+print(engine.format_summary(alerts))
+```
+
+**Step 6 — Monitor from the TUI**
+
+Open the TUI (`bitcoin-accounting`) and view the **Treasury Integrity** panel on the Dashboard. The panel shows the latest health score and recent deltas. Click **View Details →** to open the Attestation screen where you can:
+
+- Filter findings by source or severity
+- Export the current findings to JSON or CSV
+- Acknowledge findings inline
+
+> **Disclaimer**: Attestation bundles are operational evidence artifacts for internal audit and review. They are not formal legal, tax, or financial opinions.
 
 ### Data Validation
 

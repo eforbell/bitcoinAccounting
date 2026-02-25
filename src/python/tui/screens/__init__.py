@@ -1,5 +1,6 @@
 """TUI screens package."""
 
+from .attestation import AttestationScreen
 from .dashboard import DashboardScreen
 from .export import ExportScreen
 from .imports import ImportWizardScreen
@@ -11,4 +12,4 @@ from .trades import TradesScreen
 from .visualizations import VisualizationScreen
 from .wallet_management import WalletManagementScreen
 
-__all__ = ['DashboardScreen', 'ExportScreen', 'ImportWizardScreen', 'LedgerScreen', 'PortfolioScreen', 'RecordTransactionScreen', 'TaxReportingScreen', 'TradesScreen', 'VisualizationScreen', 'WalletManagementScreen']
+__all__ = ['AttestationScreen', 'DashboardScreen', 'ExportScreen', 'ImportWizardScreen', 'LedgerScreen', 'PortfolioScreen', 'RecordTransactionScreen', 'TaxReportingScreen', 'TradesScreen', 'VisualizationScreen', 'WalletManagementScreen']

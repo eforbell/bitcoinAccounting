@@ -22,6 +22,12 @@ dependencies = [
     "textual>=0.47.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
 [project.scripts]
 bitcoin-accounting = "bitcoinAccounting:main"
 bitcoin-integrity = "integrity.cli:main"
@@ -32,4 +38,4 @@ py-modules = ["bitcoinAccounts", "bitcoinAccounting"]
 
 [tool.setuptools.packages.find]
 where = ["src/python"]
-include = ["db*", "imports*", "integrity*", "tui*", "viz*"]
+include = ["attestation*", "db*", "imports*", "integrity*", "tui*", "viz*"]

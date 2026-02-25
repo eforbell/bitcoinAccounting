@@ -1,12 +1,1 @@
-psycopg2-binary
-pandas
-matplotlib
-prompt_toolkit
-requests
-python-dotenv
-yfinance
-pyarrow
-reportlab
-openpyxl
-textual>=0.47.0
-pytest-asyncio
+-e .[dev]

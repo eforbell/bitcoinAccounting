@@ -336,15 +336,18 @@ class ImportWizardScreen(Screen[None]):
         has_wallets = len(choices) > 1  # more than just the sentinel
 
         if allow_blank:
-            default_value = Select.BLANK
+            default_value = None
         else:
             default_value = choices[0][1] if has_wallets else NEW_WALLET_SENTINEL
 
         row = Horizontal(classes="form-row")
         container.mount(row)
         row.mount(Label(label_text, classes="form-label"))
-        row.mount(Select(choices, value=default_value, id=select_id,
-                         allow_blank=allow_blank))
+        if allow_blank:
+            # Textual 8.x: don't pass value=None to constructor; blank is the default
+            row.mount(Select(choices, id=select_id, allow_blank=True))
+        else:
+            row.mount(Select(choices, value=default_value, id=select_id))
 
         placeholder = (
             "No wallets yet - type a name below"
@@ -411,7 +414,7 @@ class ImportWizardScreen(Screen[None]):
                 new_row = self.query_one(f"#{row_id}", Horizontal)
                 if event.value == NEW_WALLET_SENTINEL:
                     new_row.display = True
-                elif event.value is not Select.BLANK:
+                elif event.value is not None:
                     new_row.display = False
             except Exception:
                 pass
@@ -426,7 +429,7 @@ class ImportWizardScreen(Screen[None]):
         try:
             sel = self.query_one(f"#{select_id}", Select)
             val = sel.value
-            if val == NEW_WALLET_SENTINEL or val is Select.BLANK:
+            if val == NEW_WALLET_SENTINEL or val is None:
                 inp = self.query_one(f"#{input_id}", Input)
                 text = inp.value.strip()
                 return text if text else None

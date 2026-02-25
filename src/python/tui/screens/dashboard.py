@@ -10,6 +10,8 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Label, Static
 
+from tui.screens.attestation import TreasuryIntegrityPanel
+
 if TYPE_CHECKING:
     from tui.app import CryptoApp
     from tui.screens.record_transaction import RecordTransactionScreen
@@ -479,6 +481,9 @@ Press [bold]?[/bold] for help anytime."""
         transactions = self._data.get("transactions", [])
         tx_widget = RecentTransactions(headers=headers, transactions=transactions)
         container.mount(tx_widget)
+
+        # Treasury integrity panel (loads its own data asynchronously)
+        container.mount(TreasuryIntegrityPanel())
 
     @work(thread=True)
     def load_dashboard_data(self, refresh_only: bool = False) -> None:

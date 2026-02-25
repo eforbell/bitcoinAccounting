@@ -800,7 +800,7 @@ class MergeWalletsModal(ModalScreen[bool]):
         error_label = self.query_one("#error-msg", Label)
 
         # Check if a target is selected
-        if target_select.value == Select.BLANK:
+        if target_select.value is None:
             error_label.update("Error: Please select a target wallet")
             target_select.focus()
             return

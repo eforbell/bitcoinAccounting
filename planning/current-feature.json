@@ -1,37 +1,11 @@
 {
-  "currentFeature": "feature-16",
-  "featureName": "Treasury Attestation and Monitoring UX",
-  "prdPath": "planning/features/feature-16-prd.json",
-  "summaryPath": "planning/features/feature-16-summary.md",
-  "branch": "feature/treasury-attestation-monitoring",
-  "status": "pending",
-  "stories": [
-    {
-      "id": "TAM-001",
-      "title": "Monthly attestation artifact generation",
-      "status": "pending"
-    },
-    {
-      "id": "TAM-002",
-      "title": "Attestation PDF/report formatting",
-      "status": "pending"
-    },
-    {
-      "id": "TAM-003",
-      "title": "TUI monitoring dashboard enhancements",
-      "status": "pending"
-    },
-    {
-      "id": "TAM-004",
-      "title": "Rule-based alerts and status transitions",
-      "status": "pending"
-    },
-    {
-      "id": "TAM-005",
-      "title": "Operational workflow docs and closeout",
-      "status": "pending"
-    }
-  ],
+  "currentFeature": null,
+  "featureName": null,
+  "prdPath": null,
+  "summaryPath": null,
+  "branch": null,
+  "status": "idle",
+  "stories": [],
   "completedFeatures": [
     {
       "featureId": "feature-1",
@@ -144,6 +118,14 @@
       "mergedDate": "2026-02-25",
       "stories": 5,
       "notes": "Four-module integrity suite (reconciliation, transfer-pair, basis-continuity, health-score) with weighted 0-100 score, configurable tiers, snapshot persistence, and bitcoin-integrity CLI. PostgreSQL and SQLite compatible. 5,678 lines across 19 files; 1,200+ tests."
+    },
+    {
+      "featureId": "feature-16",
+      "featureName": "Treasury Attestation and Monitoring UX",
+      "branch": "feature/treasury-attestation-monitoring",
+      "mergedDate": "2026-02-24",
+      "stories": 5,
+      "notes": "Month-end attestation bundle generation (JSON/CSV) with deterministic run IDs, optional PDF reports via reportlab with graceful degradation, TUI monitoring dashboard with TreasuryIntegrityPanel and AttestationScreen (findings drill-down, source/severity filters, inline export), rule-based AlertEngine with AlertRule, finding lifecycle tracker (FindingTracker: new→acknowledged→resolved) persisted in SQLite. 148 tests across 4 test files."
     }
   ],
   "futureEnhancements": [

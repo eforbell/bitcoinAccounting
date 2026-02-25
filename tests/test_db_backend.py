@@ -328,7 +328,7 @@ class TestSchemaCreation:
         tables = backend.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
         )
-        assert len(tables) == 4
+        assert len(tables) == 5
 
         backend.close()
 
