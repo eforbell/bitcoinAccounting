@@ -1,34 +1,34 @@
 {
-  "currentFeature": "feature-14",
-  "featureName": "Legacy Name Removal (Post-Deprecation)",
-  "prdPath": "planning/features/feature-14-prd.json",
-  "summaryPath": "planning/features/feature-14-summary.md",
-  "branch": "feature/legacy-name-removal",
-  "status": "complete",
+  "currentFeature": "feature-15",
+  "featureName": "Treasury Integrity Foundations",
+  "prdPath": "planning/features/feature-15-prd.json",
+  "summaryPath": "planning/features/feature-15-summary.md",
+  "branch": "feature/treasury-integrity-foundations",
+  "status": "completed",
   "stories": [
     {
-      "id": "LNR-001",
-      "title": "Remove legacy module shims",
+      "id": "TIF-001",
+      "title": "Ledger reconciliation engine",
       "status": "completed"
     },
     {
-      "id": "LNR-002",
-      "title": "Remove legacy console script aliases",
+      "id": "TIF-002",
+      "title": "Transfer-pair integrity checks",
       "status": "completed"
     },
     {
-      "id": "LNR-003",
-      "title": "Finalize data path policy",
+      "id": "TIF-003",
+      "title": "Cost-basis continuity monitor",
       "status": "completed"
     },
     {
-      "id": "LNR-004",
-      "title": "Purge legacy language from docs and scripts",
+      "id": "TIF-004",
+      "title": "Treasury health score and policy thresholds",
       "status": "completed"
     },
     {
-      "id": "LNR-005",
-      "title": "Cleanup tests and planning metadata",
+      "id": "TIF-005",
+      "title": "Integrity CLI report and planning closeout",
       "status": "completed"
     }
   ],
@@ -128,11 +128,18 @@
       "mergedDate": "2026-02-19",
       "stories": 7,
       "notes": "Completed staged rebrand from crypto* to bitcoin* with compatibility shims, canonical entrypoints, path/cache migration fallback, and documentation migration guidance."
+    },
+    {
+      "featureId": "feature-14",
+      "featureName": "Legacy Name Removal (Post-Deprecation)",
+      "branch": "feature/legacy-name-removal",
+      "mergedDate": "2026-02-24",
+      "stories": 5,
+      "notes": "Removed all legacy crypto* shims and aliases post-deprecation window. Finalized canonical bitcoin* naming across modules, CLI entrypoints, data paths, docs, scripts, and tests."
     }
   ],
   "futureEnhancements": [
-    "Feature #15: Web UI layer (Flask/FastAPI)",
-    "Feature #16: Tax optimization tools",
+    "Feature #16: Treasury Attestation and Monitoring UX (gates on Feature-15 stabilization)",
     "Feature #17: Pair price management (import/export)",
     "Feature #18: Multi-coin support (ETH, other assets)"
   ]

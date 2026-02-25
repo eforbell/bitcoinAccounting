@@ -2,6 +2,52 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-15: Treasury Integrity Foundations - TIF-005
+
+### Integrity CLI
+- `bitcoin-integrity` entrypoint via `src/python/integrity/cli.py`; registered in `pyproject.toml` + `integrity*` added to packages.find include
+- `run_integrity_check(backend, ...)` is the core runner — fully testable without subprocess by passing an in-memory backend
+- `format_summary(report, top_n)` returns a multi-line string; `export_json()` / `export_csv()` return serialized strings (write to file or stdout separately)
+- `persist=False` keeps the health snapshot in-memory only; `persist=True` creates the DB table and writes the row
+- CSV flattens all finding types into one sheet with a `check` column distinguishing origin
+
+## Feature-15: Treasury Integrity Foundations - TIF-004
+
+### Treasury Health Score
+- `TreasuryHealthScorer` in `src/python/integrity/health_score.py`; accepts three pre-computed snapshots and returns `HealthScoreSnapshot`
+- Three sub-scores (reconciliation 40%, transfer_integrity 35%, basis_continuity 25%) with deterministic penalty formulas; overall = weighted sum
+- Tier classification: `HEALTHY` (≥80), `WARNING` (≥60), `CRITICAL` (<60) — all configurable via `HealthThresholds`
+- Persistence table `integrity_health_snapshots` created lazily on first `persist()` call; UNIQUE on `run_id`; `load_snapshots(limit)` returns rows most-recent-first
+- Fiat currencies (USD) tracked by reconciliation engine — a Buy depletes USD → negative USD balance; use Buy+Trade roundtrips in tests for a clean 100% score
+- `HealthThresholds.weights` uses `field(default_factory=lambda: dict(DEFAULT_WEIGHTS))` to guarantee independent instances
+
+## Feature-15: Treasury Integrity Foundations - TIF-003
+
+### Cost-Basis Continuity Monitor
+- `BasisContinuityMonitor` in `src/python/integrity/basis_continuity.py`; same snapshot/result pattern
+- Three issue types: `MISSING_COST` (Buy/Trade without sell price), `AMBIGUOUS_SOURCE` (Deposit/Mining/Reward), `COVERAGE_GAP` (sold > acquired_with_cost)
+- Coin discovery via buy_curr only — sell-only rows don't trigger checks
+- Coverage gap computed per coin as max(0, total_sold - acquired_with_cost)
+- Each issue carries a templated `remediation_hint` guiding the operator
+
+## Feature-15: Treasury Integrity Foundations - TIF-002
+
+### Transfer-Pair Integrity Checker
+- `TransferPairChecker` in `src/python/integrity/transfer_pairs.py`; same snapshot/result pattern as ReconciliationEngine
+- Withdrawal (sell col) → "send"; Deposit (buy col) → "receive"; Transfer type appears in both direction queries
+- Greedy matching: for each send, find best receive (same coin, different wallet, within time window, amount diff < 50% of send); reject implausible matches
+- Severity tiers: CRITICAL (one_sided_send), WARNING (one_sided_receive, amount_mismatch), INFO (fee_anomaly)
+- Fee anomaly reported on both matched and unmatched sends; amount_tolerance and fee_anomaly_threshold are constructor-configurable
+
+## Feature-15: Treasury Integrity Foundations - TIF-001
+
+### Ledger Reconciliation Engine
+- New module at `src/python/integrity/`; engine accepts a `DatabaseBackend` and returns `ReconciliationSnapshot` dataclasses
+- Use `datetime.now(timezone.utc)` for UTC timestamps — `datetime.utcnow()` raises `DeprecationWarning` which pytest strict config converts to an error
+- Build all WHERE clauses into a single list before f-string interpolation; never embed a second `WHERE` keyword inside a template that already receives a `{where}` block
+- SQLite named params (`:name`) can appear in both halves of a UNION; the same dict value is used for each occurrence
+- When a coin filter is supplied, `total_coins_checked` is always ≥ 1 (short-circuit path); test `wallet_balances` and `is_clean` rather than counts when validating empty-range or soft-delete behaviour
+
 ## Feature-14: Legacy Name Removal - LNR-001
 
 ### Legacy Module Shim Removal

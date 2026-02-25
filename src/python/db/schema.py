@@ -65,12 +65,28 @@ CREATE TABLE IF NOT EXISTS wallets (
 )
 """
 
+INTEGRITY_HEALTH_SNAPSHOTS_TABLE = """
+CREATE TABLE IF NOT EXISTS integrity_health_snapshots (
+    run_id TEXT NOT NULL PRIMARY KEY,
+    timestamp TEXT NOT NULL,
+    overall_score REAL NOT NULL,
+    tier TEXT NOT NULL,
+    recon_score REAL NOT NULL,
+    transfer_score REAL NOT NULL,
+    basis_score REAL NOT NULL,
+    warning_min REAL NOT NULL,
+    critical_min REAL NOT NULL,
+    details_json TEXT
+)
+"""
+
 # List of all table creation statements in dependency order
 SQLITE_TABLES = [
     LEDGER_TABLE_SQLITE,
     PAIR_PRICE_TABLE_SQLITE,
     COINS_TABLE_SQLITE,
     WALLETS_TABLE_SQLITE,
+    INTEGRITY_HEALTH_SNAPSHOTS_TABLE,
 ]
 
 

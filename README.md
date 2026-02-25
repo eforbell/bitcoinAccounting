@@ -15,6 +15,7 @@ ledger and producing balance, cost-basis reports, and visualizations.
 - Tax reporting (1099-B exports, FIFO calculations)
 - Chart generation and PDF reports
 - Bulk import from exchanges (Coinbase, Kraken, Strike, River, Swan, Cash App, Gemini) and wallets (Ledger, Trezor, Sparrow, Coldcard) with auto-detection
+- **Treasury integrity checks** - Deterministic ledger reconciliation, transfer-pair validation, cost-basis continuity, and a weighted health score via `bitcoin-integrity`
 
 ## Getting Started
 
@@ -116,7 +117,7 @@ GRANT ALL PRIVILEGES ON DATABASE bitcoin_accounting TO bitcoin_accountant;
 2. Apply the schema:
 
 ```bash
-# From the repository root - creates all 4 tables (coins, ledger, pair_price, wallets)
+# From the repository root - creates all tables
 psql -U <db-admin> -d bitcoin_accounting -f src/sql/tables.sql
 ```
 
@@ -125,6 +126,7 @@ The `tables.sql` file creates all required tables:
 - `ledger` - Transaction history (buys, sells, transfers, etc.)
 - `pair_price` - Historical price data for cost basis calculations
 - `wallets` - Wallet/account metadata (matches ledger.exchange field)
+- `integrity_health_snapshots` - Treasury health score history (used by `bitcoin-integrity --persist`)
 
 All query logic is implemented in Python for database-agnostic support (works with both SQLite and PostgreSQL).
 
@@ -377,6 +379,32 @@ review comment so you can update them later.
   - Export wallet ecosystem: `export_tx custody.csv --wallets Strike,River,Coldcard`
   - Round-trip compatible with `import_csv --source native`
 
+### Treasury Integrity
+
+Run deterministic checks against your ledger at any time:
+
+```bash
+# Terminal summary (reconciliation + transfer pairs + cost basis + health score)
+bitcoin-integrity
+
+# Restrict to a single coin or wallet
+bitcoin-integrity --coin BTC --wallet Strike
+
+# Export full JSON report
+bitcoin-integrity --format json --output report.json
+
+# Export flat CSV of all findings
+bitcoin-integrity --format csv --output findings.csv
+
+# Persist the health score snapshot for trend tracking
+bitcoin-integrity --persist
+
+# Adjust tier thresholds (default: HEALTHY ≥ 80, WARNING ≥ 60)
+bitcoin-integrity --warning-min 90 --critical-min 70
+```
+
+The command exits with a concise summary showing an overall health score (0–100), sub-scores for each check, top findings, and remediation counts. Use `--persist` to build a score history queryable via the TUI or the `integrity_health_snapshots` table directly.
+
 ### Data Validation
 
 - **Balance verification**: `diagnose_balances` - Detect calculation issues
@@ -410,6 +438,7 @@ For detailed script documentation and quick reference, see [SCRIPTS_UPDATE.md](S
 - **`pair_price`**: Historical price data for cost-basis calculations
 - **`coins`**: Coin metadata (optional)
 - **`wallets`**: Wallet information (optional)
+- **`integrity_health_snapshots`**: Treasury health score history (written by `bitcoin-integrity --persist`)
 
 ## Testing
 
@@ -441,7 +470,7 @@ python -m pytest --cov=src\python\db --cov-report=term-missing
 
 ### Test Suite Coverage
 
-**640+ tests passing** (PostgreSQL tests skipped when database unavailable)
+**1,200+ tests passing** (PostgreSQL tests skipped when database unavailable)
 
 - **Database abstraction layer** (`tests/test_db_backend.py`):
   - Backend interface (SQLite, PostgreSQL)

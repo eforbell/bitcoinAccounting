@@ -19,6 +19,75 @@
 - Textual Label content access: Use `label.content` (str), NOT `label.renderable` (doesn't exist in this version)
 - Textual on_mount vs compose() children: When widgets are mounted via `container.mount(widget)`, compose() children may not be queryable in `on_mount`. Use `set_timer(0.05, callback)` with try/except guard to defer.
 
+## 2026-02-24 - TIF-005
+- What was implemented: Integrity CLI — `run_integrity_check()` core runner, `format_summary()` terminal formatter, `export_json()` and `export_csv()` serializers, `main()` CLI entrypoint (`bitcoin-integrity`); `--coin`, `--wallet`, `--start-date`, `--end-date`, `--format`, `--output`, `--persist`, `--warning-min`, `--critical-min` flags
+- Files changed:
+  - `src/python/integrity/cli.py` (IntegrityReport, run_integrity_check, format_summary, export_json, export_csv, main)
+  - `tests/test_integrity_cli.py` (35 tests across 5 test classes)
+  - `pyproject.toml` (added `bitcoin-integrity` entrypoint, `integrity*` to packages.find include)
+  - `planning/current-feature.json` (TIF-005 marked completed, feature status → completed)
+- **Learnings:**
+  - CLI runner decoupled from `_open_backend()` — accepts a `backend` param so tests pass `:memory:` directly without touching the filesystem
+  - `persist=True` passes backend to TreasuryHealthScorer; `persist=False` passes `None` — table is only created when persistence is requested
+  - CSV export flattens three sources (transfer findings, basis issues, reconciliation negatives) into a single sheet; `check` column distinguishes origin
+  - `top_n` parameter in `format_summary` controls displayed issues; counts always reflect the full total
+---
+
+## 2026-02-24 - TIF-003
+- What was implemented: Cost-basis continuity monitor — identifies Buy/Trade rows without price (MISSING_COST), Deposit/Mining/Reward rows (AMBIGUOUS_SOURCE), and aggregate coverage gaps per coin (COVERAGE_GAP); generates actionable remediation hints for each issue type
+- Files changed:
+  - `src/python/integrity/basis_continuity.py` (BasisContinuityMonitor, BasisContinuitySnapshot, BasisContinuityResult, BasisIssue, CoinBasisSummary, BasisIssueType)
+  - `tests/test_integrity_basis_continuity.py` (39 tests across 8 test classes)
+  - `planning/current-feature.json` (TIF-003 marked completed)
+- **Learnings:**
+  - Coin discovery uses buy_curr only; sell-only transactions don't trigger a coin check
+  - Coverage gap = max(0, total_sold - acquired_with_cost); only coins with buy_curr records are checked
+  - `_base_clauses` omits coin clause here (coin filtering done per-query with specific column names)
+  - `_PRICED_ACQUISITION_TYPES` and `_UNPRICED_ACQUISITION_TYPES` frozensets drive two separate query paths clearly
+---
+
+## 2026-02-24 - TIF-004
+- What was implemented: Treasury health score and policy thresholds — weighted aggregate score (0–100) across reconciliation (40%), transfer integrity (35%), and basis continuity (25%); HEALTHY/WARNING/CRITICAL tier classification with configurable thresholds; snapshot persistence in `integrity_health_snapshots` SQLite table with `load_snapshots()` for trend tracking
+- Files changed:
+  - `src/python/integrity/health_score.py` (TreasuryHealthScorer, HealthScoreSnapshot, HealthScoreResult, SubScore, HealthThresholds, HealthTier, _snapshot_to_json)
+  - `tests/test_integrity_health_score.py` (54 tests across 7 test classes)
+  - `planning/current-feature.json` (TIF-004 marked completed)
+- **Learnings:**
+  - Fiat currencies (USD) tracked by reconciliation engine as regular coins — a Buy depletes USD, making its balance negative; test roundtrips (Buy+Trade) to get a clean 100% score
+  - Persistence table created lazily on first `persist()` call via `_ensure_table()`; UNIQUE constraint on run_id prevents duplicate inserts
+  - `HealthThresholds.weights` uses `field(default_factory=lambda: dict(DEFAULT_WEIGHTS))` to ensure independent copies per instance
+  - Pre-existing `wallet.py` mypy error (`no-any-return` for `execute_scalar`) appears in all `--strict` checks; not introduced here
+---
+
+## 2026-02-24 - TIF-002
+- What was implemented: Transfer-pair integrity checker — greedy send/receive matching by coin, wallet, time window, and amount; severity-tiered findings (CRITICAL one_sided_send, WARNING one_sided_receive / amount_mismatch, INFO fee_anomaly); configurable tolerances
+- Files changed:
+  - `src/python/integrity/transfer_pairs.py` (TransferPairChecker, TransferPairSnapshot, TransferPairResult, TransferFinding, TransferRecord, Severity dataclasses/enum)
+  - `tests/test_integrity_transfer_pairs.py` (42 tests across 9 test classes)
+  - `planning/current-feature.json` (TIF-002 marked completed)
+- **Learnings:**
+  - Transfer types in ledger: Withdrawal=outgoing (sell col), Deposit=incoming (buy col), Transfer=either direction depending on populated column
+  - Greedy matching: iterate sends, find best receive by smallest amount diff within time window and same coin/different wallet; unmatched pool shrinks as pairs are confirmed
+  - Reject plausible-but-implausible matches with >50% relative diff; flag ≤50% diffs as amount_mismatch instead of leaving them unmatched
+  - Fee anomaly applies to both matched and unmatched sends — check fee_ratio at whichever stage you have the send record
+  - Pre-existing mypy strict debt in `wallet.py` (no-any-return) is informational; only new files need to be clean
+---
+
+## 2026-02-24 - TIF-001
+- What was implemented: Ledger reconciliation engine — computes per-(coin, wallet) expected vs observed balances over an optional date range; produces timestamped ReconciliationSnapshot with unique run_id
+- Files changed:
+  - `src/python/integrity/__init__.py` (new module)
+  - `src/python/integrity/reconciliation.py` (ReconciliationEngine, ReconciliationSnapshot, ReconciliationResult, CoinWalletBalance, CoinSummary dataclasses)
+  - `tests/test_integrity_reconciliation.py` (25 tests across 7 test classes)
+  - `planning/current-feature.json` (pointed to feature-15, moved feature-14 to completedFeatures)
+- **Learnings:**
+  - `datetime.utcnow()` raises DeprecationWarning as error in pytest strict config; use `datetime.now(timezone.utc)` instead
+  - When building multi-clause WHERE fragments with f-strings, never duplicate a WHERE keyword; fold all extra filters into `_base_clauses` before interpolating
+  - SQLite named params (`:name`) can appear multiple times in the same query (e.g., both sides of a UNION) — the same value is substituted each time
+  - When a coin filter is provided, `total_coins_checked` is always ≥ 1 even if no transactions exist in that range; tests should assert on wallet_balances and is_clean, not counts derived from the short-circuit path
+  - Pre-existing mypy strict debt in `wallet.py` (no-any-return) is unrelated to this story; treat as informational per Feature-14 pattern
+---
+
 ## 2026-02-13 - TXE-003
 - What was implemented: TransactionDetailModal showing all transaction fields, opens from Ledger DataTable on Enter
 - Files changed:

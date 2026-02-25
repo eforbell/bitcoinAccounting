@@ -76,8 +76,30 @@ COMMENT ON TABLE public.wallets IS 'Metadata about each wallet/account tracked i
 --     ('Phoenix', 'lightning', 'self-custodied', 'Phoenix Lightning wallet');
 
 
-GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.coins TO "bitcoin_accounting";
-GRANT UPDATE, SELECT, INSERT ON TABLE public.ledger TO "bitcoin_accounting";
-GRANT SELECT, USAGE ON SEQUENCE public.ledger_id_seq TO "bitcoin_accounting";
-GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.pair_price TO "bitcoin_accounting";
-GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.wallets TO "bitcoin_accounting";
+-- public.integrity_health_snapshots definition
+
+-- Drop table
+
+-- DROP TABLE public.integrity_health_snapshots;
+
+CREATE TABLE public.integrity_health_snapshots (
+	run_id varchar(36) NOT NULL,
+	"timestamp" text NOT NULL,
+	overall_score float8 NOT NULL,
+	tier varchar(16) NOT NULL,
+	recon_score float8 NOT NULL,
+	transfer_score float8 NOT NULL,
+	basis_score float8 NOT NULL,
+	warning_min float8 NOT NULL,
+	critical_min float8 NOT NULL,
+	details_json text NULL,
+	CONSTRAINT integrity_health_snapshots_pkey PRIMARY KEY (run_id)
+);
+
+
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.coins TO "bitcoinAccountant";
+GRANT UPDATE, SELECT, INSERT ON TABLE public.ledger TO "bitcoinAccountant";
+GRANT SELECT, USAGE ON SEQUENCE public.ledger_id_seq TO "bitcoinAccountant";
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.pair_price TO "bitcoinAccountant";
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.wallets TO "bitcoinAccountant";
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.integrity_health_snapshots TO "bitcoinAccountant";

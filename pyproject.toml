@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 bitcoin-accounting = "bitcoinAccounting:main"
+bitcoin-integrity = "integrity.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src/python"}
@@ -31,4 +32,4 @@ py-modules = ["bitcoinAccounts", "bitcoinAccounting"]
 
 [tool.setuptools.packages.find]
 where = ["src/python"]
-include = ["db*", "imports*", "tui*", "viz*"]
+include = ["db*", "imports*", "integrity*", "tui*", "viz*"]
