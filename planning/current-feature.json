@@ -1,35 +1,35 @@
 {
-  "currentFeature": "feature-15",
-  "featureName": "Treasury Integrity Foundations",
-  "prdPath": "planning/features/feature-15-prd.json",
-  "summaryPath": "planning/features/feature-15-summary.md",
-  "branch": "feature/treasury-integrity-foundations",
-  "status": "completed",
+  "currentFeature": "feature-16",
+  "featureName": "Treasury Attestation and Monitoring UX",
+  "prdPath": "planning/features/feature-16-prd.json",
+  "summaryPath": "planning/features/feature-16-summary.md",
+  "branch": "feature/treasury-attestation-monitoring",
+  "status": "pending",
   "stories": [
     {
-      "id": "TIF-001",
-      "title": "Ledger reconciliation engine",
-      "status": "completed"
+      "id": "TAM-001",
+      "title": "Monthly attestation artifact generation",
+      "status": "pending"
     },
     {
-      "id": "TIF-002",
-      "title": "Transfer-pair integrity checks",
-      "status": "completed"
+      "id": "TAM-002",
+      "title": "Attestation PDF/report formatting",
+      "status": "pending"
     },
     {
-      "id": "TIF-003",
-      "title": "Cost-basis continuity monitor",
-      "status": "completed"
+      "id": "TAM-003",
+      "title": "TUI monitoring dashboard enhancements",
+      "status": "pending"
     },
     {
-      "id": "TIF-004",
-      "title": "Treasury health score and policy thresholds",
-      "status": "completed"
+      "id": "TAM-004",
+      "title": "Rule-based alerts and status transitions",
+      "status": "pending"
     },
     {
-      "id": "TIF-005",
-      "title": "Integrity CLI report and planning closeout",
-      "status": "completed"
+      "id": "TAM-005",
+      "title": "Operational workflow docs and closeout",
+      "status": "pending"
     }
   ],
   "completedFeatures": [
@@ -136,11 +136,19 @@
       "mergedDate": "2026-02-24",
       "stories": 5,
       "notes": "Removed all legacy crypto* shims and aliases post-deprecation window. Finalized canonical bitcoin* naming across modules, CLI entrypoints, data paths, docs, scripts, and tests."
+    },
+    {
+      "featureId": "feature-15",
+      "featureName": "Treasury Integrity Foundations",
+      "branch": "feature/treasury-integrity-foundations",
+      "mergedDate": "2026-02-25",
+      "stories": 5,
+      "notes": "Four-module integrity suite (reconciliation, transfer-pair, basis-continuity, health-score) with weighted 0-100 score, configurable tiers, snapshot persistence, and bitcoin-integrity CLI. PostgreSQL and SQLite compatible. 5,678 lines across 19 files; 1,200+ tests."
     }
   ],
   "futureEnhancements": [
-    "Feature #16: Treasury Attestation and Monitoring UX (gates on Feature-15 stabilization)",
     "Feature #17: Pair price management (import/export)",
-    "Feature #18: Multi-coin support (ETH, other assets)"
+    "Feature #18: Multi-coin support (ETH, other assets)",
+    "Per-exchange coverage monitor (liquidity wall early warning) — see planning/fixes_todo.md"
   ]
 }
