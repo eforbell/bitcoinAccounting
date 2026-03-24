@@ -1,3 +1,96 @@
+## Codebase Patterns
+- FastAPI request-scoped backend pattern: expose `get_request_backend()` / `get_request_accounts()` dependencies that construct a fresh backend/service per request and always close them in `finally`
+- FastAPI DB-aware route testing: override dependency functions with lightweight fake backends in `app.dependency_overrides` so route tests don't touch live PostgreSQL from `.env`
+- Web package discovery: add `web*` to `tool.setuptools.packages.find.include` and install web dependencies in the local `.venv` before running new API tests
+
+## 2026-03-24 - WTX-001 / WTX-002 / WTX-003 / WTX-004 (API slice)
+- What was implemented: Added first authenticated tax API slice with `/api/tax/gains`, `/api/tax/1099b/preview`, `/api/tax/1099b/export`, `/api/tax/1099b/worksheet`, and `/api/tax/forecast`; introduced canonical tax JSON resources plus a small web tax service layer that translates existing `BitcoinAccounts` tax outputs into API-friendly models and CSV responses without changing the underlying FIFO logic
+- Files changed:
+  - `src/python/web/app.py`
+  - `src/python/web/models.py`
+  - `src/python/web/routes/__init__.py`
+  - `src/python/web/routes/tax.py`
+  - `src/python/web/services/__init__.py`
+  - `src/python/web/services/tax_reporting.py`
+  - `tests/test_web_models.py`
+  - `tests/test_web_tax_reporting.py`
+  - `planning/current-feature.json`
+- **Learnings:**
+  - The existing `get_sales_for_1099b()` and `forecast_capital_gains_fifo()` outputs are sufficient for the first web API; a thin translation layer is enough, no tax-core rewrite needed
+  - Enforce 2025+ wallet separation at the API boundary for preview/export routes rather than emitting a weak warning and continuing with ambiguous output
+  - Use a real in-memory SQLite backend in tax route tests instead of mocks so API parity is exercised against actual FIFO matching, CSV shape, and wallet filtering behavior
+
+## 2026-03-24 - WTX backend completion pass
+- What was implemented: Rounded out the tax backend with `/api/tax/policy`, saved preset endpoints, recent run history, and automatic history recording for gains/preview/export/forecast API calls; added lightweight web-owned persistence tables so the web app can store private-user tax state without depending on TUI workflow state
+- Files changed:
+  - `src/python/web/models.py`
+  - `src/python/web/routes/tax.py`
+  - `src/python/web/services/tax_reporting.py`
+  - `src/python/web/services/tax_state.py`
+  - `tests/test_web_tax_reporting.py`
+  - `planning/current-feature.json`
+- **Learnings:**
+  - Web-only state such as saved presets and recent runs should live in small dedicated tables owned by the web layer; do not overload ledger/core accounting tables for UI convenience
+  - Recording history inside route handlers gives an accurate API usage trail and keeps web behavior isolated from TUI and CLI usage
+  - Returning `reference_doc` in policy warnings is enough to make compliance guidance consumable by a future UI without hard-coding presentation into the backend
+
+## 2026-03-24 - WEB-001 / WEB-002
+- What was implemented: FastAPI web foundation scaffold for Feature-17; added `src/python/web/` package with app factory, config loader, request-scoped backend dependencies, canonical Pydantic JSON models, and `/api/health`; added focused tests for app boot, health endpoint, and API models; updated packaging metadata for FastAPI/uvicorn/httpx and `web*` package discovery
+- Files changed:
+  - `pyproject.toml`
+  - `src/python/web/__init__.py`
+  - `src/python/web/app.py`
+  - `src/python/web/config.py`
+  - `src/python/web/dependencies.py`
+  - `src/python/web/models.py`
+  - `src/python/web/routes/__init__.py`
+  - `src/python/web/routes/health.py`
+  - `tests/test_web_health.py`
+  - `tests/test_web_models.py`
+  - `planning/features/feature-17-prd.json`
+  - `planning/current-feature.json`
+- **Learnings:**
+  - Health/readiness routes should keep real DB checks in production code, but tests must override the backend dependency to avoid hitting operator `.env` databases
+  - TUI/table-shaped labels like `"Buy Cur."` are useful internally but should not leak into API contracts; define clean web resources early
+  - FastAPI + Pydantic v2 works cleanly in this repo with editable install once `fastapi`, `uvicorn`, and `httpx` are added to project metadata
+---
+
+## 2026-03-24 - WEB-003
+- What was implemented: Added private auth/session baseline for the web app using signed cookie sessions; `create_app(config=...)` now accepts explicit config overrides; added `/api/auth/login`, `/api/auth/logout`, and `/api/auth/me` routes; added stdlib HMAC-based session token helpers and focused auth tests
+- Files changed:
+  - `src/python/web/app.py`
+  - `src/python/web/auth.py`
+  - `src/python/web/config.py`
+  - `src/python/web/models.py`
+  - `src/python/web/routes/__init__.py`
+  - `src/python/web/routes/auth.py`
+  - `tests/test_web_auth.py`
+  - `planning/features/feature-17-prd.json`
+  - `planning/current-feature.json`
+- **Learnings:**
+  - `create_app(config=...)` is the cleanest way to keep FastAPI tests deterministic without mutating the operator's real environment variables
+  - A private single-user auth baseline does not need a database table immediately; signed cookie sessions with env-backed passphrase/secret are enough for the first slice
+  - Keep auth-enabled production behavior and auth-disabled local-dev bypass explicit in config so protected route semantics stay understandable
+---
+
+## 2026-03-24 - WEB-004 / WEB-005
+- What was implemented: Added startup validation and readiness policy for the web app; split liveness (`/api/health`) from readiness (`/api/ready`); added explicit PostgreSQL-first production policy in `WebConfig`; added startup checks for backend type, SQLite-in-production override, session TTL, and auth config normalization
+- Files changed:
+  - `src/python/web/app.py`
+  - `src/python/web/config.py`
+  - `src/python/web/models.py`
+  - `src/python/web/routes/health.py`
+  - `src/python/web/startup.py`
+  - `tests/test_web_health.py`
+  - `tests/test_web_startup.py`
+  - `planning/features/feature-17-prd.json`
+  - `planning/current-feature.json`
+- **Learnings:**
+  - Liveness should not require a database roundtrip; readiness should probe the DB explicitly and report policy-level metadata like backend type
+  - Production policy is clearer when enforced in code: require PostgreSQL for production web mode unless SQLite is explicitly opted in
+  - Normalize startup/auth misconfiguration into one `WebConfigurationError` surface so tests and operator failures remain straightforward
+---
+
 ## 2026-02-24 - TAM-005 (Feature-16 COMPLETE)
 - What was implemented: Operational workflow documentation for the monthly attestation routine; troubleshooting guidance for the four most common integrity finding categories; planning metadata closeout (current-feature.json updated to idle, all stories marked complete in PRD)
 - Files changed:

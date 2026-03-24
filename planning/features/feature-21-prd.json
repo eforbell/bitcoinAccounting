@@ -1,0 +1,126 @@
+{
+  "branchName": "feature/web-import-center",
+  "projectName": "Web Import Center and Duplicate Review",
+  "description": "Add a web import center for CSV onboarding and ongoing import maintenance, including parser detection, preview, duplicate warnings, and operator-friendly results. This is intentionally scheduled after tax-first value is delivered.",
+  "timing": {
+    "draftedOn": "2026-03-24",
+    "plannedEarliestExecution": "2026-04-07",
+    "gatingCondition": "Proceed after tax, portfolio, and ledger/write features make the web app useful even without web imports."
+  },
+  "principles": [
+    "Day-2 Feature, Not Neglected - imports matter, but they are intentionally sequenced after the tax-critical flows",
+    "Preview Before Commit - importing remains a review-first workflow",
+    "Duplicate Awareness - surface likely duplicate rows before writing",
+    "Parser Reuse - the web flow wraps the existing Python importer registry rather than reinventing source parsing",
+    "Operator Recovery - failed imports must return actionable feedback rather than partial mystery states"
+  ],
+  "techStack": {
+    "backendLanguage": "Python 3.11+",
+    "frontend": "Authenticated web upload/preview workflow",
+    "testing": "pytest parser/API tests + upload flow smoke tests",
+    "database": "PostgreSQL primary, SQLite supported",
+    "coreDependencies": "imports.registry + imports.validation + BitcoinAccounts.import_transactions"
+  },
+  "userStories": [
+    {
+      "id": "WIM-001",
+      "title": "Upload, detect, and parse import files",
+      "acceptanceCriteria": [
+        "Allow authenticated CSV upload from web UI",
+        "Detect parser source automatically or allow explicit override",
+        "Return parsed preview rows and source metadata without committing data",
+        "Support both exchange and wallet parser flows"
+      ],
+      "priority": 1,
+      "estimatedLines": "+180/-0",
+      "testStrategy": "pytest upload/detection endpoint tests using fixture CSVs",
+      "passes": false
+    },
+    {
+      "id": "WIM-002",
+      "title": "Import configuration and wallet assignment",
+      "acceptanceCriteria": [
+        "Support withdraw-to wallet and wallet-name configuration inputs where parser types require them",
+        "Reuse existing wallet selector/new-wallet semantics from the app",
+        "Validate required import parameters before execution",
+        "Keep configuration model aligned with CLI/TUI import behavior"
+      ],
+      "priority": 2,
+      "estimatedLines": "+120/-0",
+      "testStrategy": "pytest import configuration tests across parser classes",
+      "passes": false
+    },
+    {
+      "id": "WIM-003",
+      "title": "Duplicate detection preview and review workflow",
+      "acceptanceCriteria": [
+        "Run duplicate detection before commit using the existing validation utilities",
+        "Show a clear warning banner and mark likely duplicate rows in the preview",
+        "Allow the operator to proceed intentionally after review",
+        "Summarize duplicate counts in the final result"
+      ],
+      "priority": 3,
+      "estimatedLines": "+140/-0",
+      "testStrategy": "pytest duplicate-preview API tests + frontend warning-state smoke tests",
+      "passes": false
+    },
+    {
+      "id": "WIM-004",
+      "title": "Execute import and return operator-friendly results",
+      "acceptanceCriteria": [
+        "Execute imports through the Python import pipeline with imported/skipped/error counts",
+        "Return actionable error messages when parsing or writes fail",
+        "Refresh portfolio/ledger views after successful imports",
+        "Avoid silent partial failures"
+      ],
+      "priority": 4,
+      "estimatedLines": "+150/-0",
+      "testStrategy": "pytest end-to-end import route tests against fixture files and test database",
+      "passes": false
+    },
+    {
+      "id": "WIM-005",
+      "title": "Import history and troubleshooting aids",
+      "acceptanceCriteria": [
+        "Show recent import runs with source, date, and result counts",
+        "Provide parser format help in the web UI using existing parser metadata where possible",
+        "Document best practices for exchange/wallet export files and duplicate avoidance",
+        "Keep implementation simple enough for a private single-operator workflow"
+      ],
+      "priority": 5,
+      "estimatedLines": "+110/-0",
+      "testStrategy": "Manual review + targeted API tests for import history metadata",
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Import bugs can silently corrupt ledger correctness if preview and validation are weak",
+      "Large files or malformed exports may create poor UX without careful error handling"
+    ],
+    "medium": [
+      "Browser upload constraints and parser expectations may vary more than TUI file-path flows",
+      "Duplicate review UX can become noisy if not concise"
+    ],
+    "low": [
+      "The parser registry and duplicate-detection logic already exist in the Python core",
+      "Scheduling imports after tax/portfolio delivery reduces overall project risk"
+    ]
+  },
+  "preFlightChecklist": [
+    "Confirm allowed upload size and retention behavior for temp files",
+    "Decide whether import history is persisted or just logged",
+    "Confirm parser override UX",
+    "Document which import sources matter most in first web release"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+700/-0",
+    "storiesCount": 5,
+    "filesLikelyCreated": [
+      "src/python/web/routes/imports.py",
+      "src/python/web/services/imports.py",
+      "tests/test_web_imports.py",
+      "web/imports/*"
+    ]
+  }
+}

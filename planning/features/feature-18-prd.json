@@ -1,0 +1,133 @@
+{
+  "branchName": "feature/web-tax-reporting-forecasting",
+  "projectName": "Web Tax Reporting and Forecasting",
+  "description": "Bring the primary operator workflows to the web first: gains tracking, 1099-B export, FIFO sale forecasting, and explicit wallet-separated tax handling for 2025+ IRS rules.",
+  "timing": {
+    "draftedOn": "2026-03-24",
+    "plannedEarliestExecution": "2026-03-27",
+    "gatingCondition": "Proceed after Feature-17 establishes JSON contracts and authenticated API baseline."
+  },
+  "principles": [
+    "Tax First - prioritize the workflows that motivated the product",
+    "Wallet Separation Is Core - per-wallet accounting is a first-class requirement, not a warning banner afterthought",
+    "Explain The Lots - expose lot-level reasoning so forecast results remain auditable",
+    "CSV Still Matters - exported files must remain practical for downstream tax tooling",
+    "Parity With Existing Core - web results must match current Python calculations exactly"
+  ],
+  "techStack": {
+    "backendLanguage": "Python 3.11+",
+    "frontend": "Web UI consuming Python JSON endpoints",
+    "testing": "pytest API tests + fixture-driven equivalence tests against existing calculator outputs",
+    "database": "PostgreSQL primary, SQLite supported",
+    "coreDependencies": "CapitalGainCalculator + BitcoinAccounts tax APIs"
+  },
+  "userStories": [
+    {
+      "id": "WTX-001",
+      "title": "Web gains tracker endpoints and UI",
+      "acceptanceCriteria": [
+        "Expose gains tracker endpoint returning summary metrics and lot-by-lot worksheet data",
+        "Support filters for tax year, coin, and wallet",
+        "Render a phone-friendly gains summary view with drill-in on desktop",
+        "Match existing FIFO calculations from the Python core exactly"
+      ],
+      "priority": 1,
+      "estimatedLines": "+220/-0",
+      "testStrategy": "pytest tax endpoint equivalence tests against known fixtures",
+      "passes": false
+    },
+    {
+      "id": "WTX-002",
+      "title": "Wallet-separated 1099-B export workflow",
+      "acceptanceCriteria": [
+        "Expose authenticated API to preview and export 1099-B data",
+        "Require explicit wallet selection for tax year 2025 and beyond by default",
+        "Show clear operator guidance when a pre-2025 global FIFO export is requested",
+        "Preserve CSV shape suitable for existing downstream usage"
+      ],
+      "priority": 2,
+      "estimatedLines": "+180/-0",
+      "testStrategy": "pytest export route tests and CSV snapshot assertions",
+      "passes": false
+    },
+    {
+      "id": "WTX-003",
+      "title": "Hypothetical sale forecasting for mobile and desktop",
+      "acceptanceCriteria": [
+        "Expose forecast endpoint returning lots consumed, short-term vs long-term splits, and proceeds/cost basis summaries",
+        "Provide concise mobile summary and deeper desktop lot table from the same endpoint",
+        "Allow wallet-filtered forecasts for per-wallet tax planning",
+        "Handle missing basis explicitly in both API and UI"
+      ],
+      "priority": 3,
+      "estimatedLines": "+180/-0",
+      "testStrategy": "pytest forecast endpoint tests with wallet-scoped scenarios",
+      "passes": false
+    },
+    {
+      "id": "WTX-004",
+      "title": "Tax policy guidance and operator warnings",
+      "acceptanceCriteria": [
+        "Show 2025+ wallet-separation guidance prominently in the web flow",
+        "Differentiate compliant wallet-scoped flows from convenience-only historical flows",
+        "Provide links or inline notes to repo guidance on IRS wallet rules",
+        "Do not silently produce ambiguous exports"
+      ],
+      "priority": 4,
+      "estimatedLines": "+90/-0",
+      "testStrategy": "UI smoke tests + manual review of warning conditions",
+      "passes": false
+    },
+    {
+      "id": "WTX-005",
+      "title": "Saved tax presets and recent export history",
+      "acceptanceCriteria": [
+        "Allow saving common export/filter presets for the primary user",
+        "Show recent forecast and export runs for quick recall from phone",
+        "Persist lightweight metadata without duplicating the underlying tax computation outputs",
+        "Keep implementation private-user simple; no multi-user sharing model required"
+      ],
+      "priority": 5,
+      "estimatedLines": "+140/-0",
+      "testStrategy": "pytest preset persistence tests + API round-trip checks",
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Any divergence from the existing Python tax logic would undermine the purpose of the web port",
+      "Weak handling of 2025+ wallet separation would create operator confusion at the most important workflow"
+    ],
+    "medium": [
+      "Mobile layout may hide too much lot detail unless drill-downs are designed intentionally",
+      "CSV expectations may be stricter than a pure web-preview implementation first assumes"
+    ],
+    "low": [
+      "The underlying calculator APIs already exist and are exercised by tests",
+      "Tax/reporting flows are self-contained enough to ship before imports"
+    ]
+  },
+  "preFlightChecklist": [
+    "Confirm whether wallet selection should be hard-required or overrideable for 2025+ exports",
+    "Identify current CSV consumers and preserve required column shapes",
+    "Choose how recent export history should be stored",
+    "Confirm mobile-first summary metrics that matter most during routine use"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+810/-0",
+    "storiesCount": 5,
+    "filesLikelyModified": [
+      "README.md",
+      "GETTING_STARTED.md",
+      "docs/IRS_2025_WALLET_RULES.md",
+      "src/python/bitcoinAccounts.py",
+      "src/python/db/queries/capital_gains.py"
+    ],
+    "filesLikelyCreated": [
+      "src/python/web/routes/tax.py",
+      "src/python/web/services/tax_reporting.py",
+      "tests/test_web_tax_reporting.py",
+      "web/tax-reporting/*"
+    ]
+  }
+}

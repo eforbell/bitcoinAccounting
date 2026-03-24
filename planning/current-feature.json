@@ -1,11 +1,37 @@
 {
-  "currentFeature": null,
-  "featureName": null,
-  "prdPath": null,
-  "summaryPath": null,
-  "branch": null,
-  "status": "idle",
-  "stories": [],
+  "currentFeature": "feature-18",
+  "featureName": "Web Tax Reporting and Forecasting",
+  "prdPath": "planning/features/feature-18-prd.json",
+  "summaryPath": "planning/features/feature-18-summary.md",
+  "branch": "feature/web-tax-reporting-forecasting",
+  "status": "in_progress",
+  "stories": [
+    {
+      "id": "WTX-001",
+      "title": "Web gains tracker endpoints and UI",
+      "status": "in_progress"
+    },
+    {
+      "id": "WTX-002",
+      "title": "Wallet-separated 1099-B export workflow",
+      "status": "in_progress"
+    },
+    {
+      "id": "WTX-003",
+      "title": "Hypothetical sale forecasting for mobile and desktop",
+      "status": "in_progress"
+    },
+    {
+      "id": "WTX-004",
+      "title": "Tax policy guidance and operator warnings",
+      "status": "in_progress"
+    },
+    {
+      "id": "WTX-005",
+      "title": "Saved tax presets and recent export history",
+      "status": "in_progress"
+    }
+  ],
   "completedFeatures": [
     {
       "featureId": "feature-1",
@@ -129,8 +155,8 @@
     }
   ],
   "futureEnhancements": [
-    "Feature #17: Pair price management (import/export)",
-    "Feature #18: Multi-coin support (ETH, other assets)",
-    "Per-exchange coverage monitor (liquidity wall early warning) — see planning/fixes_todo.md"
+    "Feature #22: Pair price management (import/export)",
+    "Feature #23: Multi-coin support (ETH, other assets)",
+    "Feature #24: Per-exchange coverage monitor (liquidity wall early warning) — see planning/fixes_todo.md"
   ]
 }

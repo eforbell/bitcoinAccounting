@@ -4,14 +4,17 @@
 2. Read the PRD at the path specified in `prdPath` (e.g., `planning/features/feature-2-prd.json`)
 3. Read `planning/progress.txt` (check Codebase Patterns first)
 4. Check you're on the correct branch (from `current-feature.json`)
-   - If branch doesn't exist, create it from `main`
-5. Pick highest priority story where `passes: false` or this field is missing
-6. Implement that ONE story completely
-7. Run typecheck (`mypy --strict`) and tests (`pytest`)
-8. Update AGENTS.md with learnings
-9. Commit: `feat: [ID] - [Title]`
-10. Update PRD: set `passes: true` for completed story
-11. Append learnings to progress.txt
+   - If branch doesn't exist, create it from `master`
+5. Start with the highest priority unfinished story, but use judgment:
+   - complete one story when the work is naturally bounded
+   - complete multiple tightly-coupled stories in one pass when the implementation and verification are materially shared
+   - avoid artificial pauses when Codex can carry the work further safely
+6. Prefer implementing end-to-end slices instead of partial scaffolding
+7. Run the relevant tests for the touched area; run broader test/typecheck passes when the change warrants it
+8. Update AGENTS.md with durable learnings when new patterns or gotchas are discovered
+9. Update PRD status fields for stories completed in the pass
+10. Append learnings to progress.txt
+11. Commit when asked or when the operating mode explicitly expects commits
 12. Don't ever commit DB credentials or other sensitive private data to git
 
 ## Progress Format
@@ -61,7 +64,7 @@ planning/
 If ALL stories in current feature pass, reply:
 <promise>COMPLETE</promise>
 
-Otherwise end normally after completing one story.
+Otherwise end normally after completing a coherent implementation slice.
 
 # Bash Guidelines
 ## IMPORTANT: Avoid commands that cause output buffering issues

@@ -2,6 +2,55 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Feature-18: Web Tax Reporting and Forecasting - WTX-001 / WTX-004
+
+### Tax API Translation Layer
+- Keep the web tax layer thin: build authenticated FastAPI routes over `BitcoinAccounts.get_sales_for_1099b()` and `forecast_capital_gains_fifo()` rather than re-implementing FIFO logic
+- Add explicit web models for lot rows, worksheet rows, forecast lots, and operator warnings so tax JSON stays stable even if the TUI keeps using dicts with display-style keys
+- CSV exports should be serialized from the same web report object used for JSON preview; do not maintain a second tax export code path
+
+### 2025+ Wallet Policy
+- For web tax preview/export routes, treat missing wallet filters in tax year 2025+ as a hard `400` policy error, not just a Python warning
+- Historical pre-2025 global FIFO flows can remain allowed, but return an informational warning in JSON so the operator understands the distinction
+- Forecast routes can stay more permissive because they are planning tools, but they should still preserve wallet-scoped behavior when requested
+
+### Tax Route Testing Pattern
+- Prefer real in-memory SQLite plus `BitcoinAccounts` for tax API tests; route-only mocks are too weak for FIFO/tax parity checks
+- Override `get_request_accounts` with a seeded `BitcoinAccounts` instance in FastAPI tests and authenticate through the real cookie login route before hitting protected tax endpoints
+- Good minimum coverage: auth requirement, historical gains summary, 2025+ wallet requirement, CSV export shape, and forecast lot breakdown
+
+### Web-Owned Tax State
+- Keep saved presets and recent-run history in dedicated web tables such as `web_tax_presets` and `web_tax_history`; this state belongs to the web product layer, not to ledger accounting
+- Lazily create the web state tables from the route/service layer with `CREATE TABLE IF NOT EXISTS ...` and explicit `backend.commit()` so both SQLite and PostgreSQL work without separate migrations for the first pass
+- Record web history from the API routes that actually serve gains, preview, export, worksheet, and forecast requests so the stored trail reflects real web usage only
+
+## Feature-17: Web Foundation, API Layer, Auth, and Deployment - WEB-001 / WEB-002
+
+### FastAPI Foundation
+- Use **FastAPI** for the Python API layer; create `src/python/web/` with `app.py`, `config.py`, `dependencies.py`, `models.py`, and `routes/`
+- Keep the web layer separate from the TUI — web routes should depend on `bitcoinAccounts` / `db` services, never on `tui/screens/*`
+- Add `web*` to `pyproject.toml` `packages.find.include` or the new package will not be discovered in editable installs
+
+### Request-Scoped DB Pattern
+- Web requests must **not** share one long-lived `BitcoinAccounts()` or backend instance
+- Provide generator dependencies like `get_request_backend()` / `get_request_accounts()` that create a backend/service per request and close it in `finally`
+- PostgreSQL remains the recommended production backend for web mode; SQLite stays supported but is not the primary production posture
+
+### Web Testing Pattern
+- `fastapi.testclient.TestClient` works well for focused route tests in this repo once `httpx` is installed in the local `.venv`
+- DB-aware route tests should override `get_request_backend` in `app.dependency_overrides` with a small fake backend so tests do not hit the operator `.env` PostgreSQL connection
+- Clean API resources should use explicit field names like `buy_currency`, `sell_currency`, and `wallet_id`; never expose TUI labels like `"Buy Cur."` in web JSON
+
+### Private Auth Baseline
+- `create_app(config=...)` is the preferred test seam for web work; pass explicit `WebConfig(...)` in tests instead of mutating real env vars
+- Early private auth can use stdlib HMAC-signed cookie sessions with env-backed passphrase + session secret; no auth table is required for the first slice
+- `BITCOIN_ACCOUNTING_AUTH_ENABLED=0` local-dev bypass is acceptable for early web development, but protected routes should still require a signed cookie when auth is enabled
+
+### Web Startup + Readiness
+- Split web health into liveness and readiness: `/api/health` should not require a DB call, `/api/ready` should probe the configured backend
+- Enforce PostgreSQL-first policy for production web mode in config validation; only allow SQLite in production when explicitly opted in
+- Convert auth/startup misconfiguration into a single `WebConfigurationError` surface so operator-facing failures and tests stay consistent
+
 ## Feature-16: Treasury Attestation and Monitoring UX - TAM-004
 
 ### Alert Engine + Finding Lifecycle

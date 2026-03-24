@@ -1,0 +1,141 @@
+{
+  "branchName": "feature/web-foundation-api-platform",
+  "projectName": "Web Foundation, API Layer, Auth, and Deployment",
+  "description": "Establish the production architecture for a private web application on top of the existing Python accounting core: a Python API/service layer, stable JSON contracts, lightweight private auth, and deployment posture for PostgreSQL-first self-hosting over Tailscale.",
+  "timing": {
+    "draftedOn": "2026-03-24",
+    "plannedEarliestExecution": "2026-03-25",
+    "gatingCondition": "Proceed after confirming PostgreSQL remains the primary production backend and after agreeing on Python API framework choice."
+  },
+  "principles": [
+    "Python Owns The Domain - no duplication of accounting or tax logic in Node/Express",
+    "PostgreSQL First - production web deployment is optimized for the existing PostgreSQL installation",
+    "SQLite Supported, Not Primary - retain compatibility for evaluation and low-concurrency installs",
+    "Stable JSON Contracts - frontend consumes explicit API models rather than TUI-shaped tables",
+    "Private Sovereignty App - auth is mandatory, but optimized for one trusted primary user rather than multi-tenant complexity",
+    "TUI Remains Fallback - web work must not degrade the existing TUI operating path"
+  ],
+  "techStack": {
+    "backendLanguage": "Python 3.11+",
+    "backendFramework": "FastAPI or Flask with explicit service/router separation",
+    "frontend": "Express-served static app or React SPA consuming Python JSON endpoints",
+    "testing": "pytest for backend contracts + frontend smoke tests",
+    "database": "PostgreSQL primary, SQLite supported via existing DatabaseBackend abstraction",
+    "deployment": "Bare metal service on Tailscale network with reverse proxy and systemd/PM2 as appropriate"
+  },
+  "userStories": [
+    {
+      "id": "WEB-001",
+      "title": "Select Python web framework and establish application structure",
+      "acceptanceCriteria": [
+        "Choose and document the Python web framework for long-running API service",
+        "Create app structure separating routers, request/response models, and domain service adapters",
+        "Keep BitcoinAccounts and query classes reusable without moving accounting logic into the web layer",
+        "Document how the web app coexists with the TUI and CLI entrypoints"
+      ],
+      "priority": 1,
+      "estimatedLines": "+220/-0",
+      "testStrategy": "pytest backend app import and health-route smoke tests",
+      "passes": true
+    },
+    {
+      "id": "WEB-002",
+      "title": "Define canonical JSON models for core resources",
+      "acceptanceCriteria": [
+        "Create stable API response models for portfolio summary, wallet, transaction, gains lot, forecast summary, and integrity finding resources",
+        "Normalize field naming away from TUI/table labels such as 'Buy Cur.' and 'Sell Cur.'",
+        "Document model versioning strategy and nullability rules",
+        "Expose transformed JSON without breaking existing Python domain logic"
+      ],
+      "priority": 2,
+      "estimatedLines": "+180/-0",
+      "testStrategy": "pytest model serialization tests with representative fixtures",
+      "passes": true
+    },
+    {
+      "id": "WEB-003",
+      "title": "Implement baseline private auth and session model",
+      "acceptanceCriteria": [
+        "Add login/logout/session endpoints suitable for a private single-operator household app",
+        "Support secure password or passphrase authentication with signed session cookie or equivalent token strategy",
+        "Protect all non-health API routes by default",
+        "Document bootstrap flow for first-time setup on bare metal"
+      ],
+      "priority": 3,
+      "estimatedLines": "+220/-0",
+      "testStrategy": "pytest auth route tests and unauthenticated access checks",
+      "passes": true
+    },
+    {
+      "id": "WEB-004",
+      "title": "Production database policy and connection lifecycle",
+      "acceptanceCriteria": [
+        "Define PostgreSQL as recommended production backend for the web app",
+        "Implement request-safe backend/session acquisition rather than reusing one long-lived SQLite/TUI-style connection object",
+        "Document SQLite support boundaries for low-concurrency deployments",
+        "Add configuration notes for connection pooling, transaction handling, and rollback behavior"
+      ],
+      "priority": 4,
+      "estimatedLines": "+160/-0",
+      "testStrategy": "pytest backend factory tests for postgres/sqlite selection and per-request lifecycle behavior",
+      "passes": true
+    },
+    {
+      "id": "WEB-005",
+      "title": "Operational deployment and observability baseline",
+      "acceptanceCriteria": [
+        "Document deployment topology for Python API plus frontend on Tailscale-accessible bare metal",
+        "Provide health endpoint, startup validation, and structured logging baseline",
+        "Document environment variables, secrets handling, and backup expectations",
+        "Record known limits and support stance for PostgreSQL vs SQLite in web mode"
+      ],
+      "priority": 5,
+      "estimatedLines": "+120/-0",
+      "testStrategy": "Manual deployment checklist + backend health probe verification",
+      "passes": true
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Treating the TUI orchestration layer as if it were already a stable API could produce brittle web contracts",
+      "Reusing a TUI-style shared connection model in a concurrent web server would create correctness and stability risk"
+    ],
+    "medium": [
+      "Framework choice made too late could create avoidable churn in routing and validation patterns",
+      "Overbuilding auth for a private single-user app could slow delivery without adding proportional value"
+    ],
+    "low": [
+      "The existing Python domain/query core is already mature enough to support an API adapter layer",
+      "Tailscale-based private hosting reduces exposure and simplifies first deployment"
+    ]
+  },
+  "preFlightChecklist": [
+    "Confirm Python API framework preference (FastAPI favored for typed JSON contracts)",
+    "Confirm PostgreSQL remains the recommended production backend for web mode",
+    "Decide whether frontend will be simple server-rendered/static JS or a React SPA",
+    "Choose auth bootstrapping approach appropriate for private household use"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+900/-0",
+    "storiesCount": 5,
+    "filesLikelyModified": [
+      "pyproject.toml",
+      "README.md",
+      "GETTING_STARTED.md",
+      "planning/current-feature.json",
+      "planning/progress.txt",
+      "src/python/db/__init__.py",
+      "src/python/bitcoinAccounts.py"
+    ],
+    "filesLikelyCreated": [
+      "src/python/web/__init__.py",
+      "src/python/web/app.py",
+      "src/python/web/auth.py",
+      "src/python/web/models.py",
+      "src/python/web/dependencies.py",
+      "tests/test_web_auth.py",
+      "tests/test_web_models.py",
+      "tests/test_web_health.py"
+    ]
+  }
+}

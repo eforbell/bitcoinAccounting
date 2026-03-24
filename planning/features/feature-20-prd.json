@@ -1,0 +1,130 @@
+{
+  "branchName": "feature/web-ledger-transactions-wallets",
+  "projectName": "Web Ledger, Transaction Entry, and Wallet Management",
+  "description": "Bring the operational editing surfaces to the web: ledger browsing, transaction details, manual entry flows, and wallet CRUD/rename/merge so the web app can serve routine management without losing TUI fallback safety.",
+  "timing": {
+    "draftedOn": "2026-03-24",
+    "plannedEarliestExecution": "2026-04-02",
+    "gatingCondition": "Proceed after foundation, tax, and portfolio features establish stable auth, navigation, and JSON model conventions."
+  },
+  "principles": [
+    "Operational Confidence - every write flow must be explicit, validated, and auditable",
+    "Wallets Are First-Class - preserve explicit wallet management because 2025+ tax rules depend on it",
+    "Safe Destructive Actions - rename, merge, delete, and restore flows require strong confirmation",
+    "TUI Logic, Web Presentation - the web layer calls existing Python write/query services rather than duplicating transaction logic",
+    "Desktop Depth, Mobile Utility - browsing and quick-entry should work on phone; dense table operations get richer desktop treatment"
+  ],
+  "techStack": {
+    "backendLanguage": "Python 3.11+",
+    "frontend": "Responsive web UI with table/filter forms and modal/detail flows",
+    "testing": "pytest API tests + frontend smoke tests",
+    "database": "PostgreSQL primary, SQLite supported",
+    "coreDependencies": "TransactionQuery + LedgerWriter + WalletQuery"
+  },
+  "userStories": [
+    {
+      "id": "WOP-001",
+      "title": "Ledger explorer API and responsive web table",
+      "acceptanceCriteria": [
+        "Expose ledger endpoint with filters for coin, wallet, date range, and deleted visibility",
+        "Return normalized transaction JSON rather than TUI column labels",
+        "Support pagination suitable for phone and desktop",
+        "Preserve soft-delete visibility and filtering semantics"
+      ],
+      "priority": 1,
+      "estimatedLines": "+220/-0",
+      "testStrategy": "pytest ledger endpoint tests with filter combinations and deleted rows",
+      "passes": false
+    },
+    {
+      "id": "WOP-002",
+      "title": "Transaction detail, edit, delete, and restore flows",
+      "acceptanceCriteria": [
+        "Show detail view for one transaction with all accounting fields",
+        "Allow edit of supported fields with diff preview or equivalent confirmation",
+        "Allow soft-delete and restore through authenticated write endpoints",
+        "Warn clearly before actions that can affect transfer-pair integrity or tax interpretation"
+      ],
+      "priority": 2,
+      "estimatedLines": "+220/-0",
+      "testStrategy": "pytest transaction write API tests and UI confirmation-flow checks",
+      "passes": false
+    },
+    {
+      "id": "WOP-003",
+      "title": "Manual transaction entry flows",
+      "acceptanceCriteria": [
+        "Provide buy, sell, transfer, and interest-income forms on the web",
+        "Reuse wallet dropdown/new-wallet patterns from the TUI behavior",
+        "Validate required numeric and wallet fields before write",
+        "Show concise success feedback and refresh related portfolio/tax views"
+      ],
+      "priority": 3,
+      "estimatedLines": "+220/-0",
+      "testStrategy": "pytest transaction creation API tests + frontend form smoke tests",
+      "passes": false
+    },
+    {
+      "id": "WOP-004",
+      "title": "Wallet management on the web",
+      "acceptanceCriteria": [
+        "Expose wallet CRUD endpoints and web screens for create, edit, activate/deactivate, rename, and merge",
+        "Show transaction counts and warnings on rename/merge flows",
+        "Call sync_wallets_from_ledger where needed so existing ledgers remain manageable",
+        "Preserve wallet metadata needed for tax and custody visibility"
+      ],
+      "priority": 4,
+      "estimatedLines": "+180/-0",
+      "testStrategy": "pytest wallet API tests with rename/merge transaction assertions",
+      "passes": false
+    },
+    {
+      "id": "WOP-005",
+      "title": "Audit and safety polish for write operations",
+      "acceptanceCriteria": [
+        "Log or persist operator-visible metadata for destructive actions where appropriate",
+        "Ensure failed writes roll back cleanly",
+        "Document expected behavior for concurrent writes in PostgreSQL vs SQLite web mode",
+        "Keep TUI fallback available for any flows deferred from the web"
+      ],
+      "priority": 5,
+      "estimatedLines": "+90/-0",
+      "testStrategy": "pytest rollback/concurrency-adjacent tests + manual review",
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Write-path bugs would damage trust faster than missing read-only features",
+      "Wallet rename/merge behavior is tax-sensitive and must remain exact"
+    ],
+    "medium": [
+      "Ledger UX can become cluttered quickly on phone-sized screens",
+      "Edit/delete flows require careful confirmation design to avoid accidental misuse"
+    ],
+    "low": [
+      "Core write/query behavior already exists in Python and is covered by tests",
+      "The TUI provides a proven fallback workflow during incremental rollout"
+    ]
+  },
+  "preFlightChecklist": [
+    "Confirm which write flows must be available on phone vs desktop-only first",
+    "Choose pagination/filter defaults for ledger browsing",
+    "Decide whether diff preview is mandatory for web transaction edits",
+    "Define minimal audit logging expectations for destructive actions"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+930/-0",
+    "storiesCount": 5,
+    "filesLikelyCreated": [
+      "src/python/web/routes/ledger.py",
+      "src/python/web/routes/wallets.py",
+      "src/python/web/routes/transactions.py",
+      "tests/test_web_ledger.py",
+      "tests/test_web_wallets.py",
+      "tests/test_web_transaction_entry.py",
+      "web/ledger/*",
+      "web/wallets/*"
+    ]
+  }
+}

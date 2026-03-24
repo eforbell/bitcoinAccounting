@@ -1,0 +1,126 @@
+{
+  "branchName": "feature/web-portfolio-dashboard",
+  "projectName": "Web Portfolio Dashboard and Wallet Views",
+  "description": "Deliver the daily-use portfolio experience for phone and desktop: total BTC holdings, cost basis, custody posture, wallet balances, and recent activity, all backed by the Python query core.",
+  "timing": {
+    "draftedOn": "2026-03-24",
+    "plannedEarliestExecution": "2026-03-30",
+    "gatingCondition": "Proceed after Feature-17 foundation and after tax/reporting endpoints are stable enough to share model conventions."
+  },
+  "principles": [
+    "Phone First, Desktop Better - core stats must be fast and readable from a phone, with richer drill-down on larger screens",
+    "Operator Clarity - highlight the balances and custody posture that matter for sovereignty decisions",
+    "No Hidden Inference - if wallet custody is inferred rather than explicit, say so",
+    "Fast Read Paths - portfolio endpoints should remain cheap enough for habitual use",
+    "Reuse Existing Domain Queries - derive outputs from WalletQuery, BalanceCalculator, and TransactionQuery rather than bespoke SQL sprawl"
+  ],
+  "techStack": {
+    "backendLanguage": "Python 3.11+",
+    "frontend": "Web UI with responsive tables/cards/charts as needed",
+    "testing": "pytest API tests + frontend smoke coverage",
+    "database": "PostgreSQL primary, SQLite supported",
+    "coreDependencies": "WalletQuery + BalanceCalculator + TransactionQuery"
+  },
+  "userStories": [
+    {
+      "id": "WPF-001",
+      "title": "Portfolio summary API and mobile dashboard",
+      "acceptanceCriteria": [
+        "Expose total BTC balance, average basis, wallet count, and recent transaction summary via one authenticated dashboard endpoint",
+        "Design phone-friendly cards for balance, basis, custody, and quick navigation",
+        "Keep initial dashboard latency low enough for habitual use",
+        "Preserve parity with current TUI/dashboard summary values"
+      ],
+      "priority": 1,
+      "estimatedLines": "+180/-0",
+      "testStrategy": "pytest dashboard endpoint tests with representative ledger fixtures",
+      "passes": false
+    },
+    {
+      "id": "WPF-002",
+      "title": "Wallet balances and custody breakdown",
+      "acceptanceCriteria": [
+        "Expose per-wallet balances, percentages of total, active status, and custody type",
+        "Render custody breakdown clearly with explicit notice when values are inferred from heuristics",
+        "Allow toggling inactive wallets on and off",
+        "Support coin selection with BTC as the default"
+      ],
+      "priority": 2,
+      "estimatedLines": "+170/-0",
+      "testStrategy": "pytest wallet summary API tests and UI filtering smoke tests",
+      "passes": false
+    },
+    {
+      "id": "WPF-003",
+      "title": "Wallet detail view with recent activity",
+      "acceptanceCriteria": [
+        "Provide wallet detail route showing balance, custody metadata, and recent related transactions",
+        "Support direct deep links suitable for phone bookmark usage",
+        "Allow quick jump from wallet view into ledger and tax flows",
+        "Reuse existing transaction filtering logic from the Python core"
+      ],
+      "priority": 3,
+      "estimatedLines": "+140/-0",
+      "testStrategy": "pytest wallet detail endpoint tests with linked transaction fixtures",
+      "passes": false
+    },
+    {
+      "id": "WPF-004",
+      "title": "Recent transactions strip and quick actions",
+      "acceptanceCriteria": [
+        "Show recent transactions on the dashboard with type, wallet, amount, and date",
+        "Add quick actions for record transaction, view ledger, and open tax forecast",
+        "Keep quick actions reachable in one tap on mobile",
+        "Ensure the UI remains useful even when the dataset is empty"
+      ],
+      "priority": 4,
+      "estimatedLines": "+100/-0",
+      "testStrategy": "Frontend smoke tests + API empty-state checks",
+      "passes": false
+    },
+    {
+      "id": "WPF-005",
+      "title": "Dashboard caching and refresh policy",
+      "acceptanceCriteria": [
+        "Document whether dashboard reads are fully live or lightly cached",
+        "Provide explicit refresh affordance rather than ambiguous stale data",
+        "Ensure write flows invalidate or refresh the right portfolio views",
+        "Avoid introducing background complexity before it is needed"
+      ],
+      "priority": 5,
+      "estimatedLines": "+70/-0",
+      "testStrategy": "Manual behavior verification + targeted invalidation tests",
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "If dashboard numbers drift from tax or ledger views, trust in the web app will drop quickly",
+      "Overly heavy dashboard queries could make habitual phone usage unpleasant"
+    ],
+    "medium": [
+      "Custody inference may be misread as authoritative metadata unless labeled carefully",
+      "Desktop and mobile needs differ enough that one layout may not serve both well without deliberate design"
+    ],
+    "low": [
+      "The portfolio surface is mostly read-only and composes cleanly from existing query classes",
+      "The TUI already defines the right conceptual scope for the first web dashboard"
+    ]
+  },
+  "preFlightChecklist": [
+    "Decide whether dashboard should include integrity/attestation teaser now or later",
+    "Confirm phone navigation priorities for top-level tabs/actions",
+    "Choose refresh/caching policy",
+    "Define exact empty-state language for a new database"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+660/-0",
+    "storiesCount": 5,
+    "filesLikelyCreated": [
+      "src/python/web/routes/portfolio.py",
+      "src/python/web/services/portfolio.py",
+      "tests/test_web_portfolio.py",
+      "web/portfolio/*"
+    ]
+  }
+}
