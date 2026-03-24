@@ -105,6 +105,13 @@ class PortfolioDashboardResponse(APIModel):
     using_inferred_custody: bool = False
 
 
+class WalletDetailResponse(APIModel):
+    """Single wallet detail payload with balance and recent activity."""
+
+    wallet: WalletBalanceResource
+    recent_transactions: list[TransactionResource]
+
+
 class GainsSummaryResource(APIModel):
     """Summary of realized gains for a tax period."""
 

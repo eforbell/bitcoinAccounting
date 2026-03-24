@@ -99,11 +99,6 @@
           </article>
         </section>
 
-        <section class="quick-actions">
-          <a class="button button-inline" href="tax" data-route="tax">Open Tax Workspace</a>
-          <button id="refresh-dashboard" class="button button-ghost button-inline" type="button">Refresh Dashboard</button>
-        </section>
-
         <section id="custody-warning" class="policy-banner hidden"></section>
 
         <section class="dashboard-grid">
@@ -140,6 +135,57 @@
             </div>
           </div>
           <div id="recent-transactions-list" class="tx-list"></div>
+        </section>
+      </section>
+
+      <section id="wallet-view" class="view-stack hidden">
+        <nav class="breadcrumb">
+          <a href="./" data-route="dashboard">Dashboard</a>
+          <span class="breadcrumb-sep">/</span>
+          <span id="wallet-view-name">Wallet</span>
+        </nav>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow" id="wallet-view-custody">self-custodied</p>
+              <h1 id="wallet-view-title">Wallet</h1>
+              <p id="wallet-view-desc" class="muted"></p>
+            </div>
+            <div class="wallet-view-balance-wrap">
+              <strong id="wallet-view-balance" class="wallet-view-hero-balance">0 BTC</strong>
+              <div id="wallet-view-pct" class="list-item-meta">0% of stack</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="summary-grid">
+          <article class="summary-card">
+            <span class="summary-label">Type</span>
+            <strong id="wallet-view-type">unknown</strong>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">Status</span>
+            <strong id="wallet-view-status">Active</strong>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">Transactions</span>
+            <strong id="wallet-view-tx-count">0</strong>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">% of Stack</span>
+            <strong id="wallet-view-pct-card">0%</strong>
+          </article>
+        </section>
+
+        <section class="panel subpanel">
+          <div class="panel-heading">
+            <div>
+              <h3>Recent Activity</h3>
+              <p>Latest transactions for this wallet.</p>
+            </div>
+          </div>
+          <div id="wallet-tx-list" class="tx-list"></div>
         </section>
       </section>
 

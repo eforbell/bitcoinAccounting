@@ -1,37 +1,11 @@
 {
-  "currentFeature": "feature-19",
-  "featureName": "Web Portfolio Dashboard and Wallet Views",
-  "prdPath": "planning/features/feature-19-prd.json",
-  "summaryPath": "planning/features/feature-19-summary.md",
-  "branch": "feature/web-portfolio-dashboard",
-  "status": "in_progress",
-  "stories": [
-    {
-      "id": "WPF-001",
-      "title": "Portfolio summary API and mobile dashboard",
-      "status": "completed"
-    },
-    {
-      "id": "WPF-002",
-      "title": "Wallet balances and custody breakdown",
-      "status": "completed"
-    },
-    {
-      "id": "WPF-003",
-      "title": "Wallet detail view with recent activity",
-      "status": "pending"
-    },
-    {
-      "id": "WPF-004",
-      "title": "Recent transactions strip and quick actions",
-      "status": "in_progress"
-    },
-    {
-      "id": "WPF-005",
-      "title": "Dashboard caching and refresh policy",
-      "status": "pending"
-    }
-  ],
+  "currentFeature": null,
+  "featureName": null,
+  "prdPath": null,
+  "summaryPath": null,
+  "branch": null,
+  "status": "idle",
+  "stories": [],
   "completedFeatures": [
     {
       "featureId": "feature-1",
@@ -152,6 +126,14 @@
       "mergedDate": "2026-02-24",
       "stories": 5,
       "notes": "Month-end attestation bundle generation (JSON/CSV) with deterministic run IDs, optional PDF reports via reportlab with graceful degradation, TUI monitoring dashboard with TreasuryIntegrityPanel and AttestationScreen (findings drill-down, source/severity filters, inline export), rule-based AlertEngine with AlertRule, finding lifecycle tracker (FindingTracker: new→acknowledged→resolved) persisted in SQLite. 148 tests across 4 test files."
+    },
+    {
+      "featureId": "feature-19",
+      "featureName": "Web Portfolio Dashboard and Wallet Views",
+      "branch": "feature/web-wallet-detail",
+      "mergedDate": "2026-03-24",
+      "stories": 5,
+      "notes": "Mobile-first portfolio dashboard with total BTC balance, cost basis, custody breakdown, wallet balances with inactive toggle, recent transactions strip, and wallet detail view with deep-link support. Server-injected <base href> for subpath-safe routing. Clickable wallet list drills into per-wallet detail with filtered transactions. 14 API tests + Playwright smoke coverage for click-through and direct URL deep-links. Removed redundant quick-action buttons in favor of navbar navigation."
     }
   ],
   "futureEnhancements": [

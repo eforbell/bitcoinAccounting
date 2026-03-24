@@ -153,6 +153,62 @@ def test_dashboard_can_include_inactive_wallets(client: TestClient) -> None:
     assert "OldVault" in wallet_ids
 
 
+def test_wallet_detail_returns_balance_and_transactions(client: TestClient) -> None:
+    response = client.get("/api/portfolio/wallet/Coldcard", params={"coin": "BTC"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["wallet"]["wallet_id"] == "Coldcard"
+    assert body["wallet"]["custody"] == "self-custodied"
+    assert body["wallet"]["balance"] == pytest.approx(1.1)
+    assert body["wallet"]["active"] is True
+    assert body["wallet"]["percentage"] > 0
+    assert len(body["recent_transactions"]) >= 1
+
+
+def test_wallet_detail_returns_404_for_unknown_wallet(client: TestClient) -> None:
+    response = client.get("/api/portfolio/wallet/NonExistent")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Wallet not found"
+
+
+def test_wallet_detail_requires_auth() -> None:
+    app = create_app(
+        WebConfig(
+            auth_enabled=True,
+            auth_passphrase="orange-hodl",
+            session_secret="test-secret",
+        )
+    )
+    client = TestClient(app)
+
+    response = client.get("/api/portfolio/wallet/Coldcard")
+
+    assert response.status_code == 401
+
+
+def test_wallet_detail_for_inactive_wallet(client: TestClient) -> None:
+    response = client.get("/api/portfolio/wallet/OldVault", params={"coin": "BTC"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["wallet"]["wallet_id"] == "OldVault"
+    assert body["wallet"]["active"] is False
+    assert body["wallet"]["balance"] == pytest.approx(0.0)
+
+
+def test_wallet_ui_shell_is_served(client: TestClient) -> None:
+    app = create_app(WebConfig(auth_enabled=False))
+    unauthenticated = TestClient(app)
+
+    response = unauthenticated.get("/wallet/Coldcard")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Bitcoin Accounting" in response.text
+
+
 def test_dashboard_ui_shell_is_served_on_tax_path() -> None:
     app = create_app(WebConfig(auth_enabled=False))
     client = TestClient(app)

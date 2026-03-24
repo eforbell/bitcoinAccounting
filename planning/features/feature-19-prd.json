@@ -62,7 +62,7 @@
       "priority": 3,
       "estimatedLines": "+140/-0",
       "testStrategy": "pytest wallet detail endpoint tests with linked transaction fixtures",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WPF-004",
@@ -76,7 +76,8 @@
       "priority": 4,
       "estimatedLines": "+100/-0",
       "testStrategy": "Frontend smoke tests + API empty-state checks",
-      "passes": false
+      "passes": true,
+      "closureNotes": "Recent tx strip and empty states complete. Quick-action buttons removed by design — navbar provides navigation, record-transaction deferred to a future actions feature."
     },
     {
       "id": "WPF-005",
@@ -90,7 +91,8 @@
       "priority": 5,
       "estimatedLines": "+70/-0",
       "testStrategy": "Manual behavior verification + targeted invalidation tests",
-      "passes": false
+      "passes": true,
+      "closureNotes": "Dashboard uses fully live queries with no caching — appropriate for single-operator use. No write flows exist on web yet so invalidation is N/A. No premature background complexity introduced."
     }
   ],
   "riskAssessment": {

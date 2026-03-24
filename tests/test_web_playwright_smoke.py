@@ -157,6 +157,25 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             page.get_by_role("button", name="Save Current Filters").click()
             playwright.expect(page.locator("#presets-list")).to_contain_text("Vault Forecast")
             playwright.expect(page.locator("#history-list")).to_contain_text("forecast")
+
+            # Navigate back to dashboard and click into wallet detail
+            page.locator('.app-sidebar .nav-item[data-route="dashboard"]').click()
+            playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
+
+            page.locator('[data-wallet-id="Strike"]').click()
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Strike")
+            playwright.expect(page.locator("#wallet-view-balance")).to_contain_text("BTC")
+            playwright.expect(page.locator("#wallet-tx-list")).not_to_contain_text("Not Found")
+            assert "/wallet/Strike" in page.url
+
+            # Verify direct-load of wallet URL works (API resolves from subpath)
+            page.goto(base_url + "wallet/Vault", wait_until="networkidle")
+            if page.locator("#login-panel").is_visible():
+                page.get_by_label("Passphrase").fill("orange-hodl")
+                page.get_by_role("button", name="Sign In").click()
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            playwright.expect(page.locator("#wallet-view-balance")).to_contain_text("BTC")
+            playwright.expect(page.locator("#wallet-tx-list")).not_to_contain_text("Not Found")
         finally:
             if browser is not None:
                 browser.close()

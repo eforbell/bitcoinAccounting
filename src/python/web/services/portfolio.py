@@ -11,6 +11,7 @@ from web.models import (
     PortfolioSummaryResource,
     TransactionResource,
     WalletBalanceResource,
+    WalletDetailResponse,
 )
 
 _CUSTODY_PRIORITY = {
@@ -137,4 +138,45 @@ def build_portfolio_dashboard(
         wallets=wallet_rows,
         recent_transactions=recent_transactions,
         using_inferred_custody=using_inferred_custody,
+    )
+
+
+def build_wallet_detail(
+    accounts: BitcoinAccounts,
+    wallet_id: str,
+    coin: str = "BTC",
+    recent_limit: int = 20,
+) -> WalletDetailResponse | None:
+    """Build a single-wallet detail payload with recent activity."""
+    all_wallets = accounts.get_wallets(active_only=False)
+    wallet_meta = next(
+        (w for w in all_wallets if w.get("wallet_id") == wallet_id), None
+    )
+    if wallet_meta is None:
+        return None
+
+    wallet_balances = accounts.get_wallet_balance(coin, None)
+    total_balance = sum(float(v) for v in wallet_balances.values())
+    wallet_balance = float(wallet_balances.get(wallet_id, 0.0))
+    percentage = (wallet_balance / total_balance * 100) if total_balance > 0 else 0.0
+
+    wallet_resource = WalletBalanceResource(
+        wallet_id=wallet_id,
+        wallet_type=str(wallet_meta.get("type", "unknown")),
+        custody=_normalize_custody(wallet_meta.get("custody")),
+        description=wallet_meta.get("description"),
+        active=bool(wallet_meta.get("active", True)),
+        balance=wallet_balance,
+        percentage=percentage,
+    )
+
+    _headers, transactions = accounts.get_transactions(coin=coin, wallet=wallet_id)
+    recent_transactions = [
+        _build_transaction_resource(row)
+        for row in list(reversed(transactions))[:recent_limit]
+    ]
+
+    return WalletDetailResponse(
+        wallet=wallet_resource,
+        recent_transactions=recent_transactions,
     )

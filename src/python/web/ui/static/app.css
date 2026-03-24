@@ -614,6 +614,43 @@ th {
   color: var(--text-muted);
 }
 
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.breadcrumb a {
+  color: var(--orange-primary);
+}
+
+.breadcrumb-sep {
+  opacity: 0.4;
+}
+
+.list-item-link {
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.list-item-link:hover {
+  border-color: var(--border-strong);
+  background: rgba(247, 147, 26, 0.06);
+}
+
+.wallet-view-balance-wrap {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.wallet-view-hero-balance {
+  font-size: clamp(1.4rem, 3vw, 1.8rem);
+  letter-spacing: -0.02em;
+}
+
 .app-bottom-bar {
   display: none;
 }

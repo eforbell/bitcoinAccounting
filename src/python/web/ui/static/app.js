@@ -2,7 +2,9 @@ const state = {
   session: null,
   policy: null,
   dashboard: null,
+  walletDetail: null,
   currentPage: 'dashboard',
+  currentWalletId: null,
   includeInactive: false,
   gainsFilters: { taxYear: 2024, coin: 'BTC', wallet: '' },
   forecastFilters: { coin: 'BTC', wallet: '', quantity: 0.1, salePriceUsd: 100000 },
@@ -29,23 +31,51 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function relativePath(page) {
-  return page === 'tax' ? 'tax' : './';
+function appBase() {
+  const base = document.querySelector('base');
+  if (base) return new URL(base.getAttribute('href'), window.location.origin).pathname;
+  const path = window.location.pathname;
+  const taxIdx = path.indexOf('/tax');
+  if (taxIdx !== -1) return path.slice(0, taxIdx + 1);
+  const walletIdx = path.indexOf('/wallet/');
+  if (walletIdx !== -1) return path.slice(0, walletIdx + 1);
+  return path.endsWith('/') ? path : path + '/';
+}
+
+function appPath(page) {
+  const base = appBase();
+  if (page === 'tax') return `${base}tax`;
+  if (page === 'wallet' && state.currentWalletId) return `${base}wallet/${encodeURIComponent(state.currentWalletId)}`;
+  return base;
 }
 
 function currentRouteFromLocation() {
   const path = window.location.pathname.replace(/\/+$/, '');
-  return path.endsWith('/tax') ? 'tax' : 'dashboard';
+  if (path.endsWith('/tax')) return 'tax';
+  const walletMatch = path.match(/\/wallet\/([^/]+)$/);
+  if (walletMatch) {
+    state.currentWalletId = decodeURIComponent(walletMatch[1]);
+    return 'wallet';
+  }
+  return 'dashboard';
 }
 
 function navigateTo(page, replace = false) {
   state.currentPage = page;
-  const target = relativePath(page);
-  if (window.location.pathname !== new URL(target, window.location.href).pathname) {
+  const target = appPath(page);
+  if (window.location.pathname !== target) {
     const method = replace ? 'replaceState' : 'pushState';
     window.history[method]({ page }, '', target);
   }
   renderPageState();
+  if (page === 'wallet' && state.currentWalletId) {
+    loadWalletDetail(state.currentWalletId);
+  }
+}
+
+function navigateToWallet(walletId) {
+  state.currentWalletId = walletId;
+  navigateTo('wallet');
 }
 
 async function api(path, options = {}) {
@@ -54,7 +84,9 @@ async function api(path, options = {}) {
     ...(options.headers || {}),
   };
 
-  const response = await fetch(path, {
+  const url = new URL(path, new URL(appBase(), window.location.origin)).href;
+
+  const response = await fetch(url, {
     credentials: 'same-origin',
     headers,
     ...options,
@@ -92,6 +124,7 @@ function showLoggedOut() {
   byId('login-panel').classList.remove('hidden');
   byId('dashboard-view').classList.add('hidden');
   byId('tax-view').classList.add('hidden');
+  byId('wallet-view').classList.add('hidden');
   byId('operator-chip').textContent = 'operator';
   setSessionGlyph(false);
 }
@@ -105,13 +138,16 @@ function showLoggedIn(username) {
 
 function renderPageState() {
   document.body.classList.add('app-has-nav');
-  const isTax = state.currentPage === 'tax';
-  document.title = isTax ? 'Bitcoin Accounting | Tax' : 'Bitcoin Accounting | Dashboard';
-  byId('dashboard-view').classList.toggle('hidden', !state.session || isTax);
-  byId('tax-view').classList.toggle('hidden', !state.session || !isTax);
+  const page = state.currentPage;
+  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet' };
+  document.title = `Bitcoin Accounting | ${titles[page] || 'Dashboard'}`;
+  byId('dashboard-view').classList.toggle('hidden', !state.session || page !== 'dashboard');
+  byId('tax-view').classList.toggle('hidden', !state.session || page !== 'tax');
+  byId('wallet-view').classList.toggle('hidden', !state.session || page !== 'wallet');
 
+  const navRoute = page === 'wallet' ? 'dashboard' : page;
   for (const item of document.querySelectorAll('[data-route]')) {
-    item.classList.toggle('active', item.dataset.route === state.currentPage);
+    item.classList.toggle('active', item.dataset.route === navRoute);
   }
 }
 
@@ -161,7 +197,7 @@ function renderDashboard(dashboard) {
 
   byId('wallet-list').innerHTML = dashboard.wallets.length
     ? dashboard.wallets.map((wallet) => `
-        <div class="list-item">
+        <a class="list-item list-item-link" href="${appBase()}wallet/${encodeURIComponent(wallet.wallet_id)}" data-wallet-id="${escapeHtml(wallet.wallet_id)}">
           <div class="wallet-main">
             <div class="wallet-title">${escapeHtml(wallet.wallet_id)}</div>
             <div class="tx-detail">
@@ -175,32 +211,18 @@ function renderDashboard(dashboard) {
             <div class="wallet-balance">${Number(wallet.balance).toFixed(8)} BTC</div>
             <div class="list-item-meta">${wallet.percentage.toFixed(1)}% of stack</div>
           </div>
-        </div>
+        </a>
       `).join('')
     : '<div class="list-item"><div class="list-item-meta">No wallets with BTC balance yet.</div></div>';
 
-  byId('recent-transactions-list').innerHTML = dashboard.recent_transactions.length
-    ? dashboard.recent_transactions.map((tx) => {
-        const direction = tx.buy_currency === 'BTC'
-          ? `${Number(tx.buy_amount || 0).toFixed(8)} BTC`
-          : `${Number(tx.sell_amount || 0).toFixed(8)} BTC`;
-        return `
-          <div class="tx-row">
-            <div class="tx-main">
-              <div class="tx-title-row">
-                <span class="tx-title">${escapeHtml(tx.wallet_id || 'Unknown wallet')}</span>
-                <span class="tx-type-pill">${escapeHtml(tx.transaction_type || 'Tx')}</span>
-              </div>
-              <div class="tx-detail">
-                <span>${escapeHtml(tx.created_at)}</span>
-                ${tx.comment ? `<span>${escapeHtml(tx.comment)}</span>` : ''}
-              </div>
-            </div>
-            <div class="tx-amount">${escapeHtml(direction)}</div>
-          </div>
-        `;
-      }).join('')
-    : '<div class="tx-row"><div class="list-item-meta">No recent transactions yet.</div></div>';
+  for (const link of byId('wallet-list').querySelectorAll('[data-wallet-id]')) {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      navigateToWallet(link.dataset.walletId);
+    });
+  }
+
+  byId('recent-transactions-list').innerHTML = renderTransactionRows(dashboard.recent_transactions);
 }
 
 async function loadDashboard() {
@@ -211,6 +233,56 @@ async function loadDashboard() {
   });
   const dashboard = await api(`api/portfolio/dashboard?${params.toString()}`);
   renderDashboard(dashboard);
+}
+
+function renderTransactionRows(transactions) {
+  if (!transactions.length) {
+    return '<div class="tx-row"><div class="list-item-meta">No transactions yet.</div></div>';
+  }
+  return transactions.map((tx) => {
+    const direction = tx.buy_currency === 'BTC'
+      ? `${Number(tx.buy_amount || 0).toFixed(8)} BTC`
+      : `${Number(tx.sell_amount || 0).toFixed(8)} BTC`;
+    return `
+      <div class="tx-row">
+        <div class="tx-main">
+          <div class="tx-title-row">
+            <span class="tx-title">${escapeHtml(tx.wallet_id || 'Unknown wallet')}</span>
+            <span class="tx-type-pill">${escapeHtml(tx.transaction_type || 'Tx')}</span>
+          </div>
+          <div class="tx-detail">
+            <span>${escapeHtml(tx.created_at)}</span>
+            ${tx.comment ? `<span>${escapeHtml(tx.comment)}</span>` : ''}
+          </div>
+        </div>
+        <div class="tx-amount">${escapeHtml(direction)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadWalletDetail(walletId) {
+  try {
+    const params = new URLSearchParams({ coin: 'BTC', recent_limit: '20' });
+    const detail = await api(`api/portfolio/wallet/${encodeURIComponent(walletId)}?${params.toString()}`);
+    state.walletDetail = detail;
+
+    const w = detail.wallet;
+    byId('wallet-view-name').textContent = w.wallet_id;
+    byId('wallet-view-title').textContent = w.wallet_id;
+    byId('wallet-view-custody').textContent = w.custody;
+    byId('wallet-view-desc').textContent = w.description || '';
+    byId('wallet-view-balance').textContent = `${Number(w.balance).toFixed(8)} BTC`;
+    byId('wallet-view-pct').textContent = `${w.percentage.toFixed(1)}% of stack`;
+    byId('wallet-view-type').textContent = w.wallet_type;
+    byId('wallet-view-status').textContent = w.active ? 'Active' : 'Inactive';
+    byId('wallet-view-tx-count').textContent = String(detail.recent_transactions.length);
+    byId('wallet-view-pct-card').textContent = `${w.percentage.toFixed(1)}%`;
+
+    byId('wallet-tx-list').innerHTML = renderTransactionRows(detail.recent_transactions);
+  } catch (error) {
+    byId('wallet-tx-list').innerHTML = `<div class="tx-row"><div class="list-item-meta">${escapeHtml(error.message)}</div></div>`;
+  }
 }
 
 async function loadPolicy() {
@@ -362,7 +434,7 @@ function downloadTaxArtifact(kind) {
   if (state.gainsFilters.wallet) {
     params.set('wallet', state.gainsFilters.wallet);
   }
-  window.location.href = `api/tax/${kind}?${params.toString()}`;
+  window.location.href = `${appBase()}api/tax/${kind}?${params.toString()}`;
 }
 
 async function refreshSession() {
@@ -370,7 +442,11 @@ async function refreshSession() {
     const session = await api('api/auth/me');
     state.session = session;
     showLoggedIn(session.username);
-    await Promise.all([loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast()]);
+    const loaders = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast()];
+    if (state.currentPage === 'wallet' && state.currentWalletId) {
+      loaders.push(loadWalletDetail(state.currentWalletId));
+    }
+    await Promise.all(loaders);
   } catch (_) {
     state.session = null;
     showLoggedOut();
@@ -386,8 +462,12 @@ function bindNavigation() {
   }
 
   window.addEventListener('popstate', () => {
+    const previousWalletId = state.currentWalletId;
     state.currentPage = currentRouteFromLocation();
     renderPageState();
+    if (state.currentPage === 'wallet' && state.currentWalletId && state.currentWalletId !== previousWalletId) {
+      loadWalletDetail(state.currentWalletId);
+    }
   });
 }
 
@@ -404,7 +484,11 @@ function bindEvents() {
       state.session = session;
       setAuthStatus('Authenticated.');
       showLoggedIn(session.username);
-      await Promise.all([loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast()]);
+      const postLogin = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast()];
+      if (state.currentPage === 'wallet' && state.currentWalletId) {
+        postLogin.push(loadWalletDetail(state.currentWalletId));
+      }
+      await Promise.all(postLogin);
     } catch (error) {
       setAuthStatus(error.message, true);
     }
@@ -423,10 +507,6 @@ function bindEvents() {
 
   byId('session-action').addEventListener('click', handleSessionAction);
   byId('mobile-session-action').addEventListener('click', handleSessionAction);
-
-  byId('refresh-dashboard').addEventListener('click', async () => {
-    await loadDashboard();
-  });
 
   byId('inactive-toggle').addEventListener('change', async (event) => {
     state.includeInactive = event.target.checked;
