@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from web.app import create_app
-from web.auth import session_cookie_secure, verify_auth_passphrase
+from web.auth import session_cookie_path, session_cookie_secure, verify_auth_passphrase
 from web.config import WebConfig
 
 
@@ -119,3 +119,24 @@ def test_login_marks_cookie_secure_in_production() -> None:
 
     assert response.status_code == 200
     assert "Secure" in response.headers["set-cookie"]
+
+
+def test_session_cookie_path_defaults_to_root() -> None:
+    assert session_cookie_path(WebConfig()) == "/"
+
+
+def test_login_scopes_cookie_to_configured_base_path() -> None:
+    app = create_app(
+        WebConfig(
+            auth_enabled=True,
+            auth_passphrase="orange-hodl",
+            session_secret="test-secret",
+            web_base_path="/bitcoin-accounting",
+        )
+    )
+    client = TestClient(app)
+
+    response = client.post("/api/auth/login", json={"passphrase": "orange-hodl"})
+
+    assert response.status_code == 200
+    assert "Path=/bitcoin-accounting" in response.headers["set-cookie"]

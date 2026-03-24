@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from fastapi import HTTPException, Request, Response, status
 
-from web.config import WebConfig
+from web.config import WebConfig, normalized_base_path
 
 
 class AuthConfigurationError(RuntimeError):
@@ -60,6 +60,11 @@ def session_cookie_secure(config: WebConfig) -> bool:
     if config.session_cookie_secure is not None:
         return config.session_cookie_secure
     return config.app_env.lower() in {"production", "prod"}
+
+
+def session_cookie_path(config: WebConfig) -> str:
+    """Return the session cookie path, scoped to the mounted app base path."""
+    return normalized_base_path(config.web_base_path) or "/"
 
 
 def require_auth_config(config: WebConfig) -> None:
@@ -150,10 +155,10 @@ def set_session_cookie(response: Response, token: str, config: WebConfig) -> Non
         samesite="strict",
         secure=session_cookie_secure(config),
         max_age=config.session_ttl_seconds,
-        path="/",
+        path=session_cookie_path(config),
     )
 
 
 def clear_session_cookie(response: Response, config: WebConfig) -> None:
     """Clear the session cookie from a response."""
-    response.delete_cookie(config.session_cookie_name, path="/")
+    response.delete_cookie(config.session_cookie_name, path=session_cookie_path(config))

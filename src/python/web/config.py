@@ -16,6 +16,7 @@ class WebConfig:
 
     app_name: str = "Bitcoin Accounting API"
     app_env: str = "development"
+    web_base_path: str = ""
     docs_enabled: bool = True
     db_backend: str = "sqlite"
     allow_sqlite_in_production: bool = False
@@ -30,6 +31,7 @@ class WebConfig:
 def load_web_config() -> WebConfig:
     """Load web configuration from environment variables."""
     app_env = os.getenv("BITCOIN_ACCOUNTING_ENV", "development").strip() or "development"
+    web_base_path = os.getenv("BITCOIN_ACCOUNTING_WEB_BASE_PATH", "").strip()
     docs_raw = os.getenv("BITCOIN_ACCOUNTING_WEB_DOCS", "1").strip().lower()
     docs_enabled = docs_raw not in {"0", "false", "off", "no"}
     db_backend = os.getenv("DB_BACKEND", "sqlite").strip().lower() or "sqlite"
@@ -48,6 +50,7 @@ def load_web_config() -> WebConfig:
     session_ttl_seconds = int(ttl_raw)
     return WebConfig(
         app_env=app_env,
+        web_base_path=web_base_path,
         docs_enabled=docs_enabled,
         db_backend=db_backend,
         allow_sqlite_in_production=allow_sqlite_in_production,
@@ -58,6 +61,21 @@ def load_web_config() -> WebConfig:
         session_cookie_secure=session_cookie_secure,
         session_ttl_seconds=session_ttl_seconds,
     )
+
+
+def normalized_base_path(raw_path: str) -> str:
+    """Normalize configured web base path for subpath-mounted deployments."""
+    value = raw_path.strip()
+    if value in {"", "/"}:
+        return ""
+    if not value.startswith("/"):
+        raise WebConfigurationError(
+            "BITCOIN_ACCOUNTING_WEB_BASE_PATH must start with '/' when set."
+        )
+    normalized = value.rstrip("/")
+    if not normalized:
+        return ""
+    return normalized
 
 
 def validate_web_config(config: WebConfig) -> None:
@@ -75,6 +93,8 @@ def validate_web_config(config: WebConfig) -> None:
 
     if config.session_ttl_seconds <= 0:
         raise WebConfigurationError("Session TTL must be greater than zero.")
+
+    normalized_base_path(config.web_base_path)
 
     if config.app_env.lower() in {"production", "prod"}:
         if backend != "postgres" and not config.allow_sqlite_in_production:

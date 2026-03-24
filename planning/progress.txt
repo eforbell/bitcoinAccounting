@@ -3,6 +3,26 @@
 - FastAPI DB-aware route testing: override dependency functions with lightweight fake backends in `app.dependency_overrides` so route tests don't touch live PostgreSQL from `.env`
 - Web package discovery: add `web*` to `tool.setuptools.packages.find.include` and install web dependencies in the local `.venv` before running new API tests
 
+## 2026-03-24 - Web deployment + base-path slice
+- What was implemented: Added subpath-aware web config via `BITCOIN_ACCOUNTING_WEB_BASE_PATH`, scoped session cookies to the configured mount path, set FastAPI `root_path`, added `bitcoin-accounting-web-init` for runtime validation/bootstrap, and created deploy assets for `numenor` (`deploy.sh`, systemd unit, nginx example, deploy notes)
+- Files changed:
+  - `pyproject.toml`
+  - `src/python/web/app.py`
+  - `src/python/web/auth.py`
+  - `src/python/web/cli.py`
+  - `src/python/web/config.py`
+  - `src/python/web/startup.py`
+  - `tests/test_web_auth.py`
+  - `tests/test_web_startup.py`
+  - `deploy/bitcoin-accounting-web.service`
+  - `deploy/deploy.sh`
+  - `deploy/nginx-bitcoin-accounting.conf.example`
+  - `deploy/README.md`
+- **Learnings:**
+  - Subpath mounting should be expressed once in config and propagated into `root_path` plus cookie scope, not duplicated into route prefixes
+  - PostgreSQL web deployment needs schema verification rather than blind auto-creation because the canonical core schema is still owned by `src/sql/tables.sql`
+  - A Python web init command is the right analog to the old Node migration step: validate config, verify core DB state, ensure web-owned tables, then let systemd start the service
+
 ## 2026-03-24 - WTX-001 / WTX-002 / WTX-003 / WTX-004 (API slice)
 - What was implemented: Added first authenticated tax API slice with `/api/tax/gains`, `/api/tax/1099b/preview`, `/api/tax/1099b/export`, `/api/tax/1099b/worksheet`, and `/api/tax/forecast`; introduced canonical tax JSON resources plus a small web tax service layer that translates existing `BitcoinAccounts` tax outputs into API-friendly models and CSV responses without changing the underlying FIFO logic
 - Files changed:

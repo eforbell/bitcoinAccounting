@@ -1,0 +1,18 @@
+# Example nginx location block for subpath mounting.
+# External path: /bitcoin-accounting/
+# Upstream app: http://127.0.0.1:3010/
+#
+# This configuration strips the /bitcoin-accounting/ prefix before proxying.
+# The app must still set BITCOIN_ACCOUNTING_WEB_BASE_PATH=/bitcoin-accounting
+# so cookies, docs, and future frontend routing stay scoped correctly.
+
+location /bitcoin-accounting/ {
+    proxy_pass http://127.0.0.1:3010/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Prefix /bitcoin-accounting;
+    proxy_redirect off;
+}

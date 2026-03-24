@@ -34,6 +34,7 @@ dev = [
 [project.scripts]
 bitcoin-accounting = "bitcoinAccounting:main"
 bitcoin-integrity = "integrity.cli:main"
+bitcoin-accounting-web-init = "web.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src/python"}

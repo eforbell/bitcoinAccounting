@@ -1,0 +1,17 @@
+[Unit]
+Description=Bitcoin Accounting Web API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=forbell
+WorkingDirectory=/data/apps/bitcoinAccounting
+EnvironmentFile=/data/apps/bitcoinAccounting/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/data/apps/bitcoinAccounting/.venv/bin/uvicorn web.app:create_app --factory --host 127.0.0.1 --port 3010
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

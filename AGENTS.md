@@ -2,6 +2,23 @@
 
 ## For python develpment, always prefer a local virtualenvs over the system python interpreter!
 
+## Web Deployment: Base Path + Runtime Init
+
+### Subpath Mounting
+- Treat `BITCOIN_ACCOUNTING_WEB_BASE_PATH` as the single source of truth for nginx subpath mounting; normalize `""` and `"/"` to root, otherwise require a leading slash and strip a trailing slash
+- FastAPI should keep clean route definitions and use `root_path` for external subpath awareness instead of hard-coding the prefix into every router
+- Auth cookies must be scoped to the normalized base path (`/bitcoin-accounting`) rather than `/` so multiple household apps can coexist on one host cleanly
+
+### Runtime Bootstrap
+- `initialize_web_runtime()` is the deployment bootstrap seam: validate config, probe the DB, ensure runtime schema, then exit cleanly
+- SQLite may create core tables via `create_tables()`, but PostgreSQL production bootstrap should verify core tables and fail with an actionable `psql -f src/sql/tables.sql` message if they are missing
+- Web-owned tables like `web_tax_presets` and `web_tax_history` are safe to initialize from the Python web runtime on both backends
+
+### Deploy Assets
+- For the Python web app, prefer a systemd-managed `uvicorn web.app:create_app --factory` service over trying to mirror the Node process model exactly
+- Keep nginx responsible for stripping the external subpath prefix before proxying upstream, while still setting `BITCOIN_ACCOUNTING_WEB_BASE_PATH` so cookies/docs/frontend paths remain correct
+- A repo-local `deploy/deploy.sh` should handle venv creation, editable install, `bitcoin-accounting-web-init`, and service restart in one path for host prep on `numenor`
+
 ## Feature-18: Web Tax Reporting and Forecasting - WTX-001 / WTX-004
 
 ### Tax API Translation Layer
