@@ -132,11 +132,14 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             page = browser.new_page()
             page.goto(base_url, wait_until="networkidle")
 
-            playwright.expect(page.get_by_role("heading", name="Bitcoin Accounting")).to_be_visible()
+            playwright.expect(page.locator(".nav-logo")).to_contain_text("Bitcoin Accounting")
             page.get_by_label("Passphrase").fill("orange-hodl")
             page.get_by_role("button", name="Sign In").click()
 
-            playwright.expect(page.get_by_role("heading", name="Tax Dashboard")).to_be_visible()
+            playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
+            playwright.expect(page.locator("#dashboard-balance")).to_contain_text("BTC")
+            page.locator('.app-sidebar [data-route="tax"]').click()
+            playwright.expect(page.locator('#tax-view h1')).to_have_text("Tax")
             playwright.expect(page.locator("#policy-summary")).to_contain_text("Wallet-separated FIFO")
 
             page.get_by_role("button", name="Load Gains").click()

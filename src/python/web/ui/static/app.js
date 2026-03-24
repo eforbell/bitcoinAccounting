@@ -1,6 +1,9 @@
 const state = {
   session: null,
   policy: null,
+  dashboard: null,
+  currentPage: 'dashboard',
+  includeInactive: false,
   gainsFilters: { taxYear: 2024, coin: 'BTC', wallet: '' },
   forecastFilters: { coin: 'BTC', wallet: '', quantity: 0.1, salePriceUsd: 100000 },
 };
@@ -24,6 +27,25 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function relativePath(page) {
+  return page === 'tax' ? 'tax' : './';
+}
+
+function currentRouteFromLocation() {
+  const path = window.location.pathname.replace(/\/+$/, '');
+  return path.endsWith('/tax') ? 'tax' : 'dashboard';
+}
+
+function navigateTo(page, replace = false) {
+  state.currentPage = page;
+  const target = relativePath(page);
+  if (window.location.pathname !== new URL(target, window.location.href).pathname) {
+    const method = replace ? 'replaceState' : 'pushState';
+    window.history[method]({ page }, '', target);
+  }
+  renderPageState();
 }
 
 async function api(path, options = {}) {
@@ -56,6 +78,43 @@ async function api(path, options = {}) {
   return response;
 }
 
+function setAuthStatus(message, isError = false) {
+  const status = byId('auth-status');
+  status.textContent = message;
+  status.style.color = isError ? 'var(--danger)' : 'var(--text-muted)';
+}
+
+function setSessionGlyph(authenticated) {
+  byId('session-glyph').textContent = authenticated ? '↗' : '⌁';
+}
+
+function showLoggedOut() {
+  byId('login-panel').classList.remove('hidden');
+  byId('dashboard-view').classList.add('hidden');
+  byId('tax-view').classList.add('hidden');
+  byId('operator-chip').textContent = 'operator';
+  setSessionGlyph(false);
+}
+
+function showLoggedIn(username) {
+  byId('login-panel').classList.add('hidden');
+  byId('operator-chip').textContent = username;
+  setSessionGlyph(true);
+  renderPageState();
+}
+
+function renderPageState() {
+  document.body.classList.add('app-has-nav');
+  const isTax = state.currentPage === 'tax';
+  document.title = isTax ? 'Bitcoin Accounting | Tax' : 'Bitcoin Accounting | Dashboard';
+  byId('dashboard-view').classList.toggle('hidden', !state.session || isTax);
+  byId('tax-view').classList.toggle('hidden', !state.session || !isTax);
+
+  for (const item of document.querySelectorAll('[data-route]')) {
+    item.classList.toggle('active', item.dataset.route === state.currentPage);
+  }
+}
+
 function renderWarnings(containerId, warnings) {
   const container = byId(containerId);
   if (!warnings || warnings.length === 0) {
@@ -70,36 +129,88 @@ function renderWarnings(containerId, warnings) {
   `).join('');
 }
 
-function setAuthStatus(message, isError = false) {
-  const status = byId('auth-status');
-  status.textContent = message;
-  status.style.color = isError ? 'var(--danger)' : 'var(--text-muted)';
-}
+function renderDashboard(dashboard) {
+  state.dashboard = dashboard;
+  byId('dashboard-balance').textContent = `${Number(dashboard.summary.total_balance).toFixed(8)} ${dashboard.summary.coin}`;
+  byId('dashboard-basis').textContent = dashboard.summary.average_cost_basis_usd == null
+    ? 'Unpriced'
+    : currency(dashboard.summary.average_cost_basis_usd);
+  byId('dashboard-active-wallets').textContent = String(dashboard.summary.active_wallet_count);
+  byId('dashboard-recent-count').textContent = `${dashboard.recent_transactions.length} tx`;
+  byId('hero-wallet-count').textContent = `${dashboard.summary.active_wallet_count} / ${dashboard.summary.wallet_count}`;
 
-function showLoggedIn(username) {
-  byId('login-panel').classList.add('hidden');
-  byId('app-panel').classList.remove('hidden');
-  byId('operator-chip').textContent = username;
-  byId('session-action').textContent = 'Sign Out';
-}
-
-function showLoggedOut() {
-  byId('login-panel').classList.remove('hidden');
-  byId('app-panel').classList.add('hidden');
-  byId('operator-chip').textContent = 'operator';
-  byId('session-action').textContent = 'Check Session';
-}
-
-async function refreshSession() {
-  try {
-    const session = await api('api/auth/me');
-    state.session = session;
-    showLoggedIn(session.username);
-    await Promise.all([loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast()]);
-  } catch (_) {
-    state.session = null;
-    showLoggedOut();
+  const warning = byId('custody-warning');
+  if (dashboard.using_inferred_custody) {
+    warning.textContent = 'Custody mix is partially inferred from wallet names because explicit wallet metadata is incomplete.';
+    warning.classList.remove('hidden');
+  } else {
+    warning.classList.add('hidden');
   }
+
+  byId('custody-list').innerHTML = dashboard.custody_breakdown.length
+    ? dashboard.custody_breakdown.map((row) => `
+        <div class="custody-row">
+          <div>
+            <strong>${escapeHtml(row.custody)}</strong>
+            <div class="list-item-meta">${row.percentage.toFixed(1)}% of stack</div>
+          </div>
+          <div class="wallet-balance">${Number(row.balance).toFixed(8)} BTC</div>
+        </div>
+      `).join('')
+    : '<div class="custody-row"><div class="list-item-meta">No custody data yet.</div></div>';
+
+  byId('wallet-list').innerHTML = dashboard.wallets.length
+    ? dashboard.wallets.map((wallet) => `
+        <div class="list-item">
+          <div class="wallet-main">
+            <div class="wallet-title">${escapeHtml(wallet.wallet_id)}</div>
+            <div class="tx-detail">
+              <span class="wallet-badge">${escapeHtml(wallet.custody)}</span>
+              <span>${escapeHtml(wallet.wallet_type)}</span>
+              ${wallet.description ? `<span>${escapeHtml(wallet.description)}</span>` : ''}
+              ${wallet.active ? '' : '<span>inactive</span>'}
+            </div>
+          </div>
+          <div class="wallet-balance-wrap">
+            <div class="wallet-balance">${Number(wallet.balance).toFixed(8)} BTC</div>
+            <div class="list-item-meta">${wallet.percentage.toFixed(1)}% of stack</div>
+          </div>
+        </div>
+      `).join('')
+    : '<div class="list-item"><div class="list-item-meta">No wallets with BTC balance yet.</div></div>';
+
+  byId('recent-transactions-list').innerHTML = dashboard.recent_transactions.length
+    ? dashboard.recent_transactions.map((tx) => {
+        const direction = tx.buy_currency === 'BTC'
+          ? `${Number(tx.buy_amount || 0).toFixed(8)} BTC`
+          : `${Number(tx.sell_amount || 0).toFixed(8)} BTC`;
+        return `
+          <div class="tx-row">
+            <div class="tx-main">
+              <div class="tx-title-row">
+                <span class="tx-title">${escapeHtml(tx.wallet_id || 'Unknown wallet')}</span>
+                <span class="tx-type-pill">${escapeHtml(tx.transaction_type || 'Tx')}</span>
+              </div>
+              <div class="tx-detail">
+                <span>${escapeHtml(tx.created_at)}</span>
+                ${tx.comment ? `<span>${escapeHtml(tx.comment)}</span>` : ''}
+              </div>
+            </div>
+            <div class="tx-amount">${escapeHtml(direction)}</div>
+          </div>
+        `;
+      }).join('')
+    : '<div class="tx-row"><div class="list-item-meta">No recent transactions yet.</div></div>';
+}
+
+async function loadDashboard() {
+  const params = new URLSearchParams({
+    coin: 'BTC',
+    include_inactive: state.includeInactive ? 'true' : 'false',
+    recent_limit: '5',
+  });
+  const dashboard = await api(`api/portfolio/dashboard?${params.toString()}`);
+  renderDashboard(dashboard);
 }
 
 async function loadPolicy() {
@@ -191,7 +302,7 @@ async function loadPresets() {
   byId('presets-list').innerHTML = presets.length
     ? presets.map((preset) => `
         <div class="list-item">
-          <div>
+          <div class="wallet-main">
             <strong>${escapeHtml(preset.name)}</strong>
             <div class="list-item-meta">${escapeHtml(preset.preset_type.toUpperCase())} · ${escapeHtml(preset.coin)}${preset.tax_year ? ` · ${preset.tax_year}` : ''}${preset.wallet_id ? ` · ${escapeHtml(preset.wallet_id)}` : ''}</div>
           </div>
@@ -213,7 +324,7 @@ async function loadHistory() {
   byId('history-list').innerHTML = history.length
     ? history.map((entry) => `
         <div class="list-item">
-          <div>
+          <div class="wallet-main">
             <strong>${escapeHtml(entry.action)}</strong>
             <div class="list-item-meta">${escapeHtml(entry.coin)}${entry.tax_year ? ` · ${entry.tax_year}` : ''}${entry.wallet_id ? ` · ${escapeHtml(entry.wallet_id)}` : ''}</div>
           </div>
@@ -254,7 +365,35 @@ function downloadTaxArtifact(kind) {
   window.location.href = `api/tax/${kind}?${params.toString()}`;
 }
 
+async function refreshSession() {
+  try {
+    const session = await api('api/auth/me');
+    state.session = session;
+    showLoggedIn(session.username);
+    await Promise.all([loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast()]);
+  } catch (_) {
+    state.session = null;
+    showLoggedOut();
+  }
+}
+
+function bindNavigation() {
+  for (const link of document.querySelectorAll('[data-route]')) {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      navigateTo(link.dataset.route);
+    });
+  }
+
+  window.addEventListener('popstate', () => {
+    state.currentPage = currentRouteFromLocation();
+    renderPageState();
+  });
+}
+
 function bindEvents() {
+  bindNavigation();
+
   byId('login-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
@@ -265,13 +404,13 @@ function bindEvents() {
       state.session = session;
       setAuthStatus('Authenticated.');
       showLoggedIn(session.username);
-      await Promise.all([loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast()]);
+      await Promise.all([loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast()]);
     } catch (error) {
       setAuthStatus(error.message, true);
     }
   });
 
-  byId('session-action').addEventListener('click', async () => {
+  async function handleSessionAction() {
     if (state.session) {
       await api('api/auth/logout', { method: 'POST' });
       state.session = null;
@@ -280,6 +419,18 @@ function bindEvents() {
       return;
     }
     await refreshSession();
+  }
+
+  byId('session-action').addEventListener('click', handleSessionAction);
+  byId('mobile-session-action').addEventListener('click', handleSessionAction);
+
+  byId('refresh-dashboard').addEventListener('click', async () => {
+    await loadDashboard();
+  });
+
+  byId('inactive-toggle').addEventListener('change', async (event) => {
+    state.includeInactive = event.target.checked;
+    await loadDashboard();
   });
 
   byId('gains-form').addEventListener('submit', async (event) => {
@@ -319,5 +470,7 @@ function bindEvents() {
   byId('export-worksheet').addEventListener('click', () => downloadTaxArtifact('1099b/worksheet'));
 }
 
+state.currentPage = currentRouteFromLocation();
 bindEvents();
+renderPageState();
 refreshSession();

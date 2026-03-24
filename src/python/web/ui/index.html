@@ -8,28 +8,45 @@
   <link rel="stylesheet" href="static/app.css">
 </head>
 <body>
+  <nav class="app-sidebar" aria-label="Primary">
+    <a class="nav-logo" href="./" data-route="dashboard">
+      <img class="nav-logo-mark" src="static/brand/bitcoin-shield-logo.png" alt="Bitcoin Accounting shield logo">
+      <span>Bitcoin Accounting</span>
+    </a>
+    <div class="nav-items">
+      <a class="nav-item" href="./" data-route="dashboard">
+        <span class="nav-icon">◫</span>
+        <span class="nav-label">Dashboard</span>
+      </a>
+      <a class="nav-item" href="tax" data-route="tax">
+        <span class="nav-icon">₿</span>
+        <span class="nav-label">Tax</span>
+      </a>
+      <button class="nav-item nav-item-disabled" type="button" disabled>
+        <span class="nav-icon">≣</span>
+        <span class="nav-label">Ledger</span>
+      </button>
+      <button class="nav-item nav-item-disabled" type="button" disabled>
+        <span class="nav-icon">⌂</span>
+        <span class="nav-label">Wallets</span>
+      </button>
+    </div>
+  </nav>
+
   <div class="page-shell">
-    <header class="hero">
-      <div class="brand-lockup">
-        <img class="brand-logo" src="static/brand/bitcoin-shield-logo.png" alt="Bitcoin Accounting shield logo">
-        <div>
-          <p class="eyebrow">Private Sovereignty Treasury</p>
-          <h1>Bitcoin Accounting</h1>
-          <p class="hero-copy">
-            Tax reporting, wallet-separated FIFO, and sale planning from the same core you already trust.
-          </p>
-        </div>
-      </div>
-      <div class="hero-actions">
-        <button id="session-action" class="button button-ghost" type="button">Check Session</button>
-      </div>
+    <header class="topbar">
+      <button id="session-action" class="session-button" type="button" aria-label="Sign out or check session">
+        <span id="session-glyph" aria-hidden="true">⌁</span>
+      </button>
     </header>
 
-    <main class="layout">
-      <section id="login-panel" class="panel auth-panel">
+    <main id="app" class="app-layout">
+      <section id="login-panel" class="panel auth-panel hidden">
         <div class="panel-heading">
-          <h2>Unlock</h2>
-          <p>Single-operator access for your private treasury app.</p>
+          <div>
+            <h2>Unlock</h2>
+            <p>Single-operator access for your private treasury app.</p>
+          </div>
         </div>
         <form id="login-form" class="stack">
           <label class="field">
@@ -41,179 +58,289 @@
         <p id="auth-status" class="status-line"></p>
       </section>
 
-      <section id="app-panel" class="panel app-panel hidden">
-        <div class="panel-heading">
-          <div>
-            <h2>Tax Dashboard</h2>
-            <p id="policy-summary" class="muted">Loading policy guidance…</p>
-          </div>
-          <div id="operator-chip" class="operator-chip">operator</div>
-        </div>
-
-        <div id="policy-warning" class="policy-banner hidden"></div>
-
-        <section class="panel subpanel">
-          <div class="panel-heading">
-            <h3>Realized Gains</h3>
-            <p>Summary-first on phone, lot detail below when needed.</p>
-          </div>
-          <form id="gains-form" class="filters">
-            <label class="field">
-              <span>Tax Year</span>
-              <input id="gains-year" type="number" min="2009" step="1" value="2024" required>
-            </label>
-            <label class="field">
-              <span>Coin</span>
-              <input id="gains-coin" type="text" value="BTC" required>
-            </label>
-            <label class="field">
-              <span>Wallet</span>
-              <input id="gains-wallet" type="text" placeholder="Optional unless 2025+">
-            </label>
-            <div class="actions-row">
-              <button class="button" type="submit">Load Gains</button>
-              <button id="export-1099b" class="button button-ghost" type="button">Export 1099-B CSV</button>
-              <button id="export-worksheet" class="button button-ghost" type="button">Export Worksheet CSV</button>
+      <section id="dashboard-view" class="view-stack hidden">
+        <section class="hero-card">
+          <div class="hero-card-brand">
+            <img class="hero-logo" src="static/brand/bitcoin-shield-logo.png" alt="">
+            <div>
+              <p class="eyebrow">Private Sovereignty Treasury</p>
+              <h1>Dashboard</h1>
+              <p class="hero-copy">Your daily bitcoin position, custody posture, and fast path into tax planning.</p>
             </div>
-          </form>
-
-          <div class="summary-grid">
-            <article class="summary-card">
-              <span class="summary-label">Proceeds</span>
-              <strong id="gains-proceeds">$0.00</strong>
-            </article>
-            <article class="summary-card">
-              <span class="summary-label">Cost Basis</span>
-              <strong id="gains-cost">$0.00</strong>
-            </article>
-            <article class="summary-card">
-              <span class="summary-label">Net Gain/Loss</span>
-              <strong id="gains-net">$0.00</strong>
-            </article>
-            <article class="summary-card">
-              <span class="summary-label">Lots</span>
-              <strong id="gains-lots">0</strong>
-            </article>
           </div>
-
-          <div id="gains-warnings" class="warning-stack"></div>
-          <div class="table-shell">
-            <table>
-              <thead>
-                <tr>
-                  <th>Sale Date</th>
-                  <th>Lot Qty</th>
-                  <th>Acquire Date</th>
-                  <th>Term</th>
-                  <th>Gain/Loss</th>
-                </tr>
-              </thead>
-              <tbody id="gains-table">
-                <tr><td colspan="5" class="empty-row">No gains loaded yet.</td></tr>
-              </tbody>
-            </table>
+          <div class="hero-meta">
+            <div class="hero-stat">
+              <span class="hero-label">Wallets</span>
+              <strong id="hero-wallet-count">0</strong>
+            </div>
+            <div class="hero-stat">
+              <span class="hero-label">Operator</span>
+              <strong id="operator-chip">operator</strong>
+            </div>
           </div>
         </section>
 
-        <section class="panel subpanel">
-          <div class="panel-heading">
-            <h3>Sale Forecast</h3>
-            <p>Quick planning for mobile, lot-by-lot trace for desktop.</p>
-          </div>
-          <form id="forecast-form" class="filters">
-            <label class="field">
-              <span>Coin</span>
-              <input id="forecast-coin" type="text" value="BTC" required>
-            </label>
-            <label class="field">
-              <span>Wallet</span>
-              <input id="forecast-wallet" type="text" placeholder="Optional">
-            </label>
-            <label class="field">
-              <span>Quantity</span>
-              <input id="forecast-quantity" type="number" min="0.00000001" step="0.00000001" value="0.1" required>
-            </label>
-            <label class="field">
-              <span>Sale Price USD</span>
-              <input id="forecast-price" type="number" min="0.01" step="0.01" value="100000" required>
-            </label>
-            <div class="actions-row">
-              <button class="button" type="submit">Forecast Sale</button>
-            </div>
-          </form>
-
-          <div class="summary-grid">
-            <article class="summary-card">
-              <span class="summary-label">Current Balance</span>
-              <strong id="forecast-balance">0 BTC</strong>
-            </article>
-            <article class="summary-card">
-              <span class="summary-label">Proceeds</span>
-              <strong id="forecast-proceeds">$0.00</strong>
-            </article>
-            <article class="summary-card">
-              <span class="summary-label">Cost Basis</span>
-              <strong id="forecast-cost">$0.00</strong>
-            </article>
-            <article class="summary-card">
-              <span class="summary-label">Missing Basis</span>
-              <strong id="forecast-missing">0</strong>
-            </article>
-          </div>
-
-          <div id="forecast-warnings" class="warning-stack"></div>
-          <div class="table-shell">
-            <table>
-              <thead>
-                <tr>
-                  <th>Acquire Date</th>
-                  <th>Quantity</th>
-                  <th>Unit Cost</th>
-                  <th>Term</th>
-                  <th>Basis</th>
-                </tr>
-              </thead>
-              <tbody id="forecast-table">
-                <tr><td colspan="5" class="empty-row">No forecast loaded yet.</td></tr>
-              </tbody>
-            </table>
-          </div>
+        <section class="summary-grid summary-grid-dashboard">
+          <article class="summary-card summary-card-featured">
+            <span class="summary-label">Total Balance</span>
+            <strong id="dashboard-balance">0 BTC</strong>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">Cost Basis per BTC</span>
+            <strong id="dashboard-basis">$0.00</strong>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">Active Wallets</span>
+            <strong id="dashboard-active-wallets">0</strong>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">Recent Activity</span>
+            <strong id="dashboard-recent-count">0 tx</strong>
+          </article>
         </section>
 
-        <section class="panel subpanel dual-column">
-          <div>
+        <section class="quick-actions">
+          <a class="button button-inline" href="tax" data-route="tax">Open Tax Workspace</a>
+          <button id="refresh-dashboard" class="button button-ghost button-inline" type="button">Refresh Dashboard</button>
+        </section>
+
+        <section id="custody-warning" class="policy-banner hidden"></section>
+
+        <section class="dashboard-grid">
+          <section class="panel subpanel">
             <div class="panel-heading">
-              <h3>Saved Presets</h3>
-              <p>Fast recall for repeated tax workflows.</p>
+              <div>
+                <h3>Custody Breakdown</h3>
+                <p>Where your stack lives today.</p>
+              </div>
             </div>
-            <form id="preset-form" class="filters compact">
+            <div id="custody-list" class="stack"></div>
+          </section>
+
+          <section class="panel subpanel">
+            <div class="panel-heading">
+              <div>
+                <h3>Wallet Balances</h3>
+                <p>Daily position by wallet.</p>
+              </div>
+              <label class="toggle-label">
+                <input id="inactive-toggle" type="checkbox">
+                <span>Include inactive</span>
+              </label>
+            </div>
+            <div id="wallet-list" class="list-shell"></div>
+          </section>
+        </section>
+
+        <section class="panel subpanel">
+          <div class="panel-heading">
+            <div>
+              <h3>Recent Transactions</h3>
+              <p>Last movement across the stack.</p>
+            </div>
+          </div>
+          <div id="recent-transactions-list" class="tx-list"></div>
+        </section>
+      </section>
+
+      <section id="tax-view" class="view-stack hidden">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Private Sovereignty Treasury</p>
+              <h1>Tax</h1>
+              <p id="policy-summary" class="muted">Loading policy guidance…</p>
+            </div>
+          </div>
+
+          <div id="policy-warning" class="policy-banner hidden"></div>
+
+          <section class="panel subpanel">
+            <div class="panel-heading">
+              <div>
+                <h3>Realized Gains</h3>
+                <p>Summary-first on phone, lot detail below when needed.</p>
+              </div>
+            </div>
+            <form id="gains-form" class="filters">
               <label class="field">
-                <span>Name</span>
-                <input id="preset-name" type="text" placeholder="Coldcard 2025 Export" required>
+                <span>Tax Year</span>
+                <input id="gains-year" type="number" min="2009" step="1" value="2024" required>
               </label>
               <label class="field">
-                <span>Type</span>
-                <select id="preset-type">
-                  <option value="gains">Gains</option>
-                  <option value="1099b">1099-B</option>
-                  <option value="forecast">Forecast</option>
-                </select>
+                <span>Coin</span>
+                <input id="gains-coin" type="text" value="BTC" required>
               </label>
-              <button class="button" type="submit">Save Current Filters</button>
+              <label class="field">
+                <span>Wallet</span>
+                <input id="gains-wallet" type="text" placeholder="Optional unless 2025+">
+              </label>
+              <div class="actions-row">
+                <button class="button" type="submit">Load Gains</button>
+                <button id="export-1099b" class="button button-ghost" type="button">Export 1099-B CSV</button>
+                <button id="export-worksheet" class="button button-ghost" type="button">Export Worksheet CSV</button>
+              </div>
             </form>
-            <div id="presets-list" class="list-shell"></div>
-          </div>
-          <div>
-            <div class="panel-heading">
-              <h3>Recent Runs</h3>
-              <p>Latest gains, exports, and forecasts from this web app.</p>
+
+            <div class="summary-grid">
+              <article class="summary-card">
+                <span class="summary-label">Proceeds</span>
+                <strong id="gains-proceeds">$0.00</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">Cost Basis</span>
+                <strong id="gains-cost">$0.00</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">Net Gain/Loss</span>
+                <strong id="gains-net">$0.00</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">Lots</span>
+                <strong id="gains-lots">0</strong>
+              </article>
             </div>
-            <div id="history-list" class="list-shell"></div>
-          </div>
+
+            <div id="gains-warnings" class="warning-stack"></div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Sale Date</th>
+                    <th>Lot Qty</th>
+                    <th>Acquire Date</th>
+                    <th>Term</th>
+                    <th>Gain/Loss</th>
+                  </tr>
+                </thead>
+                <tbody id="gains-table">
+                  <tr><td colspan="5" class="empty-row">No gains loaded yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel subpanel">
+            <div class="panel-heading">
+              <div>
+                <h3>Sale Forecast</h3>
+                <p>Quick planning for mobile, lot-by-lot trace for desktop.</p>
+              </div>
+            </div>
+            <form id="forecast-form" class="filters">
+              <label class="field">
+                <span>Coin</span>
+                <input id="forecast-coin" type="text" value="BTC" required>
+              </label>
+              <label class="field">
+                <span>Wallet</span>
+                <input id="forecast-wallet" type="text" placeholder="Optional">
+              </label>
+              <label class="field">
+                <span>Quantity</span>
+                <input id="forecast-quantity" type="number" min="0.00000001" step="0.00000001" value="0.1" required>
+              </label>
+              <label class="field">
+                <span>Sale Price USD</span>
+                <input id="forecast-price" type="number" min="0.01" step="0.01" value="100000" required>
+              </label>
+              <div class="actions-row">
+                <button class="button" type="submit">Forecast Sale</button>
+              </div>
+            </form>
+
+            <div class="summary-grid">
+              <article class="summary-card">
+                <span class="summary-label">Current Balance</span>
+                <strong id="forecast-balance">0 BTC</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">Proceeds</span>
+                <strong id="forecast-proceeds">$0.00</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">Cost Basis</span>
+                <strong id="forecast-cost">$0.00</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">Missing Basis</span>
+                <strong id="forecast-missing">0</strong>
+              </article>
+            </div>
+
+            <div id="forecast-warnings" class="warning-stack"></div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Acquire Date</th>
+                    <th>Quantity</th>
+                    <th>Unit Cost</th>
+                    <th>Term</th>
+                    <th>Basis</th>
+                  </tr>
+                </thead>
+                <tbody id="forecast-table">
+                  <tr><td colspan="5" class="empty-row">No forecast loaded yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel subpanel dual-column">
+            <div>
+              <div class="panel-heading">
+                <div>
+                  <h3>Saved Presets</h3>
+                  <p>Fast recall for repeated tax workflows.</p>
+                </div>
+              </div>
+              <form id="preset-form" class="filters compact">
+                <label class="field">
+                  <span>Name</span>
+                  <input id="preset-name" type="text" placeholder="Coldcard 2025 Export" required>
+                </label>
+                <label class="field">
+                  <span>Type</span>
+                  <select id="preset-type">
+                    <option value="gains">Gains</option>
+                    <option value="1099b">1099-B</option>
+                    <option value="forecast">Forecast</option>
+                  </select>
+                </label>
+                <button class="button" type="submit">Save Current Filters</button>
+              </form>
+              <div id="presets-list" class="list-shell"></div>
+            </div>
+            <div>
+              <div class="panel-heading">
+                <div>
+                  <h3>Recent Runs</h3>
+                  <p>Latest gains, exports, and forecasts from this web app.</p>
+                </div>
+              </div>
+              <div id="history-list" class="list-shell"></div>
+            </div>
+          </section>
         </section>
       </section>
     </main>
   </div>
+
+  <nav class="app-bottom-bar" aria-label="Mobile navigation">
+    <a class="nav-item" href="./" data-route="dashboard">
+      <span class="nav-icon">◫</span>
+      <span class="nav-label">Dashboard</span>
+    </a>
+    <a class="nav-item" href="tax" data-route="tax">
+      <span class="nav-icon">₿</span>
+      <span class="nav-label">Tax</span>
+    </a>
+    <button id="mobile-session-action" class="nav-item nav-brand-mobile" type="button" aria-label="Sign out or check session">
+      <span class="nav-brand-mark"><img src="static/brand/bitcoin-shield-logo.png" alt="" width="18" height="18"></span>
+      <span class="nav-label">Account</span>
+    </button>
+  </nav>
 
   <script src="static/app.js"></script>
 </body>

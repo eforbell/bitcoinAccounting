@@ -17,3 +17,9 @@ _INDEX_FILE = _UI_DIR / "index.html"
 def web_app_shell() -> FileResponse:
     """Serve the main web UI shell."""
     return FileResponse(_INDEX_FILE)
+
+
+@router.get("/tax", include_in_schema=False)
+def web_tax_shell() -> FileResponse:
+    """Serve the tax page within the shared web shell."""
+    return FileResponse(_INDEX_FILE)

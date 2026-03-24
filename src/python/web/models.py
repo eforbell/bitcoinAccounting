@@ -75,6 +75,36 @@ class PortfolioSummaryResource(APIModel):
     active_wallet_count: int
 
 
+class CustodyBreakdownResource(APIModel):
+    """Custody bucket totals and percentages for dashboard consumers."""
+
+    custody: str
+    balance: float
+    percentage: float
+
+
+class WalletBalanceResource(APIModel):
+    """Wallet balance card row for the portfolio dashboard."""
+
+    wallet_id: str
+    wallet_type: str
+    custody: str
+    description: str | None = None
+    active: bool
+    balance: float
+    percentage: float
+
+
+class PortfolioDashboardResponse(APIModel):
+    """Dashboard payload combining top-level portfolio reads."""
+
+    summary: PortfolioSummaryResource
+    custody_breakdown: list[CustodyBreakdownResource]
+    wallets: list[WalletBalanceResource]
+    recent_transactions: list[TransactionResource]
+    using_inferred_custody: bool = False
+
+
 class GainsSummaryResource(APIModel):
     """Summary of realized gains for a tax period."""
 

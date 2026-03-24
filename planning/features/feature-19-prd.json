@@ -34,7 +34,7 @@
       "priority": 1,
       "estimatedLines": "+180/-0",
       "testStrategy": "pytest dashboard endpoint tests with representative ledger fixtures",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WPF-002",
@@ -48,7 +48,7 @@
       "priority": 2,
       "estimatedLines": "+170/-0",
       "testStrategy": "pytest wallet summary API tests and UI filtering smoke tests",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WPF-003",
@@ -121,6 +121,13 @@
       "src/python/web/services/portfolio.py",
       "tests/test_web_portfolio.py",
       "web/portfolio/*"
+    ],
+    "implementedSoFar": [
+      "Shared web shell with desktop sidebar and mobile bottom nav patterned after familyPulse",
+      "Dashboard is now the default landing page while tax has its own dedicated /tax route",
+      "Authenticated /api/portfolio/dashboard endpoint exposes total BTC balance, basis, custody buckets, wallet balances, and recent transactions",
+      "Compact header session control replaces the earlier oversized logout CTA",
+      "Browser smoke coverage now validates dashboard-first navigation into the tax workspace"
     ]
   }
 }

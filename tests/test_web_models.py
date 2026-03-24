@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from web.models import (
+    CustodyBreakdownResource,
     ForecastSummaryResource,
     ForecastResponse,
     ForecastLotResource,
@@ -10,9 +11,11 @@ from web.models import (
     GainsReportResponse,
     GainsSummaryResource,
     GainsWorksheetEntryResource,
+    PortfolioDashboardResponse,
     PortfolioSummaryResource,
     TaxPolicyWarningResource,
     TransactionResource,
+    WalletBalanceResource,
     WalletResource,
 )
 
@@ -93,6 +96,59 @@ def test_portfolio_and_tax_summary_models_dump_cleanly() -> None:
     assert portfolio.model_dump()["coin"] == "BTC"
     assert gains.model_dump()["tax_year"] == 2026
     assert forecast.model_dump()["total_proceeds_usd"] == 23000.0
+
+
+def test_portfolio_dashboard_payload_dumps_cleanly() -> None:
+    payload = PortfolioDashboardResponse(
+        summary=PortfolioSummaryResource(
+            coin="BTC",
+            total_balance=1.25,
+            average_cost_basis_usd=48250.12,
+            wallet_count=3,
+            active_wallet_count=2,
+        ),
+        custody_breakdown=[
+            CustodyBreakdownResource(
+                custody="self-custodied",
+                balance=1.0,
+                percentage=80.0,
+            )
+        ],
+        wallets=[
+            WalletBalanceResource(
+                wallet_id="Coldcard",
+                wallet_type="hardware",
+                custody="self-custodied",
+                description="Primary vault",
+                active=True,
+                balance=1.0,
+                percentage=80.0,
+            )
+        ],
+        recent_transactions=[
+            TransactionResource(
+                transaction_id=42,
+                created_at="2026-03-24 12:00:00",
+                transaction_type="Trade",
+                buy_amount=0.1,
+                buy_currency="BTC",
+                sell_amount=8000.0,
+                sell_currency="USD",
+                fee_amount=0.0,
+                fee_currency="USD",
+                wallet_id="Strike",
+                group="",
+                comment="DCA",
+                deleted=False,
+            )
+        ],
+        using_inferred_custody=False,
+    )
+
+    dumped = payload.model_dump()
+    assert dumped["summary"]["wallet_count"] == 3
+    assert dumped["custody_breakdown"][0]["custody"] == "self-custodied"
+    assert dumped["wallets"][0]["wallet_id"] == "Coldcard"
 
 
 def test_tax_report_and_forecast_payloads_dump_cleanly() -> None:

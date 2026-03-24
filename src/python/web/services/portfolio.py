@@ -1,0 +1,140 @@
+"""Portfolio/dashboard read models for the web UI."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from bitcoinAccounts import BitcoinAccounts
+from web.models import (
+    CustodyBreakdownResource,
+    PortfolioDashboardResponse,
+    PortfolioSummaryResource,
+    TransactionResource,
+    WalletBalanceResource,
+)
+
+_CUSTODY_PRIORITY = {
+    "self-custodied": 0,
+    "multisig": 1,
+    "custodial": 2,
+    "unknown": 3,
+}
+
+
+def _normalize_custody(custody: str | None) -> str:
+    value = (custody or "unknown").strip().lower()
+    if value in {"self-custodied", "self", "cold", "hardware", "hot"}:
+        return "self-custodied"
+    if value in {"custodial", "exchange", "third-party"}:
+        return "custodial"
+    if value in {"multisig", "multi-sig", "collaborative"}:
+        return "multisig"
+    return "unknown"
+
+
+def _build_transaction_resource(row: dict[str, Any]) -> TransactionResource:
+    return TransactionResource(
+        transaction_id=int(row["ID"]),
+        created_at=str(row["Date"]),
+        transaction_type=row.get("Type"),
+        buy_amount=float(row["Buy"]) if row.get("Buy") is not None else None,
+        buy_currency=row.get("Buy Cur."),
+        sell_amount=float(row["Sell"]) if row.get("Sell") is not None else None,
+        sell_currency=row.get("Sell Cur."),
+        fee_amount=float(row["Fee"]) if row.get("Fee") is not None else None,
+        fee_currency=row.get("Fee Cur."),
+        wallet_id=row.get("Exchange"),
+        group=row.get("Group"),
+        comment=row.get("Comment"),
+        deleted=bool(row.get("Deleted") or False),
+    )
+
+
+def build_portfolio_dashboard(
+    accounts: BitcoinAccounts,
+    coin: str = "BTC",
+    include_inactive: bool = False,
+    recent_limit: int = 5,
+) -> PortfolioDashboardResponse:
+    """Build the mobile-first portfolio dashboard payload."""
+    balance = float(accounts.get_balance(coin))
+    basis = accounts.get_basis(coin)
+
+    all_wallets = accounts.get_wallets(active_only=False)
+    active_wallets = accounts.get_wallets(active_only=True)
+    visible_wallets = (
+        all_wallets
+        if include_inactive
+        else [wallet for wallet in all_wallets if wallet.get("active", True)]
+    )
+    wallet_balances = accounts.get_wallet_balance(coin, None)
+    total_balance = sum(float(value) for value in wallet_balances.values())
+
+    using_inferred_custody = False
+    custody_totals: dict[str, float] = {
+        "self-custodied": 0.0,
+        "multisig": 0.0,
+        "custodial": 0.0,
+        "unknown": 0.0,
+    }
+    wallet_rows: list[WalletBalanceResource] = []
+
+    for wallet in visible_wallets:
+        wallet_id = str(wallet.get("wallet_id", ""))
+        wallet_balance = float(wallet_balances.get(wallet_id, 0.0))
+        custody = _normalize_custody(wallet.get("custody"))
+        percentage = (wallet_balance / total_balance * 100) if total_balance > 0 else 0.0
+        active = bool(wallet.get("active", True))
+
+        if wallet.get("type") == "unknown":
+            using_inferred_custody = True
+
+        wallet_rows.append(
+            WalletBalanceResource(
+                wallet_id=wallet_id,
+                wallet_type=str(wallet.get("type", "unknown")),
+                custody=custody,
+                description=wallet.get("description"),
+                active=active,
+                balance=wallet_balance,
+                percentage=percentage,
+            )
+        )
+
+        if wallet_balance > 0:
+            custody_totals[custody] = custody_totals.get(custody, 0.0) + wallet_balance
+
+    custody_rows = [
+        CustodyBreakdownResource(
+            custody=custody,
+            balance=balance_value,
+            percentage=(balance_value / total_balance * 100) if total_balance > 0 else 0.0,
+        )
+        for custody, balance_value in sorted(
+            custody_totals.items(),
+            key=lambda item: (_CUSTODY_PRIORITY.get(item[0], 99), -item[1]),
+        )
+        if balance_value > 0 or custody == "unknown"
+    ]
+
+    _headers, transactions = accounts.get_transactions(coin=coin)
+    recent_transactions = [
+        _build_transaction_resource(row)
+        for row in list(reversed(transactions))[:recent_limit]
+    ]
+
+    wallet_rows.sort(key=lambda row: (-row.balance, row.wallet_id.lower()))
+
+    return PortfolioDashboardResponse(
+        summary=PortfolioSummaryResource(
+            coin=coin,
+            total_balance=balance,
+            average_cost_basis_usd=float(basis) if basis is not None else None,
+            wallet_count=len(all_wallets),
+            active_wallet_count=len(active_wallets),
+        ),
+        custody_breakdown=custody_rows,
+        wallets=wallet_rows,
+        recent_transactions=recent_transactions,
+        using_inferred_custody=using_inferred_custody,
+    )
