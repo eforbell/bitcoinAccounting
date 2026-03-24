@@ -40,17 +40,18 @@ class BrokenBackend(FakeBackend):
         raise RuntimeError("database unavailable")
 
 
-def test_create_app_exposes_service_root() -> None:
+def test_create_app_serves_web_ui_shell() -> None:
     app = create_app()
     client = TestClient(app)
 
     response = client.get("/")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "service": "bitcoin-accounting-api",
-        "status": "ok",
-    }
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Bitcoin Accounting" in response.text
+    assert "Private Sovereignty Treasury" in response.text
+    assert 'href="static/app.css"' in response.text
+    assert 'src="static/app.js"' in response.text
 
 
 def test_health_route_returns_ok_payload() -> None:

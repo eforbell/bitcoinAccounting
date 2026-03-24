@@ -52,3 +52,17 @@ def test_pyproject_has_only_canonical_console_script_and_modules() -> None:
     assert "bitcoinAccounting" in py_modules
     assert "cryptoAccounts" not in py_modules
     assert "cryptoAccounting" not in py_modules
+
+
+def test_pyproject_packages_web_ui_assets() -> None:
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+
+    setuptools_config = data["tool"]["setuptools"]
+    assert setuptools_config["include-package-data"] is True
+
+    package_data = setuptools_config["package-data"]
+    assert "web" in package_data
+    assert "ui/*.html" in package_data["web"]
+    assert "ui/static/*" in package_data["web"]
+    assert "ui/static/brand/*" in package_data["web"]

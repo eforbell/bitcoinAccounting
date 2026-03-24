@@ -29,6 +29,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "httpx",
+    "playwright",
 ]
 
 [project.scripts]
@@ -39,7 +40,15 @@ bitcoin-accounting-web-init = "web.cli:main"
 [tool.setuptools]
 package-dir = {"" = "src/python"}
 py-modules = ["bitcoinAccounts", "bitcoinAccounting"]
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src/python"]
 include = ["attestation*", "db*", "imports*", "integrity*", "tui*", "viz*", "web*"]
+
+[tool.setuptools.package-data]
+web = [
+    "ui/*.html",
+    "ui/static/*",
+    "ui/static/brand/*",
+]

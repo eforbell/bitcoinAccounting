@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#F7931A">
+  <title>Bitcoin Accounting</title>
+  <link rel="stylesheet" href="static/app.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="brand-lockup">
+        <img class="brand-logo" src="static/brand/bitcoin-shield-logo.png" alt="Bitcoin Accounting shield logo">
+        <div>
+          <p class="eyebrow">Private Sovereignty Treasury</p>
+          <h1>Bitcoin Accounting</h1>
+          <p class="hero-copy">
+            Tax reporting, wallet-separated FIFO, and sale planning from the same core you already trust.
+          </p>
+        </div>
+      </div>
+      <div class="hero-actions">
+        <button id="session-action" class="button button-ghost" type="button">Check Session</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section id="login-panel" class="panel auth-panel">
+        <div class="panel-heading">
+          <h2>Unlock</h2>
+          <p>Single-operator access for your private treasury app.</p>
+        </div>
+        <form id="login-form" class="stack">
+          <label class="field">
+            <span>Passphrase</span>
+            <input id="passphrase" name="passphrase" type="password" autocomplete="current-password" required>
+          </label>
+          <button class="button" type="submit">Sign In</button>
+        </form>
+        <p id="auth-status" class="status-line"></p>
+      </section>
+
+      <section id="app-panel" class="panel app-panel hidden">
+        <div class="panel-heading">
+          <div>
+            <h2>Tax Dashboard</h2>
+            <p id="policy-summary" class="muted">Loading policy guidance…</p>
+          </div>
+          <div id="operator-chip" class="operator-chip">operator</div>
+        </div>
+
+        <div id="policy-warning" class="policy-banner hidden"></div>
+
+        <section class="panel subpanel">
+          <div class="panel-heading">
+            <h3>Realized Gains</h3>
+            <p>Summary-first on phone, lot detail below when needed.</p>
+          </div>
+          <form id="gains-form" class="filters">
+            <label class="field">
+              <span>Tax Year</span>
+              <input id="gains-year" type="number" min="2009" step="1" value="2024" required>
+            </label>
+            <label class="field">
+              <span>Coin</span>
+              <input id="gains-coin" type="text" value="BTC" required>
+            </label>
+            <label class="field">
+              <span>Wallet</span>
+              <input id="gains-wallet" type="text" placeholder="Optional unless 2025+">
+            </label>
+            <div class="actions-row">
+              <button class="button" type="submit">Load Gains</button>
+              <button id="export-1099b" class="button button-ghost" type="button">Export 1099-B CSV</button>
+              <button id="export-worksheet" class="button button-ghost" type="button">Export Worksheet CSV</button>
+            </div>
+          </form>
+
+          <div class="summary-grid">
+            <article class="summary-card">
+              <span class="summary-label">Proceeds</span>
+              <strong id="gains-proceeds">$0.00</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Cost Basis</span>
+              <strong id="gains-cost">$0.00</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Net Gain/Loss</span>
+              <strong id="gains-net">$0.00</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Lots</span>
+              <strong id="gains-lots">0</strong>
+            </article>
+          </div>
+
+          <div id="gains-warnings" class="warning-stack"></div>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sale Date</th>
+                  <th>Lot Qty</th>
+                  <th>Acquire Date</th>
+                  <th>Term</th>
+                  <th>Gain/Loss</th>
+                </tr>
+              </thead>
+              <tbody id="gains-table">
+                <tr><td colspan="5" class="empty-row">No gains loaded yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel subpanel">
+          <div class="panel-heading">
+            <h3>Sale Forecast</h3>
+            <p>Quick planning for mobile, lot-by-lot trace for desktop.</p>
+          </div>
+          <form id="forecast-form" class="filters">
+            <label class="field">
+              <span>Coin</span>
+              <input id="forecast-coin" type="text" value="BTC" required>
+            </label>
+            <label class="field">
+              <span>Wallet</span>
+              <input id="forecast-wallet" type="text" placeholder="Optional">
+            </label>
+            <label class="field">
+              <span>Quantity</span>
+              <input id="forecast-quantity" type="number" min="0.00000001" step="0.00000001" value="0.1" required>
+            </label>
+            <label class="field">
+              <span>Sale Price USD</span>
+              <input id="forecast-price" type="number" min="0.01" step="0.01" value="100000" required>
+            </label>
+            <div class="actions-row">
+              <button class="button" type="submit">Forecast Sale</button>
+            </div>
+          </form>
+
+          <div class="summary-grid">
+            <article class="summary-card">
+              <span class="summary-label">Current Balance</span>
+              <strong id="forecast-balance">0 BTC</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Proceeds</span>
+              <strong id="forecast-proceeds">$0.00</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Cost Basis</span>
+              <strong id="forecast-cost">$0.00</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Missing Basis</span>
+              <strong id="forecast-missing">0</strong>
+            </article>
+          </div>
+
+          <div id="forecast-warnings" class="warning-stack"></div>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Acquire Date</th>
+                  <th>Quantity</th>
+                  <th>Unit Cost</th>
+                  <th>Term</th>
+                  <th>Basis</th>
+                </tr>
+              </thead>
+              <tbody id="forecast-table">
+                <tr><td colspan="5" class="empty-row">No forecast loaded yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel subpanel dual-column">
+          <div>
+            <div class="panel-heading">
+              <h3>Saved Presets</h3>
+              <p>Fast recall for repeated tax workflows.</p>
+            </div>
+            <form id="preset-form" class="filters compact">
+              <label class="field">
+                <span>Name</span>
+                <input id="preset-name" type="text" placeholder="Coldcard 2025 Export" required>
+              </label>
+              <label class="field">
+                <span>Type</span>
+                <select id="preset-type">
+                  <option value="gains">Gains</option>
+                  <option value="1099b">1099-B</option>
+                  <option value="forecast">Forecast</option>
+                </select>
+              </label>
+              <button class="button" type="submit">Save Current Filters</button>
+            </form>
+            <div id="presets-list" class="list-shell"></div>
+          </div>
+          <div>
+            <div class="panel-heading">
+              <h3>Recent Runs</h3>
+              <p>Latest gains, exports, and forecasts from this web app.</p>
+            </div>
+            <div id="history-list" class="list-shell"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="static/app.js"></script>
+</body>
+</html>
