@@ -651,6 +651,63 @@ th {
   letter-spacing: -0.02em;
 }
 
+.record-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.record-tab {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.6rem 1.1rem;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.record-tab:hover {
+  background: var(--surface-soft);
+  color: var(--ivory);
+}
+
+.record-tab.active {
+  background: linear-gradient(135deg, var(--orange-primary), var(--glow-core));
+  color: var(--shield-black);
+  border-color: transparent;
+}
+
+.ledger-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+}
+
+.ledger-row {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.ledger-row:hover {
+  background: rgba(247, 147, 26, 0.06);
+}
+
+.ledger-row-deleted {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.button-danger {
+  color: var(--danger);
+  border-color: rgba(255, 125, 107, 0.2);
+}
+
 .app-bottom-bar {
   display: none;
 }
@@ -815,4 +872,36 @@ th {
   .button {
     min-height: 3rem;
   }
+
+  .actions-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+}
+
+/* Wallet management */
+.wallets-filter-row {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+.actions-cell {
+  white-space: nowrap;
+}
+
+.actions-cell .button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.button-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.button-danger:hover {
+  background: var(--danger);
+  color: var(--surface);
 }

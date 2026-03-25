@@ -4,7 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#F7931A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bitcoin Accounting">
   <title>Bitcoin Accounting</title>
+  <link rel="apple-touch-icon" href="static/brand/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="static/brand/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="static/brand/favicon-16x16.png">
+  <link rel="icon" type="image/x-icon" href="static/brand/favicon.ico">
   <link rel="stylesheet" href="static/app.css">
 </head>
 <body>
@@ -22,14 +29,18 @@
         <span class="nav-icon">₿</span>
         <span class="nav-label">Tax</span>
       </a>
-      <button class="nav-item nav-item-disabled" type="button" disabled>
+      <a class="nav-item" href="ledger" data-route="ledger">
         <span class="nav-icon">≣</span>
         <span class="nav-label">Ledger</span>
-      </button>
-      <button class="nav-item nav-item-disabled" type="button" disabled>
+      </a>
+      <a class="nav-item" href="record" data-route="record">
+        <span class="nav-icon">+</span>
+        <span class="nav-label">Record</span>
+      </a>
+      <a class="nav-item" href="wallets" data-route="wallets">
         <span class="nav-icon">⌂</span>
         <span class="nav-label">Wallets</span>
-      </button>
+      </a>
     </div>
   </nav>
 
@@ -184,9 +195,440 @@
               <h3>Recent Activity</h3>
               <p>Latest transactions for this wallet.</p>
             </div>
+            <a id="wallet-view-all-link" href="ledger" class="button button-ghost button-inline">View All</a>
           </div>
           <div id="wallet-tx-list" class="tx-list"></div>
         </section>
+      </section>
+
+      <section id="ledger-view" class="view-stack hidden">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Private Sovereignty Treasury</p>
+              <h1>Ledger</h1>
+              <p class="muted">Full transaction history with filters and summary stats.</p>
+            </div>
+          </div>
+
+          <form id="ledger-form" class="filters">
+            <label class="field">
+              <span>Coin</span>
+              <input id="ledger-coin" type="text" value="BTC" required>
+            </label>
+            <label class="field">
+              <span>Wallet</span>
+              <select id="ledger-wallet">
+                <option value="">All wallets</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Start Date</span>
+              <input id="ledger-start" type="date">
+            </label>
+            <label class="field">
+              <span>End Date</span>
+              <input id="ledger-end" type="date">
+            </label>
+            <div class="actions-row">
+              <button class="button" type="submit">Apply Filters</button>
+              <button id="ledger-clear" class="button button-ghost" type="button">Clear</button>
+              <label class="toggle-label">
+                <input id="ledger-deleted-toggle" type="checkbox">
+                <span>Show deleted</span>
+              </label>
+            </div>
+          </form>
+
+          <section class="summary-grid">
+            <article class="summary-card summary-card-featured">
+              <span class="summary-label">Balance</span>
+              <strong id="ledger-balance">0 BTC</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Credits</span>
+              <strong id="ledger-credits">0 BTC</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Debits</span>
+              <strong id="ledger-debits">0 BTC</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Fees</span>
+              <strong id="ledger-fees">0 BTC</strong>
+            </article>
+          </section>
+
+          <div id="ledger-count" class="list-item-meta" style="margin-top: 0.4rem;"></div>
+
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Buy</th>
+                  <th>Sell</th>
+                  <th>Fee</th>
+                  <th>Wallet</th>
+                  <th>Comment</th>
+                </tr>
+              </thead>
+              <tbody id="ledger-table">
+                <tr><td colspan="7" class="empty-row">No transactions loaded yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="ledger-pagination" class="ledger-pagination"></div>
+        </section>
+
+        <section id="tx-detail-panel" class="panel subpanel hidden">
+          <div class="panel-heading">
+            <div>
+              <h3>Transaction Detail</h3>
+              <p id="tx-detail-id" class="muted"></p>
+            </div>
+            <button id="tx-detail-close" class="button button-ghost button-inline" type="button">Close</button>
+          </div>
+          <div id="tx-transfer-warning" class="policy-banner hidden">
+            This transaction belongs to a transfer pair. Editing or deleting it may affect the paired transaction.
+          </div>
+          <form id="tx-edit-form" class="filters">
+            <label class="field">
+              <span>Date</span>
+              <input id="tx-edit-date" type="text" placeholder="YYYY-MM-DD HH:MM:SS">
+            </label>
+            <label class="field">
+              <span>Type</span>
+              <input id="tx-edit-type" type="text">
+            </label>
+            <label class="field">
+              <span>Buy</span>
+              <input id="tx-edit-buy" type="number" step="any">
+            </label>
+            <label class="field">
+              <span>Buy Currency</span>
+              <input id="tx-edit-buy-curr" type="text">
+            </label>
+            <label class="field">
+              <span>Sell</span>
+              <input id="tx-edit-sell" type="number" step="any">
+            </label>
+            <label class="field">
+              <span>Sell Currency</span>
+              <input id="tx-edit-sell-curr" type="text">
+            </label>
+            <label class="field">
+              <span>Fee</span>
+              <input id="tx-edit-fee" type="number" step="any">
+            </label>
+            <label class="field">
+              <span>Fee Currency</span>
+              <input id="tx-edit-fee-curr" type="text">
+            </label>
+            <label class="field">
+              <span>Wallet</span>
+              <input id="tx-edit-wallet" type="text">
+            </label>
+            <label class="field">
+              <span>Group</span>
+              <input id="tx-edit-group" type="text">
+            </label>
+            <label class="field">
+              <span>Comment</span>
+              <input id="tx-edit-comment" type="text">
+            </label>
+            <div class="actions-row">
+              <button class="button" type="submit">Save Changes</button>
+              <button id="tx-delete-btn" class="button button-ghost button-danger" type="button">Delete</button>
+              <button id="tx-restore-btn" class="button button-ghost hidden" type="button">Restore</button>
+            </div>
+          </form>
+          <p id="tx-edit-status" class="status-line hidden"></p>
+        </section>
+      </section>
+
+      <section id="record-view" class="view-stack hidden">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Private Sovereignty Treasury</p>
+              <h1>Record Transaction</h1>
+              <p class="muted">Add a new transaction to your ledger.</p>
+            </div>
+          </div>
+
+          <div class="record-tabs">
+            <button class="record-tab active" data-record-tab="buy">Buy</button>
+            <button class="record-tab" data-record-tab="sell">Sell</button>
+            <button class="record-tab" data-record-tab="transfer">Transfer</button>
+            <button class="record-tab" data-record-tab="interest">Earn Interest</button>
+          </div>
+
+          <form id="record-buy-form" class="record-form filters">
+            <label class="field">
+              <span>Date</span>
+              <input id="buy-date" type="datetime-local" required>
+            </label>
+            <label class="field">
+              <span>Buy Amount (BTC)</span>
+              <input id="buy-amount" type="number" step="any" min="0" required>
+            </label>
+            <label class="field">
+              <span>Cost (USD)</span>
+              <input id="buy-cost" type="number" step="any" min="0" required>
+            </label>
+            <label class="field">
+              <span>Wallet</span>
+              <input id="buy-wallet" type="text" required>
+            </label>
+            <label class="field">
+              <span>Fee</span>
+              <input id="buy-fee" type="number" step="any" min="0" value="0">
+            </label>
+            <label class="field">
+              <span>Fee Currency</span>
+              <input id="buy-fee-curr" type="text" value="USD">
+            </label>
+            <label class="field">
+              <span>Comment</span>
+              <input id="buy-comment" type="text">
+            </label>
+            <div class="actions-row">
+              <button class="button" type="submit">Record Buy</button>
+            </div>
+          </form>
+
+          <form id="record-sell-form" class="record-form filters hidden">
+            <label class="field">
+              <span>Date</span>
+              <input id="sell-date" type="datetime-local" required>
+            </label>
+            <label class="field">
+              <span>Sell Amount (BTC)</span>
+              <input id="sell-amount" type="number" step="any" min="0" required>
+            </label>
+            <label class="field">
+              <span>Proceeds (USD)</span>
+              <input id="sell-proceeds" type="number" step="any" min="0" required>
+            </label>
+            <label class="field">
+              <span>Wallet</span>
+              <input id="sell-wallet" type="text" required>
+            </label>
+            <label class="field">
+              <span>Fee</span>
+              <input id="sell-fee" type="number" step="any" min="0" value="0">
+            </label>
+            <label class="field">
+              <span>Fee Currency</span>
+              <input id="sell-fee-curr" type="text" value="USD">
+            </label>
+            <label class="field">
+              <span>Comment</span>
+              <input id="sell-comment" type="text">
+            </label>
+            <div class="actions-row">
+              <button class="button" type="submit">Record Sale</button>
+            </div>
+          </form>
+
+          <form id="record-transfer-form" class="record-form filters hidden">
+            <label class="field">
+              <span>Date</span>
+              <input id="transfer-date" type="datetime-local" required>
+            </label>
+            <label class="field">
+              <span>Amount (BTC)</span>
+              <input id="transfer-amount" type="number" step="any" min="0" required>
+            </label>
+            <label class="field">
+              <span>From Wallet</span>
+              <input id="transfer-from" type="text" required>
+            </label>
+            <label class="field">
+              <span>To Wallet</span>
+              <input id="transfer-to" type="text" required>
+            </label>
+            <label class="field">
+              <span>Fee</span>
+              <input id="transfer-fee" type="number" step="any" min="0" value="0">
+            </label>
+            <label class="field">
+              <span>Fee Currency</span>
+              <input id="transfer-fee-curr" type="text" value="BTC">
+            </label>
+            <label class="field">
+              <span>Comment</span>
+              <input id="transfer-comment" type="text">
+            </label>
+            <div class="actions-row">
+              <button class="button" type="submit">Record Transfer</button>
+            </div>
+          </form>
+
+          <form id="record-interest-form" class="record-form filters hidden">
+            <label class="field">
+              <span>Date</span>
+              <input id="interest-date" type="datetime-local" required>
+            </label>
+            <label class="field">
+              <span>Amount</span>
+              <input id="interest-amount" type="number" step="any" min="0" required>
+            </label>
+            <label class="field">
+              <span>Currency</span>
+              <input id="interest-currency" type="text" value="BTC">
+            </label>
+            <label class="field">
+              <span>Wallet</span>
+              <input id="interest-wallet" type="text" required>
+            </label>
+            <label class="field">
+              <span>Comment</span>
+              <input id="interest-comment" type="text">
+            </label>
+            <div class="actions-row">
+              <button class="button" type="submit">Record Interest</button>
+            </div>
+          </form>
+
+          <p id="record-status" class="status-line hidden"></p>
+        </section>
+      </section>
+
+      <section id="wallets-view" class="view-stack hidden">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Private Sovereignty Treasury</p>
+              <h1>Wallets</h1>
+              <p class="muted">Create, edit, rename, merge, and manage wallet status.</p>
+            </div>
+            <div class="actions-row">
+              <button id="wallet-sync-btn" class="button button-ghost" type="button">Sync from Ledger</button>
+              <button id="wallet-create-btn" class="button" type="button">New Wallet</button>
+            </div>
+          </div>
+
+          <div class="wallets-filter-row">
+            <label class="toggle-label">
+              <input id="wallets-active-toggle" type="checkbox">
+              <span>Active only</span>
+            </label>
+          </div>
+
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Wallet</th>
+                  <th>Type</th>
+                  <th>Custody</th>
+                  <th>Status</th>
+                  <th>Transactions</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="wallets-table">
+                <tr><td colspan="6" class="empty-row">No wallets loaded yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="wallet-form-panel" class="panel subpanel hidden">
+          <div class="panel-heading">
+            <div>
+              <h3 id="wallet-form-title">New Wallet</h3>
+            </div>
+            <button id="wallet-form-close" class="button button-ghost button-inline" type="button">Close</button>
+          </div>
+          <form id="wallet-form" class="filters">
+            <input id="wallet-form-mode" type="hidden" value="create">
+            <input id="wallet-form-original-id" type="hidden" value="">
+            <label class="field">
+              <span>Wallet ID</span>
+              <input id="wallet-form-id" type="text" required>
+            </label>
+            <label class="field">
+              <span>Type</span>
+              <select id="wallet-form-type" required>
+                <option value="exchange">Exchange</option>
+                <option value="hardware">Hardware</option>
+                <option value="software">Software</option>
+                <option value="mobile">Mobile</option>
+                <option value="paper">Paper</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Custody</span>
+              <select id="wallet-form-custody" required>
+                <option value="self-custodied">Self-Custodied</option>
+                <option value="custodial">Custodial</option>
+                <option value="multisig">Multisig</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Description</span>
+              <input id="wallet-form-desc" type="text">
+            </label>
+            <label class="field">
+              <span>Notes</span>
+              <input id="wallet-form-notes" type="text">
+            </label>
+            <div class="actions-row">
+              <button id="wallet-form-submit" class="button" type="submit">Create Wallet</button>
+            </div>
+          </form>
+          <p id="wallet-form-status" class="status-line hidden"></p>
+        </section>
+
+        <section id="wallet-rename-panel" class="panel subpanel hidden">
+          <div class="panel-heading">
+            <div>
+              <h3>Rename Wallet</h3>
+              <p id="wallet-rename-info" class="muted"></p>
+            </div>
+            <button id="wallet-rename-close" class="button button-ghost button-inline" type="button">Close</button>
+          </div>
+          <form id="wallet-rename-form" class="filters">
+            <input id="wallet-rename-old-id" type="hidden" value="">
+            <label class="field">
+              <span>New Wallet ID</span>
+              <input id="wallet-rename-new-id" type="text" required>
+            </label>
+            <div class="actions-row">
+              <button class="button" type="submit">Rename</button>
+            </div>
+          </form>
+          <p id="wallet-rename-status" class="status-line hidden"></p>
+        </section>
+
+        <section id="wallet-merge-panel" class="panel subpanel hidden">
+          <div class="panel-heading">
+            <div>
+              <h3>Merge Wallet</h3>
+              <p id="wallet-merge-info" class="muted"></p>
+            </div>
+            <button id="wallet-merge-close" class="button button-ghost button-inline" type="button">Close</button>
+          </div>
+          <form id="wallet-merge-form" class="filters">
+            <input id="wallet-merge-source-id" type="hidden" value="">
+            <label class="field">
+              <span>Merge into</span>
+              <select id="wallet-merge-target" required></select>
+            </label>
+            <div class="actions-row">
+              <button class="button button-danger" type="submit">Merge</button>
+            </div>
+          </form>
+          <p id="wallet-merge-status" class="status-line hidden"></p>
+        </section>
+
+        <p id="wallets-status" class="status-line hidden"></p>
       </section>
 
       <section id="tax-view" class="view-stack hidden">
@@ -378,9 +820,17 @@
       <span class="nav-icon">◫</span>
       <span class="nav-label">Dashboard</span>
     </a>
-    <a class="nav-item" href="tax" data-route="tax">
-      <span class="nav-icon">₿</span>
-      <span class="nav-label">Tax</span>
+    <a class="nav-item" href="ledger" data-route="ledger">
+      <span class="nav-icon">≣</span>
+      <span class="nav-label">Ledger</span>
+    </a>
+    <a class="nav-item" href="record" data-route="record">
+      <span class="nav-icon">+</span>
+      <span class="nav-label">Record</span>
+    </a>
+    <a class="nav-item" href="wallets" data-route="wallets">
+      <span class="nav-icon">⌂</span>
+      <span class="nav-label">Wallets</span>
     </a>
     <button id="mobile-session-action" class="nav-item nav-brand-mobile" type="button" aria-label="Sign out or check session">
       <span class="nav-brand-mark"><img src="static/brand/bitcoin-shield-logo.png" alt="" width="18" height="18"></span>

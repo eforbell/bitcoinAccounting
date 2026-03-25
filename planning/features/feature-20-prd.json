@@ -34,7 +34,7 @@
       "priority": 1,
       "estimatedLines": "+220/-0",
       "testStrategy": "pytest ledger endpoint tests with filter combinations and deleted rows",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WOP-002",
@@ -48,7 +48,7 @@
       "priority": 2,
       "estimatedLines": "+220/-0",
       "testStrategy": "pytest transaction write API tests and UI confirmation-flow checks",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WOP-003",
@@ -62,7 +62,7 @@
       "priority": 3,
       "estimatedLines": "+220/-0",
       "testStrategy": "pytest transaction creation API tests + frontend form smoke tests",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WOP-004",
@@ -76,7 +76,7 @@
       "priority": 4,
       "estimatedLines": "+180/-0",
       "testStrategy": "pytest wallet API tests with rename/merge transaction assertions",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WOP-005",
@@ -90,7 +90,7 @@
       "priority": 5,
       "estimatedLines": "+90/-0",
       "testStrategy": "pytest rollback/concurrency-adjacent tests + manual review",
-      "passes": false
+      "passes": true
     }
   ],
   "riskAssessment": {
@@ -108,10 +108,14 @@
     ]
   },
   "preFlightChecklist": [
-    "Confirm which write flows must be available on phone vs desktop-only first",
-    "Choose pagination/filter defaults for ledger browsing",
-    "Decide whether diff preview is mandatory for web transaction edits",
-    "Define minimal audit logging expectations for destructive actions"
+    "RESOLVED: Pagination uses page/per_page with 50 default",
+    "RESOLVED: Summary stats bar (credits/debits/fees/balance/count) included in ledger — operator values this from TUI",
+    "RESOLVED: Transaction entry lives at /record as a dedicated page with tabs (Buy/Sell/Transfer/Earn Interest), not a modal",
+    "RESOLVED: Edit preview shows current vs proposed inline in the form, not a separate diff modal",
+    "RESOLVED: Transfer-pair soft-delete warns but does not block",
+    "RESOLVED: Inline wallet creation deferred — dropdown from existing wallets only",
+    "RESOLVED: Audit logging deferred — not needed for v1",
+    "RESOLVED: WOP-002 is corrections only (edit/delete/restore) — no create-new on ledger, that's WOP-003"
   ],
   "metrics": {
     "estimatedTotalLines": "+930/-0",

@@ -1,11 +1,37 @@
 {
-  "currentFeature": null,
-  "featureName": null,
-  "prdPath": null,
-  "summaryPath": null,
-  "branch": null,
-  "status": "idle",
-  "stories": [],
+  "currentFeature": "feature-20",
+  "featureName": "Web Ledger, Transaction Entry, and Wallet Management",
+  "prdPath": "planning/features/feature-20-prd.json",
+  "summaryPath": "planning/features/feature-20-summary.md",
+  "branch": "feature/web-ledger-transactions-wallets",
+  "status": "in_progress",
+  "stories": [
+    {
+      "id": "WOP-001",
+      "title": "Ledger explorer API and responsive web table",
+      "status": "completed"
+    },
+    {
+      "id": "WOP-002",
+      "title": "Transaction detail, edit, delete, and restore flows",
+      "status": "completed"
+    },
+    {
+      "id": "WOP-003",
+      "title": "Manual transaction entry flows",
+      "status": "completed"
+    },
+    {
+      "id": "WOP-004",
+      "title": "Wallet management on the web",
+      "status": "completed"
+    },
+    {
+      "id": "WOP-005",
+      "title": "Audit and safety polish for write operations",
+      "status": "completed"
+    }
+  ],
   "completedFeatures": [
     {
       "featureId": "feature-1",

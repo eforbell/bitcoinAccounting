@@ -44,6 +44,7 @@ class WalletResource(APIModel):
     wallet_type: str
     custody: str
     description: str | None = None
+    notes: str | None = None
     active: bool
 
 
@@ -255,6 +256,146 @@ class TaxHistoryEntryResource(APIModel):
     artifact_type: str | None = None
     status: str
     created_at: datetime
+
+
+class LedgerSummaryResource(APIModel):
+    """Aggregate stats for a filtered ledger view."""
+
+    coin: str = "BTC"
+    credits: float
+    debits: float
+    fees: float
+    balance: float
+    count: int
+
+
+class LedgerResponse(APIModel):
+    """Paginated ledger response with summary stats."""
+
+    transactions: list[TransactionResource]
+    summary: LedgerSummaryResource
+    page: int
+    per_page: int
+    total: int
+
+
+class BuyRequest(APIModel):
+    """Record a BTC purchase."""
+
+    trade_date: str
+    buy: float
+    buy_curr: str = "BTC"
+    sell: float
+    sell_curr: str = "USD"
+    fee: float = 0.0
+    fee_curr: str = "USD"
+    exchange: str
+    comment: str = ""
+
+
+class SellRequest(APIModel):
+    """Record a BTC sale."""
+
+    trade_date: str
+    buy: float
+    buy_curr: str = "USD"
+    sell: float
+    sell_curr: str = "BTC"
+    fee: float = 0.0
+    fee_curr: str = "USD"
+    exchange: str
+    comment: str = ""
+
+
+class TransferRequest(APIModel):
+    """Record a wallet-to-wallet transfer."""
+
+    transfer_date: str
+    amount: float
+    coin: str = "BTC"
+    from_wallet: str
+    to_wallet: str
+    fee: float = 0.0
+    fee_coin: str = "BTC"
+    comment: str = ""
+
+
+class InterestRequest(APIModel):
+    """Record earned interest/rewards."""
+
+    interest_date: str
+    amount: float
+    currency: str = "BTC"
+    exchange: str
+    comment: str = ""
+
+
+class TransactionUpdateRequest(APIModel):
+    """Partial update for a ledger transaction."""
+
+    created_at: str | None = None
+    transaction_type: str | None = None
+    buy_amount: float | None = None
+    buy_currency: str | None = None
+    sell_amount: float | None = None
+    sell_currency: str | None = None
+    fee_amount: float | None = None
+    fee_currency: str | None = None
+    wallet_id: str | None = None
+    group: str | None = None
+    comment: str | None = None
+
+
+class WalletListResource(APIModel):
+    """Wallet with transaction count for list views."""
+
+    wallet_id: str
+    wallet_type: str
+    custody: str
+    description: str | None = None
+    notes: str | None = None
+    active: bool
+    transaction_count: int
+
+
+class WalletListResponse(APIModel):
+    """Paginated wallet list."""
+
+    wallets: list[WalletListResource]
+
+
+class WalletCreateRequest(APIModel):
+    """Create a new wallet."""
+
+    wallet_id: str
+    wallet_type: str
+    custody: str
+    description: str | None = None
+    notes: str | None = None
+
+
+class WalletUpdateRequest(APIModel):
+    """Partial update for wallet metadata."""
+
+    wallet_type: str | None = None
+    custody: str | None = None
+    description: str | None = None
+    notes: str | None = None
+    active: bool | None = None
+
+
+class WalletRenameRequest(APIModel):
+    """Rename a wallet."""
+
+    wallet_id: str
+    new_wallet_id: str
+
+
+class WalletMergeRequest(APIModel):
+    """Merge source wallet into target."""
+
+    source_wallet_id: str
+    target_wallet_id: str
 
 
 class LoginRequest(APIModel):

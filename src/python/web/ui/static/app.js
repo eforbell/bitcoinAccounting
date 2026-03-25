@@ -3,11 +3,14 @@ const state = {
   policy: null,
   dashboard: null,
   walletDetail: null,
+  walletsList: [],
   currentPage: 'dashboard',
   currentWalletId: null,
   includeInactive: false,
   gainsFilters: { taxYear: 2024, coin: 'BTC', wallet: '' },
   forecastFilters: { coin: 'BTC', wallet: '', quantity: 0.1, salePriceUsd: 100000 },
+  ledgerFilters: { coin: 'BTC', wallet: '', startDate: '', endDate: '', includeDeleted: false, page: 1, perPage: 50 },
+  selectedTx: null,
 };
 
 function byId(id) {
@@ -37,6 +40,12 @@ function appBase() {
   const path = window.location.pathname;
   const taxIdx = path.indexOf('/tax');
   if (taxIdx !== -1) return path.slice(0, taxIdx + 1);
+  const ledgerIdx = path.indexOf('/ledger');
+  if (ledgerIdx !== -1) return path.slice(0, ledgerIdx + 1);
+  const recordIdx = path.indexOf('/record');
+  if (recordIdx !== -1) return path.slice(0, recordIdx + 1);
+  const walletsIdx = path.indexOf('/wallets');
+  if (walletsIdx !== -1) return path.slice(0, walletsIdx + 1);
   const walletIdx = path.indexOf('/wallet/');
   if (walletIdx !== -1) return path.slice(0, walletIdx + 1);
   return path.endsWith('/') ? path : path + '/';
@@ -45,6 +54,9 @@ function appBase() {
 function appPath(page) {
   const base = appBase();
   if (page === 'tax') return `${base}tax`;
+  if (page === 'ledger') return `${base}ledger`;
+  if (page === 'record') return `${base}record`;
+  if (page === 'wallets') return `${base}wallets`;
   if (page === 'wallet' && state.currentWalletId) return `${base}wallet/${encodeURIComponent(state.currentWalletId)}`;
   return base;
 }
@@ -52,6 +64,15 @@ function appPath(page) {
 function currentRouteFromLocation() {
   const path = window.location.pathname.replace(/\/+$/, '');
   if (path.endsWith('/tax')) return 'tax';
+  if (path.endsWith('/record')) return 'record';
+  if (path.endsWith('/wallets')) return 'wallets';
+  if (path.endsWith('/ledger')) {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('wallet')) {
+      state.ledgerFilters.wallet = params.get('wallet');
+    }
+    return 'ledger';
+  }
   const walletMatch = path.match(/\/wallet\/([^/]+)$/);
   if (walletMatch) {
     state.currentWalletId = decodeURIComponent(walletMatch[1]);
@@ -70,6 +91,25 @@ function navigateTo(page, replace = false) {
   renderPageState();
   if (page === 'wallet' && state.currentWalletId) {
     loadWalletDetail(state.currentWalletId);
+  }
+  if (page === 'ledger') {
+    loadLedger();
+  }
+  if (page === 'wallets') {
+    loadWalletsList();
+  }
+  if (page === 'record') {
+    initRecordDates();
+  }
+}
+
+function initRecordDates() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - offset * 60000).toISOString().slice(0, 16);
+  for (const id of ['buy-date', 'sell-date', 'transfer-date', 'interest-date']) {
+    const el = byId(id);
+    if (el && !el.value) el.value = local;
   }
 }
 
@@ -125,6 +165,9 @@ function showLoggedOut() {
   byId('dashboard-view').classList.add('hidden');
   byId('tax-view').classList.add('hidden');
   byId('wallet-view').classList.add('hidden');
+  byId('ledger-view').classList.add('hidden');
+  byId('record-view').classList.add('hidden');
+  byId('wallets-view').classList.add('hidden');
   byId('operator-chip').textContent = 'operator';
   setSessionGlyph(false);
 }
@@ -139,13 +182,16 @@ function showLoggedIn(username) {
 function renderPageState() {
   document.body.classList.add('app-has-nav');
   const page = state.currentPage;
-  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet' };
+  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet', wallets: 'Wallets', ledger: 'Ledger', record: 'Record' };
   document.title = `Bitcoin Accounting | ${titles[page] || 'Dashboard'}`;
   byId('dashboard-view').classList.toggle('hidden', !state.session || page !== 'dashboard');
   byId('tax-view').classList.toggle('hidden', !state.session || page !== 'tax');
   byId('wallet-view').classList.toggle('hidden', !state.session || page !== 'wallet');
+  byId('ledger-view').classList.toggle('hidden', !state.session || page !== 'ledger');
+  byId('record-view').classList.toggle('hidden', !state.session || page !== 'record');
+  byId('wallets-view').classList.toggle('hidden', !state.session || page !== 'wallets');
 
-  const navRoute = page === 'wallet' ? 'dashboard' : page;
+  const navRoute = (page === 'wallet') ? 'dashboard' : page;
   for (const item of document.querySelectorAll('[data-route]')) {
     item.classList.toggle('active', item.dataset.route === navRoute);
   }
@@ -280,9 +326,128 @@ async function loadWalletDetail(walletId) {
     byId('wallet-view-pct-card').textContent = `${w.percentage.toFixed(1)}%`;
 
     byId('wallet-tx-list').innerHTML = renderTransactionRows(detail.recent_transactions);
+
+    const viewAllLink = byId('wallet-view-all-link');
+    viewAllLink.href = `${appBase()}ledger?wallet=${encodeURIComponent(walletId)}`;
+    viewAllLink.onclick = (event) => {
+      event.preventDefault();
+      state.ledgerFilters = { ...state.ledgerFilters, wallet: walletId, page: 1 };
+      byId('ledger-wallet').value = walletId;
+      navigateTo('ledger');
+    };
   } catch (error) {
     byId('wallet-tx-list').innerHTML = `<div class="tx-row"><div class="list-item-meta">${escapeHtml(error.message)}</div></div>`;
   }
+}
+
+async function loadLedger() {
+  const f = state.ledgerFilters;
+  const params = new URLSearchParams({ coin: f.coin, page: String(f.page), per_page: String(f.perPage) });
+  if (f.wallet) params.set('wallet', f.wallet);
+  if (f.startDate) params.set('start_date', f.startDate);
+  if (f.endDate) params.set('end_date', f.endDate);
+  if (f.includeDeleted) params.set('include_deleted', 'true');
+
+  try {
+    const data = await api(`api/ledger?${params.toString()}`);
+    renderLedger(data);
+  } catch (error) {
+    byId('ledger-table').innerHTML = `<tr><td colspan="7" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+function renderLedger(data) {
+  const s = data.summary;
+  const unit = s.coin || 'BTC';
+  byId('ledger-balance').textContent = `${Number(s.balance).toFixed(8)} ${unit}`;
+  byId('ledger-credits').textContent = `${Number(s.credits).toFixed(8)} ${unit}`;
+  byId('ledger-debits').textContent = `${Number(s.debits).toFixed(8)} ${unit}`;
+  byId('ledger-fees').textContent = `${Number(s.fees).toFixed(8)} ${unit}`;
+  byId('ledger-count').textContent = `Showing ${data.transactions.length} of ${data.total} transactions (page ${data.page})`;
+
+  if (!data.transactions.length) {
+    byId('ledger-table').innerHTML = '<tr><td colspan="7" class="empty-row">No transactions match the current filters.</td></tr>';
+  } else {
+    byId('ledger-table').innerHTML = data.transactions.map((tx) => `
+      <tr class="ledger-row${tx.deleted ? ' ledger-row-deleted' : ''}" data-tx-id="${tx.transaction_id}">
+        <td>${escapeHtml(tx.created_at)}</td>
+        <td>${escapeHtml(tx.transaction_type || '')}</td>
+        <td>${tx.buy_amount != null ? `${Number(tx.buy_amount).toFixed(8)} ${escapeHtml(tx.buy_currency || '')}` : ''}</td>
+        <td>${tx.sell_amount != null ? `${Number(tx.sell_amount).toFixed(8)} ${escapeHtml(tx.sell_currency || '')}` : ''}</td>
+        <td>${tx.fee_amount != null ? `${Number(tx.fee_amount).toFixed(8)} ${escapeHtml(tx.fee_currency || '')}` : ''}</td>
+        <td>${escapeHtml(tx.wallet_id || '')}</td>
+        <td>${escapeHtml(tx.comment || '')}</td>
+      </tr>
+    `).join('');
+
+    for (const row of byId('ledger-table').querySelectorAll('[data-tx-id]')) {
+      row.addEventListener('click', () => openTransactionDetail(Number(row.dataset.txId)));
+    }
+  }
+
+  const totalPages = Math.ceil(data.total / data.per_page);
+  if (totalPages <= 1) {
+    byId('ledger-pagination').innerHTML = '';
+  } else {
+    const buttons = [];
+    if (data.page > 1) buttons.push(`<button class="button button-ghost" data-ledger-page="${data.page - 1}">Prev</button>`);
+    buttons.push(`<span class="list-item-meta">Page ${data.page} of ${totalPages}</span>`);
+    if (data.page < totalPages) buttons.push(`<button class="button button-ghost" data-ledger-page="${data.page + 1}">Next</button>`);
+    byId('ledger-pagination').innerHTML = buttons.join(' ');
+
+    for (const btn of byId('ledger-pagination').querySelectorAll('[data-ledger-page]')) {
+      btn.addEventListener('click', () => {
+        state.ledgerFilters.page = Number(btn.dataset.ledgerPage);
+        loadLedger();
+      });
+    }
+  }
+}
+
+async function openTransactionDetail(txId) {
+  try {
+    const tx = await api(`api/ledger/${txId}`);
+    state.selectedTx = tx;
+    byId('tx-detail-id').textContent = `#${tx.transaction_id}`;
+    byId('tx-edit-date').value = tx.created_at || '';
+    byId('tx-edit-type').value = tx.transaction_type || '';
+    byId('tx-edit-buy').value = tx.buy_amount != null ? tx.buy_amount : '';
+    byId('tx-edit-buy-curr').value = tx.buy_currency || '';
+    byId('tx-edit-sell').value = tx.sell_amount != null ? tx.sell_amount : '';
+    byId('tx-edit-sell-curr').value = tx.sell_currency || '';
+    byId('tx-edit-fee').value = tx.fee_amount != null ? tx.fee_amount : '';
+    byId('tx-edit-fee-curr').value = tx.fee_currency || '';
+    byId('tx-edit-wallet').value = tx.wallet_id || '';
+    byId('tx-edit-group').value = tx.group || '';
+    byId('tx-edit-comment').value = tx.comment || '';
+
+    const warning = byId('tx-transfer-warning');
+    if (tx.group && (tx.transaction_type === 'Deposit' || tx.transaction_type === 'Withdrawal')) {
+      warning.classList.remove('hidden');
+    } else {
+      warning.classList.add('hidden');
+    }
+
+    byId('tx-delete-btn').classList.toggle('hidden', tx.deleted);
+    byId('tx-restore-btn').classList.toggle('hidden', !tx.deleted);
+    byId('tx-edit-status').classList.add('hidden');
+    byId('tx-detail-panel').classList.remove('hidden');
+    byId('tx-detail-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (error) {
+    byId('tx-detail-panel').classList.add('hidden');
+  }
+}
+
+function closeTransactionDetail() {
+  byId('tx-detail-panel').classList.add('hidden');
+  state.selectedTx = null;
+}
+
+function showTxStatus(message, isError = false) {
+  const el = byId('tx-edit-status');
+  el.textContent = message;
+  el.style.color = isError ? 'var(--danger)' : 'var(--success)';
+  el.classList.remove('hidden');
 }
 
 async function loadPolicy() {
@@ -437,14 +602,137 @@ function downloadTaxArtifact(kind) {
   window.location.href = `${appBase()}api/tax/${kind}?${params.toString()}`;
 }
 
+async function populateLedgerWalletDropdown() {
+  try {
+    const data = await api('api/wallets');
+    const select = byId('ledger-wallet');
+    const current = select.value;
+    select.innerHTML = '<option value="">All wallets</option>' +
+      data.wallets.map((w) =>
+        `<option value="${escapeHtml(w.wallet_id)}"${w.wallet_id === current ? ' selected' : ''}>${escapeHtml(w.wallet_id)}</option>`
+      ).join('');
+  } catch (_) {
+    // Keep the existing options if the API call fails
+  }
+}
+
+async function loadWalletsList() {
+  const activeOnly = byId('wallets-active-toggle').checked;
+  const params = new URLSearchParams();
+  if (activeOnly) params.set('active_only', 'true');
+  try {
+    const data = await api(`api/wallets?${params.toString()}`);
+    state.walletsList = data.wallets;
+    renderWalletsList(data.wallets);
+  } catch (error) {
+    byId('wallets-table').innerHTML = `<tr><td colspan="6" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+function renderWalletsList(wallets) {
+  if (!wallets.length) {
+    byId('wallets-table').innerHTML = '<tr><td colspan="6" class="empty-row">No wallets found.</td></tr>';
+    return;
+  }
+  byId('wallets-table').innerHTML = wallets.map((w) => `
+    <tr>
+      <td><strong>${escapeHtml(w.wallet_id)}</strong>${w.description ? `<br><span class="list-item-meta">${escapeHtml(w.description)}</span>` : ''}</td>
+      <td>${escapeHtml(w.wallet_type)}</td>
+      <td>${escapeHtml(w.custody)}</td>
+      <td>${w.active ? 'Active' : 'Inactive'}</td>
+      <td>${w.transaction_count}</td>
+      <td class="actions-cell">
+        <button class="button button-ghost button-inline" data-wallet-edit="${escapeHtml(w.wallet_id)}">Edit</button>
+        <button class="button button-ghost button-inline" data-wallet-toggle="${escapeHtml(w.wallet_id)}" data-active="${w.active}">${w.active ? 'Deactivate' : 'Activate'}</button>
+        <button class="button button-ghost button-inline" data-wallet-rename="${escapeHtml(w.wallet_id)}" data-tx-count="${w.transaction_count}">Rename</button>
+        <button class="button button-ghost button-inline" data-wallet-merge="${escapeHtml(w.wallet_id)}" data-tx-count="${w.transaction_count}">Merge</button>
+      </td>
+    </tr>
+  `).join('');
+
+  for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-edit]')) {
+    btn.addEventListener('click', () => openWalletEdit(btn.dataset.walletEdit));
+  }
+  for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-toggle]')) {
+    btn.addEventListener('click', () => toggleWalletActive(btn.dataset.walletToggle, btn.dataset.active === 'true'));
+  }
+  for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-rename]')) {
+    btn.addEventListener('click', () => openWalletRename(btn.dataset.walletRename, Number(btn.dataset.txCount)));
+  }
+  for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-merge]')) {
+    btn.addEventListener('click', () => openWalletMerge(btn.dataset.walletMerge, Number(btn.dataset.txCount)));
+  }
+}
+
+function openWalletEdit(walletId) {
+  const w = (state.walletsList || []).find((w) => w.wallet_id === walletId);
+  if (!w) return;
+  byId('wallet-form-mode').value = 'edit';
+  byId('wallet-form-original-id').value = walletId;
+  byId('wallet-form-title').textContent = `Edit: ${walletId}`;
+  byId('wallet-form-submit').textContent = 'Save Changes';
+  byId('wallet-form-id').value = walletId;
+  byId('wallet-form-id').setAttribute('disabled', 'disabled');
+  byId('wallet-form-type').value = w.wallet_type;
+  byId('wallet-form-custody').value = w.custody;
+  byId('wallet-form-desc').value = w.description || '';
+  byId('wallet-form-notes').value = w.notes || '';
+  byId('wallet-form-status').classList.add('hidden');
+  byId('wallet-form-panel').classList.remove('hidden');
+  byId('wallet-form-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function toggleWalletActive(walletId, currentlyActive) {
+  try {
+    await api(`api/wallets/${encodeURIComponent(walletId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active: !currentlyActive }),
+    });
+    await loadWalletsList();
+  } catch (error) {
+    const statusEl = byId('wallets-status');
+    statusEl.textContent = error.message;
+    statusEl.style.color = 'var(--danger)';
+    statusEl.classList.remove('hidden');
+  }
+}
+
+function openWalletRename(walletId, txCount) {
+  byId('wallet-rename-old-id').value = walletId;
+  byId('wallet-rename-new-id').value = '';
+  byId('wallet-rename-info').textContent = `Renaming "${walletId}" (${txCount} transaction${txCount !== 1 ? 's' : ''} will be updated).`;
+  byId('wallet-rename-status').classList.add('hidden');
+  byId('wallet-rename-panel').classList.remove('hidden');
+  byId('wallet-rename-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function openWalletMerge(sourceId, txCount) {
+  byId('wallet-merge-source-id').value = sourceId;
+  byId('wallet-merge-info').textContent = `Merge "${sourceId}" (${txCount} transaction${txCount !== 1 ? 's' : ''}) into another wallet. The source wallet will be deleted.`;
+  byId('wallet-merge-status').classList.add('hidden');
+  const options = (state.walletsList || [])
+    .filter((w) => w.wallet_id !== sourceId)
+    .map((w) => `<option value="${escapeHtml(w.wallet_id)}">${escapeHtml(w.wallet_id)}</option>`)
+    .join('');
+  byId('wallet-merge-target').innerHTML = options || '<option value="">No other wallets</option>';
+  byId('wallet-merge-panel').classList.remove('hidden');
+  byId('wallet-merge-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 async function refreshSession() {
   try {
     const session = await api('api/auth/me');
     state.session = session;
     showLoggedIn(session.username);
-    const loaders = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast()];
+    const loaders = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast(), populateLedgerWalletDropdown()];
     if (state.currentPage === 'wallet' && state.currentWalletId) {
       loaders.push(loadWalletDetail(state.currentWalletId));
+    }
+    if (state.currentPage === 'ledger') {
+      loaders.push(loadLedger());
+    }
+    if (state.currentPage === 'wallets') {
+      loaders.push(loadWalletsList());
     }
     await Promise.all(loaders);
   } catch (_) {
@@ -484,9 +772,15 @@ function bindEvents() {
       state.session = session;
       setAuthStatus('Authenticated.');
       showLoggedIn(session.username);
-      const postLogin = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast()];
+      const postLogin = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast(), populateLedgerWalletDropdown()];
       if (state.currentPage === 'wallet' && state.currentWalletId) {
         postLogin.push(loadWalletDetail(state.currentWalletId));
+      }
+      if (state.currentPage === 'ledger') {
+        postLogin.push(loadLedger());
+      }
+      if (state.currentPage === 'wallets') {
+        postLogin.push(loadWalletsList());
       }
       await Promise.all(postLogin);
     } catch (error) {
@@ -507,6 +801,228 @@ function bindEvents() {
 
   byId('session-action').addEventListener('click', handleSessionAction);
   byId('mobile-session-action').addEventListener('click', handleSessionAction);
+
+  // Record tab switching
+  for (const tab of document.querySelectorAll('.record-tab')) {
+    tab.addEventListener('click', () => {
+      for (const t of document.querySelectorAll('.record-tab')) t.classList.remove('active');
+      tab.classList.add('active');
+      for (const f of document.querySelectorAll('.record-form')) f.classList.add('hidden');
+      document.getElementById(`record-${tab.dataset.recordTab}-form`).classList.remove('hidden');
+      byId('record-status').classList.add('hidden');
+    });
+  }
+
+  function showRecordStatus(message, isError = false) {
+    const el = byId('record-status');
+    el.textContent = message;
+    el.style.color = isError ? 'var(--danger)' : 'var(--success)';
+    el.classList.remove('hidden');
+  }
+
+  function todayLocal() {
+    const now = new Date();
+    const offset = now.getTimezoneOffset();
+    return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 16);
+  }
+
+  byId('record-buy-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      await api('api/ledger/buy', {
+        method: 'POST',
+        body: JSON.stringify({
+          trade_date: byId('buy-date').value,
+          buy: Number(byId('buy-amount').value),
+          sell: Number(byId('buy-cost').value),
+          exchange: byId('buy-wallet').value.trim(),
+          fee: Number(byId('buy-fee').value) || 0,
+          fee_curr: byId('buy-fee-curr').value.trim() || 'USD',
+          comment: byId('buy-comment').value.trim(),
+        }),
+      });
+      showRecordStatus('Buy recorded successfully.');
+      byId('record-buy-form').reset();
+      byId('buy-date').value = todayLocal();
+    } catch (error) {
+      showRecordStatus(error.message, true);
+    }
+  });
+
+  byId('record-sell-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      await api('api/ledger/sell', {
+        method: 'POST',
+        body: JSON.stringify({
+          trade_date: byId('sell-date').value,
+          sell: Number(byId('sell-amount').value),
+          buy: Number(byId('sell-proceeds').value),
+          exchange: byId('sell-wallet').value.trim(),
+          fee: Number(byId('sell-fee').value) || 0,
+          fee_curr: byId('sell-fee-curr').value.trim() || 'USD',
+          comment: byId('sell-comment').value.trim(),
+        }),
+      });
+      showRecordStatus('Sale recorded successfully.');
+      byId('record-sell-form').reset();
+      byId('sell-date').value = todayLocal();
+    } catch (error) {
+      showRecordStatus(error.message, true);
+    }
+  });
+
+  byId('record-transfer-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      await api('api/ledger/transfer', {
+        method: 'POST',
+        body: JSON.stringify({
+          transfer_date: byId('transfer-date').value,
+          amount: Number(byId('transfer-amount').value),
+          from_wallet: byId('transfer-from').value.trim(),
+          to_wallet: byId('transfer-to').value.trim(),
+          fee: Number(byId('transfer-fee').value) || 0,
+          fee_coin: byId('transfer-fee-curr').value.trim() || 'BTC',
+          comment: byId('transfer-comment').value.trim(),
+        }),
+      });
+      showRecordStatus('Transfer recorded successfully.');
+      byId('record-transfer-form').reset();
+      byId('transfer-date').value = todayLocal();
+    } catch (error) {
+      showRecordStatus(error.message, true);
+    }
+  });
+
+  byId('record-interest-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      await api('api/ledger/interest', {
+        method: 'POST',
+        body: JSON.stringify({
+          interest_date: byId('interest-date').value,
+          amount: Number(byId('interest-amount').value),
+          currency: byId('interest-currency').value.trim() || 'BTC',
+          exchange: byId('interest-wallet').value.trim(),
+          comment: byId('interest-comment').value.trim(),
+        }),
+      });
+      showRecordStatus('Interest recorded successfully.');
+      byId('record-interest-form').reset();
+      byId('interest-date').value = todayLocal();
+    } catch (error) {
+      showRecordStatus(error.message, true);
+    }
+  });
+
+  byId('ledger-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    state.ledgerFilters = {
+      coin: byId('ledger-coin').value.trim() || 'BTC',
+      wallet: byId('ledger-wallet').value.trim(),
+      startDate: byId('ledger-start').value,
+      endDate: byId('ledger-end').value,
+      includeDeleted: byId('ledger-deleted-toggle').checked,
+      page: 1,
+      perPage: state.ledgerFilters.perPage,
+    };
+    await loadLedger();
+  });
+
+  byId('tx-detail-close').addEventListener('click', closeTransactionDetail);
+
+  byId('tx-edit-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!state.selectedTx) return;
+    const txId = state.selectedTx.transaction_id;
+    const body = {};
+    const fields = [
+      ['tx-edit-date', 'created_at'],
+      ['tx-edit-type', 'transaction_type'],
+      ['tx-edit-buy', 'buy_amount'],
+      ['tx-edit-buy-curr', 'buy_currency'],
+      ['tx-edit-sell', 'sell_amount'],
+      ['tx-edit-sell-curr', 'sell_currency'],
+      ['tx-edit-fee', 'fee_amount'],
+      ['tx-edit-fee-curr', 'fee_currency'],
+      ['tx-edit-wallet', 'wallet_id'],
+      ['tx-edit-group', 'group'],
+      ['tx-edit-comment', 'comment'],
+    ];
+    const orig = state.selectedTx;
+    const origMap = {
+      created_at: orig.created_at || '',
+      transaction_type: orig.transaction_type || '',
+      buy_amount: orig.buy_amount,
+      buy_currency: orig.buy_currency || '',
+      sell_amount: orig.sell_amount,
+      sell_currency: orig.sell_currency || '',
+      fee_amount: orig.fee_amount,
+      fee_currency: orig.fee_currency || '',
+      wallet_id: orig.wallet_id || '',
+      group: orig.group || '',
+      comment: orig.comment || '',
+    };
+    for (const [elId, key] of fields) {
+      const val = byId(elId).value;
+      const isNumeric = ['buy_amount', 'sell_amount', 'fee_amount'].includes(key);
+      const newVal = isNumeric ? (val !== '' ? Number(val) : null) : val;
+      const origVal = origMap[key];
+      if (isNumeric ? newVal !== origVal : val !== (origVal || '')) {
+        body[key] = newVal;
+      }
+    }
+    if (Object.keys(body).length === 0) {
+      showTxStatus('No changes detected.');
+      return;
+    }
+    try {
+      await api(`api/ledger/${txId}`, { method: 'PATCH', body: JSON.stringify(body) });
+      showTxStatus('Transaction updated.');
+      await loadLedger();
+      await openTransactionDetail(txId);
+    } catch (error) {
+      showTxStatus(error.message, true);
+    }
+  });
+
+  byId('tx-delete-btn').addEventListener('click', async () => {
+    if (!state.selectedTx) return;
+    if (!confirm('Soft-delete this transaction? It can be restored later.')) return;
+    const txId = state.selectedTx.transaction_id;
+    try {
+      await api(`api/ledger/${txId}`, { method: 'DELETE' });
+      showTxStatus('Transaction deleted.');
+      await loadLedger();
+      await openTransactionDetail(txId);
+    } catch (error) {
+      showTxStatus(error.message, true);
+    }
+  });
+
+  byId('tx-restore-btn').addEventListener('click', async () => {
+    if (!state.selectedTx) return;
+    const txId = state.selectedTx.transaction_id;
+    try {
+      await api(`api/ledger/${txId}/restore`, { method: 'POST' });
+      showTxStatus('Transaction restored.');
+      await loadLedger();
+      await openTransactionDetail(txId);
+    } catch (error) {
+      showTxStatus(error.message, true);
+    }
+  });
+
+  byId('ledger-clear').addEventListener('click', async () => {
+    byId('ledger-coin').value = 'BTC';
+    byId('ledger-wallet').value = '';
+    byId('ledger-start').value = '';
+    byId('ledger-end').value = '';
+    byId('ledger-deleted-toggle').checked = false;
+    state.ledgerFilters = { coin: 'BTC', wallet: '', startDate: '', endDate: '', includeDeleted: false, page: 1, perPage: 50 };
+    await loadLedger();
+  });
 
   byId('inactive-toggle').addEventListener('change', async (event) => {
     state.includeInactive = event.target.checked;
@@ -548,6 +1064,142 @@ function bindEvents() {
 
   byId('export-1099b').addEventListener('click', () => downloadTaxArtifact('1099b/export'));
   byId('export-worksheet').addEventListener('click', () => downloadTaxArtifact('1099b/worksheet'));
+
+  // --- Wallet Management ---
+
+  byId('wallet-create-btn').addEventListener('click', () => {
+    byId('wallet-form-mode').value = 'create';
+    byId('wallet-form-original-id').value = '';
+    byId('wallet-form-title').textContent = 'New Wallet';
+    byId('wallet-form-submit').textContent = 'Create Wallet';
+    byId('wallet-form-id').value = '';
+    byId('wallet-form-id').removeAttribute('disabled');
+    byId('wallet-form-type').value = 'exchange';
+    byId('wallet-form-custody').value = 'self-custodied';
+    byId('wallet-form-desc').value = '';
+    byId('wallet-form-notes').value = '';
+    byId('wallet-form-status').classList.add('hidden');
+    byId('wallet-form-panel').classList.remove('hidden');
+    byId('wallet-form-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  byId('wallet-form-close').addEventListener('click', () => {
+    byId('wallet-form-panel').classList.add('hidden');
+  });
+
+  byId('wallet-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const mode = byId('wallet-form-mode').value;
+    const statusEl = byId('wallet-form-status');
+    try {
+      if (mode === 'create') {
+        await api('api/wallets', {
+          method: 'POST',
+          body: JSON.stringify({
+            wallet_id: byId('wallet-form-id').value.trim(),
+            wallet_type: byId('wallet-form-type').value,
+            custody: byId('wallet-form-custody').value,
+            description: byId('wallet-form-desc').value.trim() || null,
+            notes: byId('wallet-form-notes').value.trim() || null,
+          }),
+        });
+        statusEl.textContent = 'Wallet created.';
+        statusEl.style.color = 'var(--success)';
+      } else {
+        const walletId = byId('wallet-form-original-id').value;
+        const orig = (state.walletsList || []).find((w) => w.wallet_id === walletId) || {};
+        const body = {};
+        const wt = byId('wallet-form-type').value;
+        const cust = byId('wallet-form-custody').value;
+        const desc = byId('wallet-form-desc').value.trim();
+        const notes = byId('wallet-form-notes').value.trim();
+        if (wt && wt !== orig.wallet_type) body.wallet_type = wt;
+        if (cust && cust !== orig.custody) body.custody = cust;
+        if (desc !== (orig.description || '')) body.description = desc || null;
+        if (notes !== (orig.notes || '')) body.notes = notes || null;
+        await api(`api/wallets/${encodeURIComponent(walletId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        });
+        statusEl.textContent = 'Wallet updated.';
+        statusEl.style.color = 'var(--success)';
+      }
+      statusEl.classList.remove('hidden');
+      await loadWalletsList();
+    } catch (error) {
+      statusEl.textContent = error.message;
+      statusEl.style.color = 'var(--danger)';
+      statusEl.classList.remove('hidden');
+    }
+  });
+
+  byId('wallet-sync-btn').addEventListener('click', async () => {
+    const statusEl = byId('wallets-status');
+    try {
+      const result = await api('api/wallets/sync', { method: 'POST' });
+      statusEl.textContent = `Sync complete. ${result.created} wallet(s) created.`;
+      statusEl.style.color = 'var(--success)';
+      statusEl.classList.remove('hidden');
+      await loadWalletsList();
+    } catch (error) {
+      statusEl.textContent = error.message;
+      statusEl.style.color = 'var(--danger)';
+      statusEl.classList.remove('hidden');
+    }
+  });
+
+  byId('wallets-active-toggle').addEventListener('change', () => loadWalletsList());
+
+  byId('wallet-rename-close').addEventListener('click', () => {
+    byId('wallet-rename-panel').classList.add('hidden');
+  });
+
+  byId('wallet-rename-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const oldId = byId('wallet-rename-old-id').value;
+    const newId = byId('wallet-rename-new-id').value.trim();
+    const statusEl = byId('wallet-rename-status');
+    try {
+      await api('api/wallets/rename', {
+        method: 'POST',
+        body: JSON.stringify({ wallet_id: oldId, new_wallet_id: newId }),
+      });
+      statusEl.textContent = `Renamed to "${newId}".`;
+      statusEl.style.color = 'var(--success)';
+      statusEl.classList.remove('hidden');
+      await loadWalletsList();
+    } catch (error) {
+      statusEl.textContent = error.message;
+      statusEl.style.color = 'var(--danger)';
+      statusEl.classList.remove('hidden');
+    }
+  });
+
+  byId('wallet-merge-close').addEventListener('click', () => {
+    byId('wallet-merge-panel').classList.add('hidden');
+  });
+
+  byId('wallet-merge-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const sourceId = byId('wallet-merge-source-id').value;
+    const targetId = byId('wallet-merge-target').value;
+    if (!confirm(`Merge "${sourceId}" into "${targetId}"? This cannot be undone.`)) return;
+    const statusEl = byId('wallet-merge-status');
+    try {
+      await api('api/wallets/merge', {
+        method: 'POST',
+        body: JSON.stringify({ source_wallet_id: sourceId, target_wallet_id: targetId }),
+      });
+      statusEl.textContent = `Merged into "${targetId}".`;
+      statusEl.style.color = 'var(--success)';
+      statusEl.classList.remove('hidden');
+      await loadWalletsList();
+    } catch (error) {
+      statusEl.textContent = error.message;
+      statusEl.style.color = 'var(--danger)';
+      statusEl.classList.remove('hidden');
+    }
+  });
 }
 
 state.currentPage = currentRouteFromLocation();

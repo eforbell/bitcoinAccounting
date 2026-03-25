@@ -45,6 +45,24 @@ def web_tax_shell(request: Request) -> HTMLResponse:
     return _shell_response(request)
 
 
+@router.get("/record", include_in_schema=False)
+def web_record_shell(request: Request) -> HTMLResponse:
+    """Serve the transaction entry page within the shared web shell."""
+    return _shell_response(request)
+
+
+@router.get("/ledger", include_in_schema=False)
+def web_ledger_shell(request: Request) -> HTMLResponse:
+    """Serve the ledger explorer page within the shared web shell."""
+    return _shell_response(request)
+
+
+@router.get("/wallets", include_in_schema=False)
+def web_wallets_shell(request: Request) -> HTMLResponse:
+    """Serve the wallet management page within the shared web shell."""
+    return _shell_response(request)
+
+
 @router.get("/wallet/{wallet_id:path}", include_in_schema=False)
 def web_wallet_shell(request: Request, wallet_id: str) -> HTMLResponse:
     """Serve the wallet detail page within the shared web shell."""

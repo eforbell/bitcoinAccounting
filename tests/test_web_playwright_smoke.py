@@ -31,6 +31,18 @@ def _seed_smoke_database(db_path: str) -> None:
     backend = SqliteBackend(db_path, auto_create_tables=True)
     accounts = BitcoinAccounts(backend=backend)
     try:
+        accounts.wallet_query.add_wallet(
+            wallet_id="Strike",
+            wallet_type="exchange",
+            custody="custodial",
+            description="DCA exchange",
+        )
+        accounts.wallet_query.add_wallet(
+            wallet_id="Vault",
+            wallet_type="hardware",
+            custody="self-custodied",
+            description="Cold storage",
+        )
         accounts.execute_trade(
             trade_date=datetime(2024, 1, 1),
             buy=1.0,
@@ -146,14 +158,14 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             playwright.expect(page.locator("#gains-lots")).to_have_text("1")
             playwright.expect(page.locator("#gains-table")).to_contain_text("12/01/2024")
 
-            page.get_by_label("Wallet").nth(1).fill("Vault")
-            page.get_by_label("Quantity").fill("0.2")
+            page.locator("#forecast-wallet").fill("Vault")
+            page.locator("#forecast-quantity").fill("0.2")
             page.get_by_role("button", name="Forecast Sale").click()
             playwright.expect(page.locator("#forecast-balance")).to_have_text("0.25000000 BTC")
             playwright.expect(page.locator("#forecast-table")).to_contain_text("2025-12-01")
 
-            page.get_by_label("Name").fill("Vault Forecast")
-            page.get_by_label("Type").select_option("forecast")
+            page.locator("#preset-name").fill("Vault Forecast")
+            page.locator("#preset-type").select_option("forecast")
             page.get_by_role("button", name="Save Current Filters").click()
             playwright.expect(page.locator("#presets-list")).to_contain_text("Vault Forecast")
             playwright.expect(page.locator("#history-list")).to_contain_text("forecast")
@@ -176,6 +188,42 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
             playwright.expect(page.locator("#wallet-view-balance")).to_contain_text("BTC")
             playwright.expect(page.locator("#wallet-tx-list")).not_to_contain_text("Not Found")
+
+            # Navigate to ledger via sidebar
+            page.locator('.app-sidebar .nav-item[data-route="ledger"]').click()
+            playwright.expect(page.get_by_role("heading", name="Ledger")).to_be_visible()
+            playwright.expect(page.locator("#ledger-balance")).to_contain_text("BTC")
+            playwright.expect(page.locator("#ledger-table")).not_to_contain_text("No transactions loaded yet.")
+            assert "/ledger" in page.url
+
+            # Verify direct-load of ledger URL works
+            page.goto(base_url + "ledger", wait_until="networkidle")
+            if page.locator("#login-panel").is_visible():
+                page.get_by_label("Passphrase").fill("orange-hodl")
+                page.get_by_role("button", name="Sign In").click()
+            playwright.expect(page.get_by_role("heading", name="Ledger")).to_be_visible()
+            playwright.expect(page.locator("#ledger-balance")).to_contain_text("BTC")
+
+            # Navigate to wallets via sidebar
+            page.locator('.app-sidebar .nav-item[data-route="wallets"]').click()
+            playwright.expect(page.get_by_role("heading", name="Wallets")).to_be_visible()
+            playwright.expect(page.locator("#wallets-table")).to_contain_text("Strike")
+            playwright.expect(page.locator("#wallets-table")).to_contain_text("Vault")
+            assert "/wallets" in page.url
+
+            # Verify ledger wallet filter is a dropdown with wallet options
+            page.locator('.app-sidebar .nav-item[data-route="ledger"]').click()
+            playwright.expect(page.locator("#ledger-wallet")).to_be_visible()
+            playwright.expect(page.locator('#ledger-wallet option[value="Strike"]')).to_be_attached()
+            playwright.expect(page.locator('#ledger-wallet option[value="Vault"]')).to_be_attached()
+
+            # Verify direct-load of wallets URL works
+            page.goto(base_url + "wallets", wait_until="networkidle")
+            if page.locator("#login-panel").is_visible():
+                page.get_by_label("Passphrase").fill("orange-hodl")
+                page.get_by_role("button", name="Sign In").click()
+            playwright.expect(page.get_by_role("heading", name="Wallets")).to_be_visible()
+            playwright.expect(page.locator("#wallets-table")).to_contain_text("Strike")
         finally:
             if browser is not None:
                 browser.close()

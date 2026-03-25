@@ -92,14 +92,14 @@ class WalletQuery:
             # Use TRUE for boolean - works in both SQLite and PostgreSQL
             active_filter = "WHERE active = TRUE" if active_only else ""
             query = f"""
-                SELECT wallet_id, wallet_type, custody, description, active
+                SELECT wallet_id, wallet_type, custody, description, notes, active
                 FROM wallets
                 {active_filter}
                 ORDER BY wallet_id
             """
             rows = self.backend.execute(query)
             wallets = [{'wallet_id': row['wallet_id'], 'type': row['wallet_type'], 'custody': row['custody'],
-                        'description': row['description'], 'active': row['active']}
+                        'description': row['description'], 'notes': row['notes'], 'active': row['active']}
                        for row in rows]
 
             # If table exists but is empty, fall back to ledger

@@ -2356,3 +2356,27 @@
   - Packaging metadata tests can enforce script/module surface contracts quickly without requiring editable-install success.
   - Feature closeout should mark both final story completion and top-level feature status in planning metadata.
 ---
+
+## 2026-03-24 - WOP-004 / WOP-005 (Wallet Management + Audit Polish)
+- What was implemented:
+  - WOP-004: Full wallet CRUD API (list, create, get, update, rename, merge, sync) with authenticated routes at /api/wallets, service layer wrapping WalletQuery, Pydantic request/response models, SPA frontend with table view, create/edit forms, rename/merge confirmation dialogs with tx-count warnings, and active toggle
+  - WOP-005: Write audit log infrastructure (write_audit_log table, audit service with ensure_audit_table/log_write_action/get_audit_log), wired into all wallet write routes (create, update, rename, merge, sync). WalletQuery already handles rollback in rename/merge. Concurrency: PostgreSQL MVCC for prod, SQLite WAL for dev; single-operator design makes contention unlikely. TUI wallet management is fully independent and unmodified.
+- Files changed:
+  - `src/python/web/models.py` (added WalletListResource, WalletListResponse, WalletCreateRequest, WalletUpdateRequest, WalletRenameRequest, WalletMergeRequest)
+  - `src/python/web/services/wallet.py` (new: wallet service layer)
+  - `src/python/web/services/audit.py` (new: write audit log service with DDL and helpers)
+  - `src/python/web/routes/wallets.py` (new: authenticated wallet management API routes)
+  - `src/python/web/routes/__init__.py` (register wallets_router)
+  - `src/python/web/routes/ui.py` (add /wallets shell route)
+  - `src/python/web/app.py` (include wallets_router)
+  - `src/python/web/ui/index.html` (enabled Wallets nav link, added wallets-view with table/create/edit/rename/merge panels, added to mobile bottom bar)
+  - `src/python/web/ui/static/app.js` (SPA routing for wallets page, loadWalletsList, renderWalletsList, openWalletEdit, toggleWalletActive, openWalletRename, openWalletMerge, event bindings)
+  - `src/python/web/ui/static/app.css` (wallet management styles, button-danger)
+  - `tests/test_web_wallets.py` (new: 20 tests covering list/filter/create/duplicate/get/404/update/toggle/rename/merge/sync/audit-log/ui-shell)
+  - `planning/features/feature-20-prd.json` (WOP-004, WOP-005 passes=true)
+  - `planning/current-feature.json` (WOP-004, WOP-005 status=completed)
+- **Learnings:**
+  - The /sync route must be declared before /{wallet_id} in FastAPI to avoid path parameter capture of "sync" as a wallet_id
+  - ensure_audit_table with CREATE IF NOT EXISTS on every log call avoids schema migration complexity while keeping the audit table self-provisioning
+  - Wallet service layer can stay thin by delegating entirely to WalletQuery for atomicity (rename/merge already have try/rollback blocks)
+---
