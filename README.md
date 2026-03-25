@@ -360,6 +360,33 @@ After migrating from PostgreSQL to SQLite, verify:
 
 Add `src/scripts` to your PATH or run scripts directly with full path.
 
+### Optional Web Dashboard Bitcoin Presence
+
+If you run the private web app alongside a local `bitcoind`, the dashboard can show a compact **Bitcoin Presence** panel with current height, last block age, peer count, and mempool activity.
+
+This integration is intentionally optional:
+
+- If disabled, the panel does not appear.
+- If enabled but RPC is unavailable, the rest of the dashboard still loads.
+- The first pass uses `bitcoind` JSON-RPC only. Electrum-compatible verification work is planned separately.
+
+Recommended environment variables:
+
+```bash
+BITCOIN_CHAIN_STATUS_ENABLED=1
+BITCOIN_RPC_URL=http://127.0.0.1:8332
+BITCOIN_RPC_COOKIE_FILE=/path/to/.cookie
+BITCOIN_RPC_TIMEOUT_SECONDS=3
+```
+
+Cookie auth is preferred over storing explicit RPC usernames and passwords. If you do not use a cookie file, set both `BITCOIN_RPC_USER` and `BITCOIN_RPC_PASSWORD` instead.
+
+Refresh behavior:
+
+- When the dashboard is open and node status is available, the panel refreshes about once per minute.
+- When the node is unavailable, the UI backs off to a slower retry cadence.
+- Stale or unavailable node data is shown as a degraded state inside the panel rather than as a fatal application error.
+
 ### Recording Transactions
 
 - **Purchase BTC**: `buySats` - Records buy with automatic price lookup

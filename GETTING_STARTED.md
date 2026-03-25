@@ -163,6 +163,24 @@ The same functionality is also available as individual CLI scripts in `src/scrip
 
 See the [README](README.md#environment-variables) for PostgreSQL setup and configuration details.
 
+## Optional Web Bitcoin Presence
+
+If you are running the web app with a local `bitcoind`, you can enable the dashboard's **Bitcoin Presence** panel.
+
+```bash
+BITCOIN_CHAIN_STATUS_ENABLED=1
+BITCOIN_RPC_URL=http://127.0.0.1:8332
+BITCOIN_RPC_COOKIE_FILE=/path/to/.cookie
+```
+
+The panel is optional and non-blocking:
+
+- Disabled: no visual change to the dashboard
+- Enabled + healthy node: compact timechain status appears
+- Enabled + unreachable node: the dashboard still works and shows a degraded node state
+
+Prefer cookie auth for household deployments. See the [README](README.md#optional-web-dashboard-bitcoin-presence) for the full note.
+
 ## Rebrand Status
 
 - Canonical module names are now `bitcoinAccounting` and `bitcoinAccounts`.

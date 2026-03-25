@@ -24,6 +24,7 @@ def test_static_assets_are_served_from_relative_paths() -> None:
     assert js_response.headers["content-type"].startswith("text/javascript")
     assert "api/tax/gains" in js_response.text
     assert "api/auth/login" in js_response.text
+    assert "api/chain/status" in js_response.text
 
     assert logo_response.status_code == 200
     assert logo_response.headers["content-type"] == "image/png"

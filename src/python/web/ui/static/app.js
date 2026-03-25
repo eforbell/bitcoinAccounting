@@ -3,6 +3,7 @@ const state = {
   policy: null,
   dashboard: null,
   chainStatus: null,
+  chainStatusRefreshHandle: null,
   walletDetail: null,
   walletsList: [],
   currentPage: 'dashboard',
@@ -170,6 +171,7 @@ function setSessionGlyph(authenticated) {
 }
 
 function showLoggedOut() {
+  clearChainStatusRefresh();
   byId('login-panel').classList.remove('hidden');
   byId('dashboard-view').classList.add('hidden');
   byId('tax-view').classList.add('hidden');
@@ -187,6 +189,25 @@ function showLoggedIn(username) {
   byId('operator-chip').textContent = username;
   setSessionGlyph(true);
   renderPageState();
+}
+
+function clearChainStatusRefresh() {
+  if (state.chainStatusRefreshHandle) {
+    window.clearTimeout(state.chainStatusRefreshHandle);
+    state.chainStatusRefreshHandle = null;
+  }
+}
+
+function scheduleChainStatusRefresh(delayMs) {
+  clearChainStatusRefresh();
+  if (!state.session || state.currentPage !== 'dashboard') return;
+  state.chainStatusRefreshHandle = window.setTimeout(async () => {
+    try {
+      await loadChainStatus();
+    } catch (_) {
+      // loadChainStatus already renders degraded state on failures
+    }
+  }, delayMs);
 }
 
 function renderPageState() {
@@ -210,6 +231,13 @@ function renderPageState() {
   const moreBtn = document.getElementById('more-menu-toggle');
   if (moreBtn) {
     moreBtn.classList.toggle('active', ['tax', 'import'].includes(navRoute));
+  }
+
+  if (page !== 'dashboard') {
+    clearChainStatusRefresh();
+  } else if (state.session && state.chainStatus) {
+    const delayMs = state.chainStatus.available ? 60000 : 180000;
+    scheduleChainStatusRefresh(delayMs);
   }
 }
 
@@ -250,6 +278,13 @@ function formatRefreshTime(value) {
   return `Updated ${dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
 
+function isChainStatusStale(status) {
+  if (!status || !status.refreshed_at) return false;
+  const refreshed = new Date(status.refreshed_at);
+  if (Number.isNaN(refreshed.getTime())) return false;
+  return (Date.now() - refreshed.getTime()) > 120000;
+}
+
 function renderChainStatus(status) {
   state.chainStatus = status;
   const panel = byId('chain-status-panel');
@@ -269,14 +304,17 @@ function renderChainStatus(status) {
     ? '-'
     : `${status.mempool_tx_count} tx · ${formatBytes(status.mempool_usage_bytes)}`;
   byId('chain-meta-network').textContent = status.network ? `${status.network} via ${status.source}` : status.source;
-  byId('chain-meta-sync').textContent = status.available
-    ? (status.is_synced ? 'Synced to tip' : `Syncing ${((status.verification_progress || 0) * 100).toFixed(2)}%`)
-    : 'Node unavailable';
+  const stale = isChainStatusStale(status);
+  byId('chain-meta-sync').textContent = !status.available
+    ? 'Node unavailable'
+    : stale
+      ? 'Status stale'
+      : (status.is_synced ? 'Synced to tip' : `Syncing ${((status.verification_progress || 0) * 100).toFixed(2)}%`);
   byId('chain-meta-refresh').textContent = formatRefreshTime(status.refreshed_at);
 
   const chip = byId('chain-status-chip');
   chip.classList.remove('chip-live', 'chip-syncing', 'chip-down');
-  if (!status.available) {
+  if (!status.available || stale) {
     chip.textContent = 'unavailable';
     chip.classList.add('chip-down');
   } else if (status.is_synced) {
@@ -292,6 +330,35 @@ function renderChainStatus(status) {
     warning.classList.remove('hidden');
   } else {
     warning.classList.add('hidden');
+  }
+
+  const delayMs = status.available ? 60000 : 180000;
+  scheduleChainStatusRefresh(delayMs);
+}
+
+async function loadChainStatus() {
+  try {
+    const status = await api('api/chain/status');
+    renderChainStatus(status);
+  } catch (error) {
+    renderChainStatus({
+      enabled: true,
+      available: false,
+      source: 'bitcoind',
+      network: null,
+      block_height: null,
+      header_height: null,
+      verification_progress: null,
+      is_synced: null,
+      last_block_at: null,
+      seconds_since_last_block: null,
+      peer_count: null,
+      mempool_tx_count: null,
+      mempool_usage_bytes: null,
+      pruned: null,
+      warnings: [error.message || 'Bitcoin node status is currently unavailable.'],
+      refreshed_at: new Date().toISOString(),
+    });
   }
 }
 
@@ -363,7 +430,7 @@ async function loadDashboard() {
   });
   const [dashboardResult, chainResult] = await Promise.allSettled([
     api(`api/portfolio/dashboard?${params.toString()}`),
-    api('api/chain/status'),
+    loadChainStatus(),
   ]);
 
   if (dashboardResult.status !== 'fulfilled') {
@@ -372,27 +439,8 @@ async function loadDashboard() {
 
   renderDashboard(dashboardResult.value);
 
-  if (chainResult.status === 'fulfilled') {
-    renderChainStatus(chainResult.value);
-  } else {
-    renderChainStatus({
-      enabled: true,
-      available: false,
-      source: 'bitcoind',
-      network: null,
-      block_height: null,
-      header_height: null,
-      verification_progress: null,
-      is_synced: null,
-      last_block_at: null,
-      seconds_since_last_block: null,
-      peer_count: null,
-      mempool_tx_count: null,
-      mempool_usage_bytes: null,
-      pruned: null,
-      warnings: [chainResult.reason?.message || 'Bitcoin node status is currently unavailable.'],
-      refreshed_at: new Date().toISOString(),
-    });
+  if (chainResult.status !== 'fulfilled') {
+    throw chainResult.reason;
   }
 }
 
@@ -861,15 +909,20 @@ function bindNavigation() {
     link.addEventListener('click', (event) => {
       event.preventDefault();
       navigateTo(link.dataset.route);
+      if (state.session && link.dataset.route === 'dashboard') {
+        loadDashboard();
+      }
     });
   }
 
   window.addEventListener('popstate', () => {
     const previousWalletId = state.currentWalletId;
-    state.currentPage = currentRouteFromLocation();
+      state.currentPage = currentRouteFromLocation();
     renderPageState();
     if (state.currentPage === 'wallet' && state.currentWalletId && state.currentWalletId !== previousWalletId) {
       loadWalletDetail(state.currentWalletId);
+    } else if (state.currentPage === 'dashboard' && state.session) {
+      loadDashboard();
     }
   });
 }
