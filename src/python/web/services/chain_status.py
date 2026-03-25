@@ -61,7 +61,7 @@ class ChainStatusService:
             and verification_progress >= 0.9999
         )
 
-        last_block_at = self._timestamp_to_datetime(blockchain.get("mediantime"))
+        last_block_at = self._timestamp_to_datetime(blockchain.get("time"))
         seconds_since_last_block = None
         if last_block_at is not None:
             seconds_since_last_block = int(
