@@ -419,6 +419,54 @@ class WalletMergeRequest(APIModel):
     target_wallet_id: str
 
 
+class TradeResource(APIModel):
+    """Single trade with cost basis for the trades view."""
+
+    date: str
+    trade_type: str
+    quantity: float
+    trade_currency: str
+    unit_cost_usd: float | None = None
+    total_cost_usd: float | None = None
+    exchange: str | None = None
+
+
+class TradesResponse(APIModel):
+    """Paginated trade history response."""
+
+    trades: list[TradeResource]
+    page: int
+    per_page: int
+    total: int
+
+
+class ExchangeLiquidityResource(APIModel):
+    """Per-exchange liquidity summary row."""
+
+    exchange: str
+    total_purchased: float
+    current_balance: float
+    avg_cost_usd: float | None = None
+
+
+class CostBasisSummaryResource(APIModel):
+    """Overall cost basis and holdings summary."""
+
+    total_purchased: float
+    total_usd_spent: float
+    avg_cost_basis_usd: float | None = None
+    still_at_exchanges: float
+    in_cold_storage: float
+    total_holdings: float
+
+
+class LiquidityResponse(APIModel):
+    """Exchange liquidity with cost basis summary."""
+
+    exchanges: list[ExchangeLiquidityResource]
+    summary: CostBasisSummaryResource
+
+
 class LoginRequest(APIModel):
     """Login request payload."""
 

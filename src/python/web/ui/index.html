@@ -33,6 +33,10 @@
         <span class="nav-icon">≣</span>
         <span class="nav-label">Ledger</span>
       </a>
+      <a class="nav-item" href="trades" data-route="trades">
+        <span class="nav-icon">⇄</span>
+        <span class="nav-label">Trades</span>
+      </a>
       <a class="nav-item" href="record" data-route="record">
         <span class="nav-icon">+</span>
         <span class="nav-label">Record</span>
@@ -384,6 +388,113 @@
             </div>
           </form>
           <p id="tx-edit-status" class="status-line hidden"></p>
+        </section>
+      </section>
+
+      <section id="trades-view" class="view-stack hidden">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Private Sovereignty Treasury</p>
+              <h1>Trades</h1>
+              <p class="muted">Trade history and exchange liquidity with cost basis.</p>
+            </div>
+          </div>
+
+          <div class="trades-tabs">
+            <button id="trades-tab-history" class="button trades-tab active" type="button">Trade History</button>
+            <button id="trades-tab-liquidity" class="button trades-tab" type="button">Liquidity</button>
+          </div>
+
+          <!-- Trade History sub-view -->
+          <div id="trades-history-panel">
+            <form id="trades-filter-form" class="filters">
+              <label class="field">
+                <span>Exchange</span>
+                <select id="trades-exchange-filter">
+                  <option value="">All exchanges</option>
+                </select>
+              </label>
+              <div class="actions-row">
+                <button class="button" type="submit">Apply</button>
+                <button id="trades-clear" class="button button-ghost" type="button">Clear</button>
+              </div>
+            </form>
+
+            <div id="trades-count" class="list-item-meta" style="margin-top: 0.4rem;"></div>
+
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Quantity</th>
+                    <th>Trade Currency</th>
+                    <th>Unit Cost (USD)</th>
+                    <th>Total Cost (USD)</th>
+                    <th>Exchange</th>
+                  </tr>
+                </thead>
+                <tbody id="trades-table">
+                  <tr><td colspan="7" class="empty-row">No trades loaded yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div id="trades-pagination" class="ledger-pagination"></div>
+          </div>
+
+          <!-- Liquidity sub-view -->
+          <div id="trades-liquidity-panel" class="hidden">
+            <div id="liquidity-count" class="list-item-meta" style="margin-top: 0.4rem;"></div>
+
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Exchange</th>
+                    <th>Total Purchased</th>
+                    <th>Current Balance</th>
+                    <th>Avg Cost (USD)</th>
+                  </tr>
+                </thead>
+                <tbody id="liquidity-table">
+                  <tr><td colspan="4" class="empty-row">No liquidity data loaded yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="panel subpanel" id="cost-basis-summary" style="margin-top: 1rem;">
+              <h3>Cost Basis Summary</h3>
+              <section class="summary-grid">
+                <article class="summary-card summary-card-featured">
+                  <span class="summary-label">Total Purchased</span>
+                  <strong id="liq-total-purchased">0 BTC</strong>
+                </article>
+                <article class="summary-card">
+                  <span class="summary-label">Total USD Spent</span>
+                  <strong id="liq-total-usd">$0</strong>
+                </article>
+                <article class="summary-card">
+                  <span class="summary-label">Avg Cost Basis</span>
+                  <strong id="liq-avg-cost">$0 / BTC</strong>
+                </article>
+                <article class="summary-card">
+                  <span class="summary-label">Still at Exchanges</span>
+                  <strong id="liq-at-exchanges">0 BTC</strong>
+                </article>
+                <article class="summary-card">
+                  <span class="summary-label">In Cold Storage</span>
+                  <strong id="liq-cold-storage">0 BTC</strong>
+                </article>
+                <article class="summary-card summary-card-featured">
+                  <span class="summary-label">Total Holdings</span>
+                  <strong id="liq-total-holdings">0 BTC</strong>
+                </article>
+              </section>
+            </div>
+          </div>
         </section>
       </section>
 
@@ -981,9 +1092,13 @@
         <img src="static/brand/bitcoin-shield-logo.png" alt="" width="22" height="22">
         <strong>Bitcoin Accounting</strong>
       </span>
-      <span class="more-menu-subtitle">Tax, import, settings</span>
+      <span class="more-menu-subtitle">Trades, tax, import, settings</span>
     </div>
     <hr class="more-menu-divider">
+    <a class="more-menu-item" href="trades" data-route="trades">
+      <span class="more-menu-icon">⇄</span>
+      <span>Trades</span>
+    </a>
     <a class="more-menu-item" href="tax" data-route="tax">
       <span class="more-menu-icon">₿</span>
       <span>Tax</span>

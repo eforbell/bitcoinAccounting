@@ -14,6 +14,7 @@ const state = {
   ledgerFilters: { coin: 'BTC', wallet: '', startDate: '', endDate: '', includeDeleted: false, page: 1, perPage: 50 },
   selectedTx: null,
   importState: { parsers: [], preview: null, duplicateIndices: [], step: 1, wallets: [] },
+  tradesFilters: { exchange: '', page: 1, perPage: 50, view: 'trades' },
 };
 
 function byId(id) {
@@ -60,6 +61,7 @@ function appPath(page) {
   const base = appBase();
   if (page === 'tax') return `${base}tax`;
   if (page === 'ledger') return `${base}ledger`;
+  if (page === 'trades') return `${base}trades`;
   if (page === 'record') return `${base}record`;
   if (page === 'wallets') return `${base}wallets`;
   if (page === 'import') return `${base}import`;
@@ -70,6 +72,7 @@ function appPath(page) {
 function currentRouteFromLocation() {
   const path = window.location.pathname.replace(/\/+$/, '');
   if (path.endsWith('/tax')) return 'tax';
+  if (path.endsWith('/trades')) return 'trades';
   if (path.endsWith('/record')) return 'record';
   if (path.endsWith('/wallets')) return 'wallets';
   if (path.endsWith('/import')) return 'import';
@@ -101,6 +104,9 @@ function navigateTo(page, replace = false) {
   }
   if (page === 'ledger') {
     loadLedger();
+  }
+  if (page === 'trades') {
+    loadTradesPage();
   }
   if (page === 'import') {
     loadImportPage();
@@ -213,12 +219,13 @@ function scheduleChainStatusRefresh(delayMs) {
 function renderPageState() {
   document.body.classList.add('app-has-nav');
   const page = state.currentPage;
-  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet', wallets: 'Wallets', ledger: 'Ledger', record: 'Record', import: 'Import' };
+  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet', wallets: 'Wallets', ledger: 'Ledger', trades: 'Trades', record: 'Record', import: 'Import' };
   document.title = `Bitcoin Accounting | ${titles[page] || 'Dashboard'}`;
   byId('dashboard-view').classList.toggle('hidden', !state.session || page !== 'dashboard');
   byId('tax-view').classList.toggle('hidden', !state.session || page !== 'tax');
   byId('wallet-view').classList.toggle('hidden', !state.session || page !== 'wallet');
   byId('ledger-view').classList.toggle('hidden', !state.session || page !== 'ledger');
+  byId('trades-view').classList.toggle('hidden', !state.session || page !== 'trades');
   byId('record-view').classList.toggle('hidden', !state.session || page !== 'record');
   byId('wallets-view').classList.toggle('hidden', !state.session || page !== 'wallets');
   byId('import-view').classList.toggle('hidden', !state.session || page !== 'import');
@@ -230,7 +237,7 @@ function renderPageState() {
   // Highlight "More" button when a page inside the sheet is active
   const moreBtn = document.getElementById('more-menu-toggle');
   if (moreBtn) {
-    moreBtn.classList.toggle('active', ['tax', 'import'].includes(navRoute));
+    moreBtn.classList.toggle('active', ['tax', 'trades', 'import'].includes(navRoute));
   }
 
   if (page !== 'dashboard') {
@@ -894,6 +901,9 @@ async function refreshSession() {
     if (state.currentPage === 'ledger') {
       loaders.push(loadLedger());
     }
+    if (state.currentPage === 'trades') {
+      loaders.push(loadTradesPage());
+    }
     if (state.currentPage === 'wallets') {
       loaders.push(loadWalletsList());
     }
@@ -946,6 +956,9 @@ function bindEvents() {
       }
       if (state.currentPage === 'ledger') {
         postLogin.push(loadLedger());
+      }
+      if (state.currentPage === 'trades') {
+        postLogin.push(loadTradesPage());
       }
       if (state.currentPage === 'wallets') {
         postLogin.push(loadWalletsList());
@@ -1644,6 +1657,157 @@ function bindImportEvents() {
   byId('import-another-btn').addEventListener('click', resetImportForm);
 }
 
+// ── Trades & Liquidity ──
+
+async function loadTradesPage() {
+  const view = state.tradesFilters.view;
+  // Populate exchange filter from liquidity data (complete exchange list)
+  populateTradesExchangeDropdown();
+  if (view === 'liquidity') {
+    await loadLiquidity();
+  } else {
+    await loadTrades();
+  }
+  updateTradesTabs();
+}
+
+async function populateTradesExchangeDropdown() {
+  try {
+    const data = await api('api/trades/liquidity');
+    const select = byId('trades-exchange-filter');
+    const current = state.tradesFilters.exchange;
+    const opts = ['<option value="">All exchanges</option>'];
+    for (const e of data.exchanges) {
+      opts.push(`<option value="${escapeHtml(e.exchange)}"${e.exchange === current ? ' selected' : ''}>${escapeHtml(e.exchange)}</option>`);
+    }
+    select.innerHTML = opts.join('');
+  } catch {}
+}
+
+function updateTradesTabs() {
+  const view = state.tradesFilters.view;
+  byId('trades-tab-history').classList.toggle('active', view === 'trades');
+  byId('trades-tab-liquidity').classList.toggle('active', view === 'liquidity');
+  byId('trades-history-panel').classList.toggle('hidden', view !== 'trades');
+  byId('trades-liquidity-panel').classList.toggle('hidden', view !== 'liquidity');
+}
+
+async function loadTrades() {
+  const f = state.tradesFilters;
+  const params = new URLSearchParams({ page: String(f.page), per_page: String(f.perPage) });
+  if (f.exchange) params.set('exchange', f.exchange);
+
+  try {
+    const data = await api(`api/trades?${params.toString()}`);
+    renderTrades(data);
+  } catch (error) {
+    byId('trades-table').innerHTML = `<tr><td colspan="7" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+function renderTrades(data) {
+  byId('trades-count').textContent = `Showing ${data.trades.length} of ${data.total} trades (page ${data.page})`;
+
+  if (!data.trades.length) {
+    byId('trades-table').innerHTML = '<tr><td colspan="7" class="empty-row">No trades match the current filters.</td></tr>';
+  } else {
+    byId('trades-table').innerHTML = data.trades.map((t) => `
+      <tr>
+        <td>${escapeHtml(t.date)}</td>
+        <td>${escapeHtml(t.trade_type)}</td>
+        <td>${Number(t.quantity).toFixed(8)}</td>
+        <td>${escapeHtml(t.trade_currency)}</td>
+        <td>${t.unit_cost_usd != null ? currency(t.unit_cost_usd) : '-'}</td>
+        <td>${t.total_cost_usd != null ? currency(t.total_cost_usd) : '-'}</td>
+        <td>${escapeHtml(t.exchange || '')}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Pagination
+  const totalPages = Math.ceil(data.total / data.per_page);
+  if (totalPages <= 1) {
+    byId('trades-pagination').innerHTML = '';
+  } else {
+    const buttons = [];
+    if (data.page > 1) buttons.push(`<button class="button button-ghost" data-trades-page="${data.page - 1}">Prev</button>`);
+    buttons.push(`<span class="list-item-meta">Page ${data.page} of ${totalPages}</span>`);
+    if (data.page < totalPages) buttons.push(`<button class="button button-ghost" data-trades-page="${data.page + 1}">Next</button>`);
+    byId('trades-pagination').innerHTML = buttons.join(' ');
+
+    for (const btn of byId('trades-pagination').querySelectorAll('[data-trades-page]')) {
+      btn.addEventListener('click', () => {
+        state.tradesFilters.page = Number(btn.dataset.tradesPage);
+        loadTrades();
+      });
+    }
+  }
+
+}
+
+async function loadLiquidity() {
+  try {
+    const data = await api('api/trades/liquidity');
+    renderLiquidity(data);
+  } catch (error) {
+    byId('liquidity-table').innerHTML = `<tr><td colspan="4" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+function renderLiquidity(data) {
+  const exchanges = data.exchanges;
+  byId('liquidity-count').textContent = `Showing ${exchanges.length} exchanges with purchase history`;
+
+  if (!exchanges.length) {
+    byId('liquidity-table').innerHTML = '<tr><td colspan="4" class="empty-row">No exchange liquidity data found.</td></tr>';
+  } else {
+    byId('liquidity-table').innerHTML = exchanges.map((e) => `
+      <tr>
+        <td>${escapeHtml(e.exchange)}</td>
+        <td>${Number(e.total_purchased).toFixed(8)}</td>
+        <td>${Number(e.current_balance).toFixed(8)}</td>
+        <td>${e.avg_cost_usd != null ? currency(e.avg_cost_usd) : '-'}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Summary cards
+  const s = data.summary;
+  byId('liq-total-purchased').textContent = `${Number(s.total_purchased).toFixed(8)} BTC`;
+  byId('liq-total-usd').textContent = currency(s.total_usd_spent);
+  byId('liq-avg-cost').textContent = s.avg_cost_basis_usd != null ? `${currency(s.avg_cost_basis_usd)} / BTC` : '-';
+  byId('liq-at-exchanges').textContent = `${Number(s.still_at_exchanges).toFixed(8)} BTC`;
+  byId('liq-cold-storage').textContent = `${Number(s.in_cold_storage).toFixed(8)} BTC`;
+  byId('liq-total-holdings').textContent = `${Number(s.total_holdings).toFixed(8)} BTC`;
+
+}
+
+function bindTradesEvents() {
+  byId('trades-tab-history').addEventListener('click', () => {
+    state.tradesFilters.view = 'trades';
+    updateTradesTabs();
+    loadTrades();
+  });
+  byId('trades-tab-liquidity').addEventListener('click', () => {
+    state.tradesFilters.view = 'liquidity';
+    updateTradesTabs();
+    loadLiquidity();
+  });
+  byId('trades-filter-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    state.tradesFilters.exchange = byId('trades-exchange-filter').value;
+    state.tradesFilters.page = 1;
+    await loadTrades();
+  });
+  byId('trades-clear').addEventListener('click', async () => {
+    byId('trades-exchange-filter').value = '';
+    state.tradesFilters.exchange = '';
+    state.tradesFilters.page = 1;
+    await loadTrades();
+  });
+}
+
+bindTradesEvents();
 bindImportEvents();
 
 state.currentPage = currentRouteFromLocation();

@@ -270,6 +270,29 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
                 page.get_by_role("button", name="Sign In").click()
             playwright.expect(page.get_by_role("heading", name="Wallets")).to_be_visible()
             playwright.expect(page.locator("#wallets-table")).to_contain_text("Strike")
+
+            # Navigate to trades via sidebar
+            page.locator('.app-sidebar .nav-item[data-route="trades"]').click()
+            playwright.expect(page.get_by_role("heading", name="Trades")).to_be_visible()
+            playwright.expect(page.locator("#trades-table")).not_to_contain_text("No trades loaded yet.")
+            assert "/trades" in page.url
+
+            # Toggle to liquidity view
+            page.locator("#trades-tab-liquidity").click()
+            playwright.expect(page.locator("#liquidity-table")).not_to_contain_text("No liquidity data loaded yet.")
+            playwright.expect(page.locator("#liq-total-holdings")).to_contain_text("BTC")
+
+            # Toggle back to trade history
+            page.locator("#trades-tab-history").click()
+            playwright.expect(page.locator("#trades-table")).to_be_visible()
+
+            # Verify direct-load of trades URL works
+            page.goto(base_url + "trades", wait_until="networkidle")
+            if page.locator("#login-panel").is_visible():
+                page.get_by_label("Passphrase").fill("orange-hodl")
+                page.get_by_role("button", name="Sign In").click()
+            playwright.expect(page.get_by_role("heading", name="Trades")).to_be_visible()
+            playwright.expect(page.locator("#trades-table")).not_to_contain_text("No trades loaded yet.")
         finally:
             if browser is not None:
                 browser.close()

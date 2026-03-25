@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --orange-primary: #F7931A;
   --orange-shadow: #D97706;
   --shield-black: #111111;
@@ -1109,3 +1110,21 @@ th {
 
 #import-preview-table td:first-child,
 #import-preview-table th:first-child { width: 2rem; text-align: center; }
+
+/* ── Trades tabs ── */
+.trades-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.trades-tab {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+}
+.trades-tab.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}

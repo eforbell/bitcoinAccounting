@@ -7,7 +7,8 @@ from .imports import router as imports_router
 from .ledger import router as ledger_router
 from .portfolio import router as portfolio_router
 from .tax import router as tax_router
+from .trades import router as trades_router
 from .ui import router as ui_router
 from .wallets import router as wallets_router
 
-__all__ = ["auth_router", "chain_router", "health_router", "imports_router", "ledger_router", "portfolio_router", "tax_router", "ui_router", "wallets_router"]
+__all__ = ["auth_router", "chain_router", "health_router", "imports_router", "ledger_router", "portfolio_router", "tax_router", "trades_router", "ui_router", "wallets_router"]

@@ -1,0 +1,113 @@
+{
+  "branchName": "feature/web-trades-liquidity",
+  "projectName": "Web Trades and Liquidity View",
+  "description": "Port the TUI Trades/Liquidity screen to the web: trade history with per-trade cost basis, exchange liquidity summary with average cost, and cost basis summary showing cold storage and total holdings. BTC implied as default.",
+  "timing": {
+    "draftedOn": "2026-03-25",
+    "plannedEarliestExecution": "2026-03-25",
+    "gatingCondition": "Proceed after web ledger and import features establish stable patterns."
+  },
+  "principles": [
+    "Bitcoin-Centric - BTC is the default coin; no coin dropdown needed",
+    "TUI Logic, Web Presentation - reuse existing TradeQuery and balance methods rather than duplicating logic",
+    "Cost Basis First - every trade shows unit cost and total cost in USD, the liquidity view is all about cost basis",
+    "Desktop Depth, Mobile Utility - trade table is rich on desktop, summary cards work on phone",
+    "Read-Only View - this feature is purely analytical; no write operations"
+  ],
+  "techStack": {
+    "backendLanguage": "Python 3.11+",
+    "frontend": "Responsive web UI with tab toggle, data tables, and summary cards",
+    "testing": "pytest API tests",
+    "database": "PostgreSQL primary, SQLite supported",
+    "coreDependencies": "TradeQuery + BalanceCalculator + WalletQuery"
+  },
+  "userStories": [
+    {
+      "id": "WTR-001",
+      "title": "Trades API endpoints, models, and service layer",
+      "acceptanceCriteria": [
+        "GET /api/trades returns paginated trade history with cost basis fields",
+        "GET /api/trades/liquidity returns per-exchange summary with current balances and cost basis summary",
+        "Both endpoints require authentication",
+        "Exchange filter supported on trades endpoint"
+      ],
+      "priority": 1,
+      "estimatedLines": "+150/-0",
+      "testStrategy": "pytest API tests for both endpoints, filter, pagination, empty data",
+      "passes": true,
+      "closureNotes": "Created routes/trades.py, services/trades.py, 5 Pydantic models, 10 passing tests"
+    },
+    {
+      "id": "WTR-002",
+      "title": "Trade History web view with pagination",
+      "acceptanceCriteria": [
+        "New Trades sidebar nav item between Ledger and Record",
+        "Trade History table with Date, Type, Quantity, Trade Currency, Unit Cost, Total Cost, Exchange columns",
+        "Pagination controls following ledger pattern",
+        "SPA routing for /trades path"
+      ],
+      "priority": 2,
+      "estimatedLines": "+130/-0",
+      "testStrategy": "Manual verification, SPA shell test",
+      "passes": true,
+      "closureNotes": "Added sidebar nav, trades-view HTML, loadTrades/renderTrades JS, pagination"
+    },
+    {
+      "id": "WTR-003",
+      "title": "Liquidity web view with cost basis summary",
+      "acceptanceCriteria": [
+        "Tab toggle between Trade History and Liquidity sub-views",
+        "Exchange summary table with Total Purchased, Current Balance, Avg Cost columns",
+        "Cost Basis Summary panel with total purchased, USD spent, avg cost, exchange balance, cold storage, total holdings"
+      ],
+      "priority": 3,
+      "estimatedLines": "+110/-0",
+      "testStrategy": "Manual verification, API tests cover data correctness",
+      "passes": true,
+      "closureNotes": "Added liquidity panel with summary cards, tab toggle, loadLiquidity/renderLiquidity JS"
+    },
+    {
+      "id": "WTR-004",
+      "title": "Exchange filter and responsive polish",
+      "acceptanceCriteria": [
+        "Exchange filter dropdown populated from liquidity data",
+        "Apply/Clear filter buttons",
+        "Tab toggle styled with active state",
+        "Empty state messages for no-data scenarios"
+      ],
+      "priority": 4,
+      "estimatedLines": "+80/-0",
+      "testStrategy": "Manual filter behavior verification",
+      "passes": true,
+      "closureNotes": "Exchange dropdown populated from liquidity API, CSS tab styling, empty states"
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Cost basis calculations depend on price lookup availability; missing prices show as dashes"
+    ],
+    "medium": [
+      "Large trade histories (500+) may be slow to paginate since all trades are fetched then sliced"
+    ],
+    "low": [
+      "Core trade query and balance logic is well-tested in TUI",
+      "Read-only feature with no write operations to worry about"
+    ]
+  },
+  "preFlightChecklist": [
+    "RESOLVED: BTC hardcoded as default coin, no coin dropdown",
+    "RESOLVED: Tab toggle pattern for Trade History vs Liquidity sub-views",
+    "RESOLVED: Exchange filter populated from liquidity endpoint (complete exchange list)",
+    "RESOLVED: Server-side pagination for trades, no pagination for liquidity"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+470/-0",
+    "storiesCount": 4,
+    "filesLikelyCreated": [
+      "src/python/web/routes/trades.py",
+      "src/python/web/services/trades.py",
+      "tests/test_web_trades.py",
+      "planning/features/feature-24-prd.json"
+    ]
+  }
+}
