@@ -52,6 +52,80 @@ See the **[Getting Started Guide](GETTING_STARTED.md)** for a walkthrough of the
 
 ---
 
+## Run the Web App Locally
+
+The repo also includes a FastAPI web app with a bundled frontend shell under `src/python/web/`.
+
+For local development on this machine, prefer the repo-local virtualenv:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -e .
+```
+
+The web app reads `.env` from the repository root via the database package import. For a simple local SQLite run, this is enough:
+
+```bash
+cp .env.example .env
+```
+
+Recommended local `.env` settings:
+
+```env
+DB_BACKEND=sqlite
+BITCOIN_ACCOUNTING_ENV=development
+BITCOIN_ACCOUNTING_AUTH_ENABLED=0
+BITCOIN_ACCOUNTING_WEB_BASE_PATH=
+BITCOIN_ACCOUNTING_WEB_DOCS=1
+```
+
+Initialize runtime state before starting the server:
+
+```bash
+.venv/bin/bitcoin-accounting-web-init
+```
+
+Then run the app server with the new one-liner:
+
+```bash
+.venv/bin/bitcoin-accounting-web
+```
+
+Python module form:
+
+```bash
+.venv/bin/python -m web
+```
+
+You can still run the explicit `uvicorn` command if you want:
+
+```bash
+.venv/bin/uvicorn web.app:create_app --factory --host 127.0.0.1 --port 3010
+```
+
+Open it at:
+
+```text
+http://127.0.0.1:3010/
+```
+
+Useful local endpoints:
+
+- UI: `http://127.0.0.1:3010/`
+- OpenAPI docs: `http://127.0.0.1:3010/docs`
+- Liveness: `http://127.0.0.1:3010/api/health`
+- Readiness: `http://127.0.0.1:3010/api/ready`
+
+Notes:
+
+- SQLite is the default local backend and `bitcoin-accounting-web-init` will create the core tables automatically for SQLite.
+- The web launcher defaults to `127.0.0.1:3010`. For example: `.venv/bin/bitcoin-accounting-web --reload --port 3011`
+- If you set `BITCOIN_ACCOUNTING_AUTH_ENABLED=1`, you must also set `BITCOIN_ACCOUNTING_AUTH_PASSPHRASE` and `BITCOIN_ACCOUNTING_SESSION_SECRET` before startup.
+- If you want to test a subpath mount locally, set `BITCOIN_ACCOUNTING_WEB_BASE_PATH=/bitcoin-accounting` and serve the app behind a proxy that strips that prefix before forwarding upstream.
+
+---
+
 ## Rebrand Status
 
 As of **February 19, 2026**, the canonical runtime names are:
