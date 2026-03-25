@@ -1,0 +1,139 @@
+{
+  "branchName": "feature/web-bitcoin-block-clock",
+  "projectName": "Web Block Clock and Bitcoin Node Presence",
+  "description": "Connect the web dashboard to the household Bitcoin node stack with an optional block clock and compact chain-status panel powered by local Bitcoin RPC, reinforcing the sovereign operating posture without turning the app into a full node console.",
+  "timing": {
+    "draftedOn": "2026-03-25",
+    "plannedEarliestExecution": "2026-04-14",
+    "gatingCondition": "Proceed after Feature-20 stabilizes the web shell and dashboard layout enough to absorb one additional dashboard card without churn."
+  },
+  "principles": [
+    "Timechain Presence - the dashboard should feel connected to Bitcoin itself, not only to the accounting database",
+    "Optional, Not Fragile - local node integration must never prevent the rest of the web app from loading",
+    "Compact Operator Signal - expose the node metrics that inform confidence and action, not a full console clone",
+    "Local-First Sovereignty - query only household-controlled infrastructure such as local bitcoind and local Electrum-compatible services",
+    "Phone First, Desktop Better - the block clock card must read clearly on mobile while allowing richer density on desktop"
+  ],
+  "techStack": {
+    "backendLanguage": "Python 3.11+",
+    "backendFramework": "FastAPI web service with request-safe service adapters",
+    "frontend": "Existing responsive web shell with dashboard cards and lightweight polling",
+    "testing": "pytest API tests + frontend smoke coverage",
+    "database": "PostgreSQL primary, SQLite supported",
+    "coreDependencies": "bitcoind JSON-RPC + existing web dashboard service layer"
+  },
+  "userStories": [
+    {
+      "id": "BTC-001",
+      "title": "Optional Bitcoin node config and runtime service seam",
+      "acceptanceCriteria": [
+        "Add optional web configuration for local Bitcoin RPC access using cookie auth or explicit credentials",
+        "Validate chain-status config without making web startup fail when the feature is disabled",
+        "Create a small service adapter responsible for querying blockchain, network, and mempool status from bitcoind",
+        "Keep the integration isolated from core accounting query classes"
+      ],
+      "priority": 1,
+      "estimatedLines": "+150/-0",
+      "testStrategy": "pytest config and service tests covering enabled, disabled, and unreachable-node cases",
+      "passes": false
+    },
+    {
+      "id": "BTC-002",
+      "title": "Chain status API and canonical read model",
+      "acceptanceCriteria": [
+        "Expose chain-status data through a stable web payload with explicit nullability for unavailable metrics",
+        "Include current block height, header height, sync posture, last block age, peer count, and mempool summary",
+        "Represent degraded or unreachable node states as operator-readable warnings rather than raw exceptions",
+        "Keep the payload compact enough for dashboard polling"
+      ],
+      "priority": 2,
+      "estimatedLines": "+140/-0",
+      "testStrategy": "pytest API tests for available, syncing, unavailable, and disabled states",
+      "passes": false
+    },
+    {
+      "id": "BTC-003",
+      "title": "Dashboard block clock card",
+      "acceptanceCriteria": [
+        "Render a compact dashboard card showing height, time since last block, sync status, peers, and mempool activity",
+        "Fit the card cleanly into the existing mobile-first dashboard layout without overwhelming portfolio information",
+        "Provide a clear unavailable or stale presentation when node data is missing or old",
+        "Use terminology suitable for operators familiar with Bitcoin but not dependent on terminal-style dense output"
+      ],
+      "priority": 3,
+      "estimatedLines": "+170/-0",
+      "testStrategy": "frontend smoke coverage plus targeted rendering tests for normal and degraded states",
+      "passes": false
+    },
+    {
+      "id": "BTC-004",
+      "title": "Refresh policy, stale-state logic, and UX polish",
+      "acceptanceCriteria": [
+        "Define a conservative refresh cadence appropriate for single-operator dashboard use",
+        "Show freshness information such as last update time or stale indicator where appropriate",
+        "Avoid aggressive polling when the node is unreachable or disabled",
+        "Preserve fast dashboard interaction even when chain-status calls are slower than portfolio reads"
+      ],
+      "priority": 4,
+      "estimatedLines": "+90/-0",
+      "testStrategy": "manual behavior verification plus targeted stale-state tests",
+      "passes": false
+    },
+    {
+      "id": "BTC-005",
+      "title": "Operator docs and deployment notes",
+      "acceptanceCriteria": [
+        "Document required environment variables and cookie-auth setup for local bitcoind access",
+        "Explain degraded behavior when chain status is disabled or unavailable",
+        "Record the intended scope boundary so future work can add verification or broadcast features without reinterpreting Feature-22",
+        "Update planning metadata and progress notes once implementation lands"
+      ],
+      "priority": 5,
+      "estimatedLines": "+70/-0",
+      "testStrategy": "manual doc review + deployment checklist validation",
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "If node integration can break or materially slow the dashboard, trust in the web app will drop quickly",
+      "If the card tries to do too much, it will dilute the portfolio dashboard rather than strengthen it"
+    ],
+    "medium": [
+      "RPC availability and auth configuration may vary across self-hosted deployments",
+      "Stale node data could be misread as live without explicit degraded-state language"
+    ],
+    "low": [
+      "The feature is read-only and can be isolated behind a narrow service seam",
+      "bitcoind already exposes the core status metrics needed for a useful first pass"
+    ]
+  },
+  "preFlightChecklist": [
+    "Confirm exact metric set for v1 block clock card",
+    "Choose whether chain status lives inside /api/portfolio/dashboard or under its own route",
+    "Choose refresh cadence and stale threshold",
+    "Confirm cookie-file path handling for production deployment on numenor"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+620/-0",
+    "storiesCount": 5,
+    "filesLikelyModified": [
+      "src/python/web/config.py",
+      "src/python/web/models.py",
+      "src/python/web/services/portfolio.py",
+      "src/python/web/ui/index.html",
+      "src/python/web/ui/static/app.js",
+      "src/python/web/ui/static/app.css",
+      "README.md",
+      "GETTING_STARTED.md",
+      "planning/current-feature.json",
+      "planning/progress.txt",
+      "AGENTS.md"
+    ],
+    "filesLikelyCreated": [
+      "src/python/web/services/chain_status.py",
+      "src/python/web/routes/chain.py",
+      "tests/test_web_chain_status.py"
+    ]
+  }
+}

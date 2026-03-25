@@ -1,0 +1,185 @@
+{
+  "branchName": "feature/web-descriptor-wallet-verification",
+  "projectName": "Descriptor-Based Wallet Verification",
+  "description": "Add private, on-demand Bitcoin wallet verification to the web app by comparing ledger balances against balances derived from descriptor-backed Bitcoin accounts over a local Electrum-compatible server, while keeping sensitive descriptor material out of the normal accounting data model by default.",
+  "timing": {
+    "draftedOn": "2026-03-25",
+    "plannedEarliestExecution": "2026-04-21",
+    "gatingCondition": "Proceed after Feature-22 establishes Bitcoin node presence on the dashboard and after the team resolves the descriptor parsing and Sparrow wallet-file strategy documented in this PRD."
+  },
+  "principles": [
+    "Descriptor First - multisig and modern wallet setups require full descriptor coverage rather than xpub-only shortcuts",
+    "Private by Default - verification secrets are handled ephemerally unless the operator explicitly opts into persistence",
+    "Electrum as Common Ground - verification depends on the Electrum protocol, not on any one server implementation",
+    "Results Persist, Secrets Usually Do Not - verification outcomes belong in the app's durable record; descriptors usually do not",
+    "Sparrow-Aware Operator Workflow - advanced self-custody users should feel like the feature was designed for their tools and threat model",
+    "Narrow Claims, High Trust - the feature should state exactly what was verified and avoid overstating coverage"
+  ],
+  "techStack": {
+    "backendLanguage": "Python 3.11+",
+    "backendFramework": "FastAPI web service with isolated verification service adapters",
+    "frontend": "Existing responsive web shell with dashboard and wallet detail surfaces",
+    "testing": "pytest API/service tests + targeted frontend smoke coverage",
+    "database": "PostgreSQL primary, SQLite supported",
+    "coreDependencies": "Electrum-compatible JSON-RPC server + existing wallet/balance query services + descriptor parsing/derivation layer"
+  },
+  "userStories": [
+    {
+      "id": "WVV-001",
+      "title": "Verification domain model and result persistence",
+      "acceptanceCriteria": [
+        "Add a dedicated verification data model separate from normal wallet metadata so verification state does not get mixed into the accounting schema haphazardly",
+        "Persist non-sensitive verification outputs such as ledger balance, verified chain balance, drift, height, timestamp, status, and operator-facing error text",
+        "Model support for multiple chain accounts per wallet even if the first UI exposes only one verification target",
+        "Keep the model compatible with future integrity findings, attestation exports, and alerting"
+      ],
+      "priority": 1,
+      "estimatedLines": "+180/-0",
+      "testStrategy": "pytest model and persistence tests on SQLite and PostgreSQL-backed fixtures",
+      "passes": false
+    },
+    {
+      "id": "WVV-002",
+      "title": "Electrum-compatible chain query backend abstraction",
+      "acceptanceCriteria": [
+        "Create a chain-query interface that targets the Electrum protocol rather than a single deployment such as electrs, mempool/electrs, or Frigate",
+        "Support the minimum RPC set required for verification including version negotiation, header/tip awareness, balance lookup, history lookup, and optionally UTXO lookup",
+        "Handle unreachable, incompatible, or partially degraded servers with operator-readable failure states",
+        "Keep the abstraction narrow enough that alternate backends such as Esplora or bitcoind scan RPC could be added later without rewriting verification semantics"
+      ],
+      "priority": 2,
+      "estimatedLines": "+170/-0",
+      "testStrategy": "pytest unit tests with mocked Electrum JSON-RPC responses plus protocol compatibility fixtures",
+      "passes": false
+    },
+    {
+      "id": "WVV-003",
+      "title": "Manual descriptor verification session",
+      "acceptanceCriteria": [
+        "Allow an operator to provide descriptor input on demand for a verification session without requiring persistence",
+        "Support descriptor sets sufficient for common single-sig and multisig wallet layouts, including external and change branches when applicable",
+        "Derive verification targets for a bounded scan window and compare computed chain balance to the ledger balance for the mapped wallet",
+        "Discard session-provided descriptor material after verification completes or fails"
+      ],
+      "priority": 3,
+      "estimatedLines": "+220/-0",
+      "testStrategy": "pytest verification-service tests with known descriptor fixtures and synthetic Electrum responses",
+      "passes": false
+    },
+    {
+      "id": "WVV-004",
+      "title": "Wallet detail and dashboard verification surfaces",
+      "acceptanceCriteria": [
+        "Expose verified balance, ledger balance, drift, verification status, and last checked time on wallet-facing web surfaces",
+        "Clearly distinguish unverified, verified, stale, failed, and partially configured states",
+        "Avoid language that implies complete wallet proof when only a registered descriptor account has been checked",
+        "Keep the UI useful on mobile while allowing richer drill-down on desktop"
+      ],
+      "priority": 4,
+      "estimatedLines": "+170/-0",
+      "testStrategy": "frontend smoke coverage and API payload tests for all verification states",
+      "passes": false
+    },
+    {
+      "id": "WVV-005",
+      "title": "Optional remembered verification sources",
+      "acceptanceCriteria": [
+        "Allow operators to opt into storing a remembered verification source such as descriptor material or a local Sparrow wallet reference",
+        "Make the default posture session-only, with clear consent when persistence is enabled",
+        "Persist enough metadata to detect an obvious mismatch with a previously verified wallet target, such as a stable wallet fingerprint or descriptor checksum",
+        "Keep persisted verification-source data isolated from routine wallet CRUD and tax workflows"
+      ],
+      "priority": 5,
+      "estimatedLines": "+180/-0",
+      "testStrategy": "pytest persistence/permission tests and negative tests for mismatched descriptors",
+      "passes": false
+    },
+    {
+      "id": "WVV-006",
+      "title": "Sparrow-aware source integration path",
+      "acceptanceCriteria": [
+        "Document and, if feasible, implement a path for using Sparrow wallet files as an on-demand verification source while preserving Sparrow's encryption posture",
+        "Keep Sparrow integration optional so descriptor-based verification can ship even if wallet-file unlock support is deferred",
+        "Avoid claiming support for Sparrow wallet-file decryption until the file format and safe unlock flow are verified from primary source code or docs",
+        "Preserve a clean abstraction so other descriptor-capable wallet sources can be added later"
+      ],
+      "priority": 6,
+      "estimatedLines": "+140/-0",
+      "testStrategy": "research spike + targeted integration tests if wallet-file support is implemented",
+      "passes": false
+    },
+    {
+      "id": "WVV-007",
+      "title": "Integrity findings and alert integration",
+      "acceptanceCriteria": [
+        "Turn meaningful verification mismatches into explicit integrity findings rather than ad hoc UI warnings",
+        "Support operator-facing statuses such as new, acknowledged, and resolved where appropriate",
+        "Expose enough structured metadata for future attestation or alert exports",
+        "Keep routine balance verification useful even before full alerting automation is configured"
+      ],
+      "priority": 7,
+      "estimatedLines": "+120/-0",
+      "testStrategy": "pytest finding-generation tests with clean, drifted, and failed verification scenarios",
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "Persisting descriptor material incautiously would create a serious privacy and operator-trust failure",
+      "If the app overstates what was verified, users may assume a false level of treasury assurance"
+    ],
+    "medium": [
+      "Descriptor parsing and derivation may prove awkward in pure Python compared with the stronger Rust ecosystem",
+      "Electrum-compatible servers can differ at the edges in behavior, performance, and supported protocol versions",
+      "Sparrow wallet-file support may require a deeper source-level compatibility effort than is appropriate for the first iteration"
+    ],
+    "low": [
+      "The core comparison concept is straightforward once descriptors can be derived into scriptPubKeys and queried over Electrum",
+      "The feature is naturally opt-in and can remain non-blocking for operators who prefer pure ledger accounting"
+    ]
+  },
+  "preFlightChecklist": [
+    "Decide whether descriptor parsing/derivation stays in Python or uses a helper/library seam backed by Rust tooling such as rust-miniscript or BDK",
+    "Decide the exact v1 descriptor input format and whether both external and change descriptors are mandatory for multisig verification",
+    "Confirm the initial Electrum protocol compatibility target and transport assumptions for local household deployments",
+    "Decide whether v1 will persist only verification results or also permit opt-in persistence of descriptor sources",
+    "Determine whether a remembered source should store raw descriptor material, encrypted descriptor material, or only an indirect Sparrow/local-file reference",
+    "Research Sparrow wallet-file encryption and unlock flow from primary sources before promising native wallet-file support",
+    "Define the exact claim language for verified, stale, failed, and partial-coverage states so the UI does not over-promise"
+  ],
+  "openQuestions": [
+    "Is there a production-credible Python-native descriptor parsing and derivation stack for the descriptor types we care about, or should the project plan on a Rust-backed helper from the outset?",
+    "Should v1 verification be balance-only, or should it also query history/UTXOs to better explain drift when the balance mismatches?",
+    "What is the minimum safe scan policy for descriptor-derived addresses or scriptPubKeys: fixed gap limit, wallet-provided range, or operator override?",
+    "If persisted sources are allowed, what encryption-at-rest posture is acceptable for stored descriptor material in a single-operator private app?",
+    "Can Sparrow wallet-file decryption be supported safely and maintainably enough to include in Feature-23 proper, or should it remain a follow-on story after manual descriptor sessions ship?"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+1180/-0",
+    "storiesCount": 7,
+    "filesLikelyModified": [
+      "src/python/web/models.py",
+      "src/python/web/services/portfolio.py",
+      "src/python/web/routes/wallets.py",
+      "src/python/web/ui/index.html",
+      "src/python/web/ui/static/app.js",
+      "src/python/web/ui/static/app.css",
+      "src/python/integrity/alerts.py",
+      "src/python/attestation/generator.py",
+      "README.md",
+      "GETTING_STARTED.md",
+      "planning/current-feature.json",
+      "planning/progress.txt",
+      "AGENTS.md"
+    ],
+    "filesLikelyCreated": [
+      "src/python/web/services/wallet_verification.py",
+      "src/python/web/services/electrum_client.py",
+      "src/python/web/routes/verification.py",
+      "src/python/web/models_verification.py",
+      "tests/test_web_wallet_verification.py",
+      "tests/test_electrum_client.py",
+      "tests/test_verification_findings.py"
+    ]
+  }
+}
