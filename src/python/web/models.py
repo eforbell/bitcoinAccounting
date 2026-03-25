@@ -467,6 +467,12 @@ class LiquidityResponse(APIModel):
     summary: CostBasisSummaryResource
 
 
+class ExchangeListResponse(APIModel):
+    """Sorted list of all exchanges with trade activity."""
+
+    exchanges: list[str]
+
+
 class LoginRequest(APIModel):
     """Login request payload."""
 

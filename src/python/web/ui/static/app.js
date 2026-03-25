@@ -183,6 +183,7 @@ function showLoggedOut() {
   byId('tax-view').classList.add('hidden');
   byId('wallet-view').classList.add('hidden');
   byId('ledger-view').classList.add('hidden');
+  byId('trades-view').classList.add('hidden');
   byId('record-view').classList.add('hidden');
   byId('wallets-view').classList.add('hidden');
   byId('import-view').classList.add('hidden');
@@ -1673,12 +1674,13 @@ async function loadTradesPage() {
 
 async function populateTradesExchangeDropdown() {
   try {
-    const data = await api('api/trades/liquidity');
+    // Fetch the exchange list from the trades endpoint (includes all exchanges, not just buy-side)
+    const data = await api('api/trades/exchanges');
     const select = byId('trades-exchange-filter');
     const current = state.tradesFilters.exchange;
     const opts = ['<option value="">All exchanges</option>'];
-    for (const e of data.exchanges) {
-      opts.push(`<option value="${escapeHtml(e.exchange)}"${e.exchange === current ? ' selected' : ''}>${escapeHtml(e.exchange)}</option>`);
+    for (const ex of data.exchanges) {
+      opts.push(`<option value="${escapeHtml(ex)}"${ex === current ? ' selected' : ''}>${escapeHtml(ex)}</option>`);
     }
     select.innerHTML = opts.join('');
   } catch {}

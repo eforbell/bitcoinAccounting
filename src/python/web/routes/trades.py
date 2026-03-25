@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from bitcoinAccounts import BitcoinAccounts
 from web.auth import require_authenticated_principal
 from web.dependencies import get_request_accounts
-from web.models import LiquidityResponse, TradesResponse
-from web.services.trades import build_liquidity_response, build_trades_response
+from web.models import ExchangeListResponse, LiquidityResponse, TradesResponse
+from web.services.trades import build_liquidity_response, build_trades_response, get_trade_exchanges
 
 router = APIRouter(
     prefix="/api/trades",
@@ -31,6 +31,14 @@ def trades(
         page=page,
         per_page=per_page,
     )
+
+
+@router.get("/exchanges", response_model=ExchangeListResponse)
+def exchanges(
+    accounts: BitcoinAccounts = Depends(get_request_accounts),
+) -> ExchangeListResponse:
+    """Return sorted list of all exchanges with trade activity."""
+    return ExchangeListResponse(exchanges=get_trade_exchanges(accounts))
 
 
 @router.get("/liquidity", response_model=LiquidityResponse)

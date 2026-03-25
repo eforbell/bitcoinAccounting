@@ -236,3 +236,134 @@ def test_liquidity_current_balances(client: TestClient) -> None:
     # Strike: bought 0.5, no transfers -> 0.5 remaining
     strike = next(e for e in body["exchanges"] if e["exchange"] == "Strike")
     assert strike["current_balance"] == pytest.approx(0.5)
+
+
+# --- Exchanges endpoint ---
+
+
+def test_exchanges_includes_sell_only_exchanges(client: TestClient) -> None:
+    """The exchanges endpoint must include exchanges with only sell activity."""
+    response = client.get("/api/trades/exchanges")
+    assert response.status_code == 200
+    body = response.json()
+    exchanges = body["exchanges"]
+    # River has buys and sells, Strike has buys only — both must be present
+    assert "River" in exchanges
+    assert "Strike" in exchanges
+    # List should be sorted
+    assert exchanges == sorted(exchanges)
+
+
+# --- Missing price data ---
+
+
+def test_liquidity_missing_cost_returns_none_avg() -> None:
+    """When a purchase lacks price data, avg_cost_usd must be None, not $0."""
+    backend = SqliteBackend(":memory:", auto_create_tables=True)
+    accounts = BitcoinAccounts(backend=backend)
+
+    accounts.wallet_query.add_wallet(
+        wallet_id="ForeignExchange",
+        wallet_type="exchange",
+        custody="custodial",
+    )
+
+    # Insert a BTC buy against EUR — no USD price lookup available in test
+    # This simulates a trade where total_cost comes back as None
+    backend.execute(
+        """INSERT INTO ledger
+           (createddate, trans_type, buy, buy_curr, sell, sell_curr, fee, fee_curr, exchange, deleted)
+           VALUES (:d, 'Trade', :buy, 'BTC', :sell, 'EUR', 0, 'EUR', 'ForeignExchange', 0)""",
+        {"d": "2024-06-01 12:00:00", "buy": 0.5, "sell": 25000.0},
+    )
+    backend.commit()
+
+    app = create_app(
+        WebConfig(
+            auth_enabled=True,
+            auth_passphrase="orange-hodl",
+            session_secret="test-secret",
+        )
+    )
+    app.dependency_overrides[get_request_accounts] = lambda: accounts
+    app.dependency_overrides[get_request_backend] = lambda: backend
+
+    test_client = TestClient(app)
+    login = test_client.post("/api/auth/login", json={"passphrase": "orange-hodl"})
+    assert login.status_code == 200
+
+    response = test_client.get("/api/trades/liquidity")
+    body = response.json()
+
+    fe = next(e for e in body["exchanges"] if e["exchange"] == "ForeignExchange")
+    # avg_cost_usd must be None, not 0.0
+    assert fe["avg_cost_usd"] is None
+
+    # Summary avg should also be None when any exchange lacks cost data
+    assert body["summary"]["avg_cost_basis_usd"] is None
+
+    accounts.close()
+
+
+def test_exchanges_includes_sell_only_exchange_not_in_liquidity() -> None:
+    """An exchange with only sell activity must appear in /exchanges but not /liquidity."""
+    backend = SqliteBackend(":memory:", auto_create_tables=True)
+    accounts = BitcoinAccounts(backend=backend)
+
+    accounts.wallet_query.add_wallet(
+        wallet_id="BuyPlace",
+        wallet_type="exchange",
+        custody="custodial",
+    )
+    accounts.wallet_query.add_wallet(
+        wallet_id="SellOnly",
+        wallet_type="exchange",
+        custody="custodial",
+    )
+
+    # Buy at BuyPlace
+    accounts.execute_trade(
+        trade_date=datetime(2024, 1, 1),
+        buy=1.0, buy_curr="BTC",
+        sell=50000.0, sell_curr="USD",
+        exchange="BuyPlace",
+    )
+    # Transfer to SellOnly, then sell there
+    accounts.transfer_funds(
+        withdraw_date=datetime(2024, 2, 1),
+        deposit_date=datetime(2024, 2, 1),
+        tx_amount=0.5, tx_coin="BTC",
+        from_account="BuyPlace", to_account="SellOnly",
+    )
+    accounts.execute_trade(
+        trade_date=datetime(2024, 3, 1),
+        buy=30000.0, buy_curr="USD",
+        sell=0.5, sell_curr="BTC",
+        exchange="SellOnly",
+    )
+
+    app = create_app(
+        WebConfig(
+            auth_enabled=True,
+            auth_passphrase="orange-hodl",
+            session_secret="test-secret",
+        )
+    )
+    app.dependency_overrides[get_request_accounts] = lambda: accounts
+    app.dependency_overrides[get_request_backend] = lambda: backend
+
+    test_client = TestClient(app)
+    login = test_client.post("/api/auth/login", json={"passphrase": "orange-hodl"})
+    assert login.status_code == 200
+
+    # /exchanges must include SellOnly
+    ex_response = test_client.get("/api/trades/exchanges")
+    assert "SellOnly" in ex_response.json()["exchanges"]
+
+    # /liquidity must NOT include SellOnly (no purchases there)
+    liq_response = test_client.get("/api/trades/liquidity")
+    liq_exchanges = [e["exchange"] for e in liq_response.json()["exchanges"]]
+    assert "SellOnly" not in liq_exchanges
+    assert "BuyPlace" in liq_exchanges
+
+    accounts.close()

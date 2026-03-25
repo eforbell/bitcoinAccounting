@@ -57,37 +57,53 @@ def build_trades_response(
     )
 
 
+def get_trade_exchanges(accounts: BitcoinAccounts) -> list[str]:
+    """Return sorted list of all distinct exchanges with any trade activity."""
+    all_trades = accounts.trade_query.get_trade_cost("BTC", "USD")
+    exchanges = sorted({t.get("exchange") for t in all_trades if t.get("exchange")})
+    return exchanges
+
+
 def build_liquidity_response(accounts: BitcoinAccounts) -> LiquidityResponse:
     """Build exchange liquidity summary with cost basis metrics."""
     all_trades = accounts.trade_query.get_trade_cost("BTC", "USD")
 
-    # Group purchases by exchange
-    exchange_data: dict[str, dict[str, float]] = {}
+    # Group purchases by exchange, tracking cost completeness
+    exchange_data: dict[str, dict[str, Any]] = {}
     for t in all_trades:
         if t.get("quantity", 0) <= 0:
             continue
 
         exchange = t.get("exchange", "Unknown")
         if exchange not in exchange_data:
-            exchange_data[exchange] = {"purchased": 0.0, "usd_spent": 0.0}
+            exchange_data[exchange] = {
+                "purchased": 0.0,
+                "usd_spent": 0.0,
+                "has_missing_cost": False,
+            }
 
         exchange_data[exchange]["purchased"] += t["quantity"]
         if t.get("total_cost") is not None:
             exchange_data[exchange]["usd_spent"] += t["total_cost"]
+        else:
+            exchange_data[exchange]["has_missing_cost"] = True
 
     # Build per-exchange rows with current balances
     exchange_rows: list[ExchangeLiquidityResource] = []
     total_purchased = 0.0
     total_balance = 0.0
     total_usd_spent = 0.0
+    any_missing_cost = False
 
     for exchange, data in exchange_data.items():
         purchased = data["purchased"]
         usd_spent = data["usd_spent"]
+        missing_cost = data["has_missing_cost"]
 
         if purchased > 0:
             balance = accounts.get_wallet_balance("BTC", exchange)
-            avg_cost = usd_spent / purchased
+            # Return None when price data is incomplete to avoid false $0
+            avg_cost = usd_spent / purchased if not missing_cost else None
 
             exchange_rows.append(
                 ExchangeLiquidityResource(
@@ -101,14 +117,19 @@ def build_liquidity_response(accounts: BitcoinAccounts) -> LiquidityResponse:
             total_purchased += purchased
             total_balance += balance
             total_usd_spent += usd_spent
+            if missing_cost:
+                any_missing_cost = True
 
     # Sort by total purchased descending
     exchange_rows.sort(key=lambda x: x.total_purchased, reverse=True)
 
-    # Overall summary
+    # Overall summary — return None for avg cost if any exchange has missing price data
     overall_balance = accounts.get_balance("BTC")
     in_cold_storage = overall_balance - total_balance
-    avg_cost_basis = total_usd_spent / total_purchased if total_purchased > 0 else None
+    if total_purchased > 0 and not any_missing_cost:
+        avg_cost_basis = total_usd_spent / total_purchased
+    else:
+        avg_cost_basis = None
 
     summary = CostBasisSummaryResource(
         total_purchased=total_purchased,
