@@ -353,6 +353,76 @@ h3 {
   border-color: rgba(247, 147, 26, 0.18);
 }
 
+.chain-panel {
+  background: linear-gradient(180deg, rgba(247, 147, 26, 0.03), rgba(17, 17, 17, 0.62));
+}
+
+.chain-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.chain-stat {
+  min-width: 0;
+  border: 1px solid rgba(244, 241, 234, 0.08);
+  border-radius: 1rem;
+  background: rgba(244, 241, 234, 0.03);
+  padding: 0.85rem 0.9rem;
+}
+
+.chain-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 241, 234, 0.1);
+  background: rgba(244, 241, 234, 0.04);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chip-live {
+  color: #9de27a;
+  border-color: rgba(157, 226, 122, 0.24);
+  background: rgba(157, 226, 122, 0.1);
+}
+
+.chip-syncing {
+  color: var(--warning);
+  border-color: rgba(255, 183, 71, 0.24);
+  background: rgba(255, 183, 71, 0.1);
+}
+
+.chip-down {
+  color: var(--danger);
+  border-color: rgba(255, 125, 107, 0.24);
+  background: rgba(255, 125, 107, 0.1);
+}
+
+.chain-status-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.chain-status-warning {
+  margin-top: 0.8rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(255, 183, 71, 0.18);
+  background: rgba(255, 183, 71, 0.09);
+  color: var(--text-muted);
+}
+
 .quick-actions {
   display: flex;
   flex-wrap: wrap;
@@ -812,6 +882,10 @@ th {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .chain-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .filters,
   .filters.compact {
     grid-template-columns: 1fr;
@@ -959,6 +1033,10 @@ th {
 
   .summary-card {
     padding: 0.78rem 0.84rem;
+  }
+
+  .chain-status-grid {
+    grid-template-columns: 1fr;
   }
 
   .button {

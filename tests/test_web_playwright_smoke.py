@@ -19,6 +19,7 @@ from bitcoinAccounts import BitcoinAccounts
 from db import SqliteBackend
 from web.app import create_app
 from web.config import WebConfig
+from web.routes.chain import get_chain_status_service
 
 
 def _find_free_port() -> int:
@@ -71,8 +72,22 @@ def _seed_smoke_database(db_path: str) -> None:
         accounts.close()
 
 
+class _StaticChainService:
+    """Minimal fake chain-status service for Playwright smoke tests."""
+
+    def __init__(self, payload: dict[str, object]) -> None:
+        self._payload = payload
+
+    def get_status(self) -> dict[str, object]:
+        return self._payload
+
+
 @contextlib.contextmanager
-def _run_smoke_server(db_path: str) -> Iterator[str]:
+def _run_smoke_server(
+    db_path: str,
+    *,
+    chain_status_payload: dict[str, object] | None = None,
+) -> Iterator[str]:
     previous_db_backend = os.environ.get("DB_BACKEND")
     previous_sqlite_path = os.environ.get("SQLITE_DB_PATH")
     os.environ["DB_BACKEND"] = "sqlite"
@@ -80,17 +95,23 @@ def _run_smoke_server(db_path: str) -> Iterator[str]:
 
     port = _find_free_port()
     root_app = FastAPI()
+    web_app = create_app(
+        WebConfig(
+            auth_enabled=True,
+            auth_passphrase="orange-hodl",
+            session_secret="test-secret",
+            db_backend="sqlite",
+            web_base_path="/bitcoin-accounting",
+        )
+    )
+    if chain_status_payload is not None:
+        web_app.dependency_overrides[get_chain_status_service] = (
+            lambda: _StaticChainService(chain_status_payload)
+        )
+
     root_app.mount(
         "/bitcoin-accounting",
-        create_app(
-            WebConfig(
-                auth_enabled=True,
-                auth_passphrase="orange-hodl",
-                session_secret="test-secret",
-                db_backend="sqlite",
-                web_base_path="/bitcoin-accounting",
-            )
-        ),
+        web_app,
     )
 
     config = uvicorn.Config(root_app, host="127.0.0.1", port=port, log_level="warning", ws="none")
@@ -129,7 +150,27 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
     db_path = str(tmp_path / "smoke.sqlite3")
     _seed_smoke_database(db_path)
 
-    with _run_smoke_server(db_path) as base_url:
+    with _run_smoke_server(
+        db_path,
+        chain_status_payload={
+            "enabled": True,
+            "available": True,
+            "source": "bitcoind",
+            "network": "main",
+            "block_height": 942151,
+            "header_height": 942151,
+            "verification_progress": 1.0,
+            "is_synced": True,
+            "last_block_at": datetime(2026, 3, 25, 12, 0, 0),
+            "seconds_since_last_block": 302,
+            "peer_count": 11,
+            "mempool_tx_count": 10815,
+            "mempool_usage_bytes": 64487424,
+            "pruned": False,
+            "warnings": [],
+            "refreshed_at": datetime(2026, 3, 25, 12, 5, 0),
+        },
+    ) as base_url:
         manager = None
         browser = None
         try:
@@ -150,6 +191,11 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
 
             playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
             playwright.expect(page.locator("#dashboard-balance")).to_contain_text("BTC")
+            playwright.expect(page.locator("#chain-status-panel")).to_be_visible()
+            playwright.expect(page.locator("#chain-status-chip")).to_have_text("live")
+            playwright.expect(page.locator("#chain-height")).to_have_text("942151")
+            playwright.expect(page.locator("#chain-peers")).to_have_text("11")
+            playwright.expect(page.locator("#chain-meta-sync")).to_contain_text("Synced to tip")
             page.locator('.app-sidebar [data-route="tax"]').click()
             playwright.expect(page.locator('#tax-view h1')).to_have_text("Tax")
             playwright.expect(page.locator("#policy-summary")).to_contain_text("Wallet-separated FIFO")

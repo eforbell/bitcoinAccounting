@@ -2,6 +2,7 @@ const state = {
   session: null,
   policy: null,
   dashboard: null,
+  chainStatus: null,
   walletDetail: null,
   walletsList: [],
   currentPage: 'dashboard',
@@ -226,6 +227,74 @@ function renderWarnings(containerId, warnings) {
   `).join('');
 }
 
+function formatDuration(seconds) {
+  if (seconds == null || Number.isNaN(Number(seconds))) return '-';
+  const total = Math.max(0, Number(seconds));
+  if (total < 60) return `${Math.round(total)}s ago`;
+  if (total < 3600) return `${Math.round(total / 60)}m ago`;
+  if (total < 86400) return `${Math.round(total / 3600)}h ago`;
+  return `${Math.round(total / 86400)}d ago`;
+}
+
+function formatBytes(bytes) {
+  if (bytes == null || Number.isNaN(Number(bytes))) return '-';
+  const value = Number(bytes);
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatRefreshTime(value) {
+  if (!value) return '-';
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return '-';
+  return `Updated ${dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function renderChainStatus(status) {
+  state.chainStatus = status;
+  const panel = byId('chain-status-panel');
+  const warning = byId('chain-status-warning');
+
+  if (!status || !status.enabled) {
+    panel.classList.add('hidden');
+    warning.classList.add('hidden');
+    return;
+  }
+
+  panel.classList.remove('hidden');
+  byId('chain-height').textContent = status.block_height == null ? '-' : String(status.block_height);
+  byId('chain-last-block').textContent = formatDuration(status.seconds_since_last_block);
+  byId('chain-peers').textContent = status.peer_count == null ? '-' : String(status.peer_count);
+  byId('chain-mempool').textContent = status.mempool_tx_count == null
+    ? '-'
+    : `${status.mempool_tx_count} tx · ${formatBytes(status.mempool_usage_bytes)}`;
+  byId('chain-meta-network').textContent = status.network ? `${status.network} via ${status.source}` : status.source;
+  byId('chain-meta-sync').textContent = status.available
+    ? (status.is_synced ? 'Synced to tip' : `Syncing ${((status.verification_progress || 0) * 100).toFixed(2)}%`)
+    : 'Node unavailable';
+  byId('chain-meta-refresh').textContent = formatRefreshTime(status.refreshed_at);
+
+  const chip = byId('chain-status-chip');
+  chip.classList.remove('chip-live', 'chip-syncing', 'chip-down');
+  if (!status.available) {
+    chip.textContent = 'unavailable';
+    chip.classList.add('chip-down');
+  } else if (status.is_synced) {
+    chip.textContent = 'live';
+    chip.classList.add('chip-live');
+  } else {
+    chip.textContent = 'syncing';
+    chip.classList.add('chip-syncing');
+  }
+
+  if (status.warnings && status.warnings.length) {
+    warning.textContent = status.warnings[0];
+    warning.classList.remove('hidden');
+  } else {
+    warning.classList.add('hidden');
+  }
+}
+
 function renderDashboard(dashboard) {
   state.dashboard = dashboard;
   byId('dashboard-balance').textContent = `${Number(dashboard.summary.total_balance).toFixed(8)} ${dashboard.summary.coin}`;
@@ -292,8 +361,39 @@ async function loadDashboard() {
     include_inactive: state.includeInactive ? 'true' : 'false',
     recent_limit: '5',
   });
-  const dashboard = await api(`api/portfolio/dashboard?${params.toString()}`);
-  renderDashboard(dashboard);
+  const [dashboardResult, chainResult] = await Promise.allSettled([
+    api(`api/portfolio/dashboard?${params.toString()}`),
+    api('api/chain/status'),
+  ]);
+
+  if (dashboardResult.status !== 'fulfilled') {
+    throw dashboardResult.reason;
+  }
+
+  renderDashboard(dashboardResult.value);
+
+  if (chainResult.status === 'fulfilled') {
+    renderChainStatus(chainResult.value);
+  } else {
+    renderChainStatus({
+      enabled: true,
+      available: false,
+      source: 'bitcoind',
+      network: null,
+      block_height: null,
+      header_height: null,
+      verification_progress: null,
+      is_synced: null,
+      last_block_at: null,
+      seconds_since_last_block: null,
+      peer_count: null,
+      mempool_tx_count: null,
+      mempool_usage_bytes: null,
+      pruned: null,
+      warnings: [chainResult.reason?.message || 'Bitcoin node status is currently unavailable.'],
+      refreshed_at: new Date().toISOString(),
+    });
+  }
 }
 
 function renderTransactionRows(transactions) {

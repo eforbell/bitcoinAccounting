@@ -26,6 +26,12 @@ class WebConfig:
     session_cookie_name: str = "ba_session"
     session_cookie_secure: bool | None = None
     session_ttl_seconds: int = 60 * 60 * 24 * 7
+    chain_status_enabled: bool = False
+    bitcoin_rpc_url: str | None = None
+    bitcoin_rpc_cookie_file: str | None = None
+    bitcoin_rpc_user: str | None = None
+    bitcoin_rpc_password: str | None = None
+    bitcoin_rpc_timeout_seconds: float = 3.0
 
 
 def load_web_config() -> WebConfig:
@@ -48,6 +54,14 @@ def load_web_config() -> WebConfig:
         session_cookie_secure = cookie_secure_raw.strip().lower() in {"1", "true", "on", "yes"}
     ttl_raw = os.getenv("BITCOIN_ACCOUNTING_SESSION_TTL_SECONDS", str(60 * 60 * 24 * 7)).strip()
     session_ttl_seconds = int(ttl_raw)
+    chain_status_raw = os.getenv("BITCOIN_CHAIN_STATUS_ENABLED", "0").strip().lower()
+    chain_status_enabled = chain_status_raw in {"1", "true", "on", "yes"}
+    bitcoin_rpc_url = os.getenv("BITCOIN_RPC_URL")
+    bitcoin_rpc_cookie_file = os.getenv("BITCOIN_RPC_COOKIE_FILE")
+    bitcoin_rpc_user = os.getenv("BITCOIN_RPC_USER")
+    bitcoin_rpc_password = os.getenv("BITCOIN_RPC_PASSWORD")
+    rpc_timeout_raw = os.getenv("BITCOIN_RPC_TIMEOUT_SECONDS", "3").strip()
+    bitcoin_rpc_timeout_seconds = float(rpc_timeout_raw)
     return WebConfig(
         app_env=app_env,
         web_base_path=web_base_path,
@@ -60,6 +74,12 @@ def load_web_config() -> WebConfig:
         session_cookie_name=cookie_name,
         session_cookie_secure=session_cookie_secure,
         session_ttl_seconds=session_ttl_seconds,
+        chain_status_enabled=chain_status_enabled,
+        bitcoin_rpc_url=bitcoin_rpc_url,
+        bitcoin_rpc_cookie_file=bitcoin_rpc_cookie_file,
+        bitcoin_rpc_user=bitcoin_rpc_user,
+        bitcoin_rpc_password=bitcoin_rpc_password,
+        bitcoin_rpc_timeout_seconds=bitcoin_rpc_timeout_seconds,
     )
 
 
@@ -94,7 +114,27 @@ def validate_web_config(config: WebConfig) -> None:
     if config.session_ttl_seconds <= 0:
         raise WebConfigurationError("Session TTL must be greater than zero.")
 
+    if config.bitcoin_rpc_timeout_seconds <= 0:
+        raise WebConfigurationError("Bitcoin RPC timeout must be greater than zero.")
+
     normalized_base_path(config.web_base_path)
+
+    if config.chain_status_enabled:
+        rpc_url = (config.bitcoin_rpc_url or "").strip()
+        cookie_file = (config.bitcoin_rpc_cookie_file or "").strip()
+        rpc_user = (config.bitcoin_rpc_user or "").strip()
+        rpc_password = (config.bitcoin_rpc_password or "").strip()
+
+        if not rpc_url:
+            raise WebConfigurationError(
+                "BITCOIN_RPC_URL must be set when BITCOIN_CHAIN_STATUS_ENABLED=1."
+            )
+
+        if not cookie_file and not (rpc_user and rpc_password):
+            raise WebConfigurationError(
+                "Configure BITCOIN_RPC_COOKIE_FILE or both BITCOIN_RPC_USER and "
+                "BITCOIN_RPC_PASSWORD when BITCOIN_CHAIN_STATUS_ENABLED=1."
+            )
 
     if config.app_env.lower() in {"production", "prod"}:
         if backend != "postgres" and not config.allow_sqlite_in_production:

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from web.config import WebConfig, load_web_config, normalized_base_path
-from web.routes import auth_router, health_router, imports_router, ledger_router, portfolio_router, tax_router, ui_router, wallets_router
+from web.routes import auth_router, chain_router, health_router, imports_router, ledger_router, portfolio_router, tax_router, ui_router, wallets_router
 from web.startup import validate_startup_config
 from pathlib import Path
 
@@ -34,6 +34,7 @@ def create_app(config: WebConfig | None = None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
     app.include_router(ui_router)
     app.include_router(auth_router)
+    app.include_router(chain_router)
     app.include_router(health_router)
     app.include_router(ledger_router)
     app.include_router(portfolio_router)

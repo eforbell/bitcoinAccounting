@@ -116,6 +116,40 @@
 
         <section id="custody-warning" class="policy-banner hidden"></section>
 
+        <section id="chain-status-panel" class="panel subpanel chain-panel hidden">
+          <div class="panel-heading">
+            <div>
+              <h3>Bitcoin Presence</h3>
+              <p>Subtle signals from your local node and the current timechain.</p>
+            </div>
+            <div id="chain-status-chip" class="chain-status-chip">inactive</div>
+          </div>
+          <div class="chain-status-grid">
+            <article class="chain-stat">
+              <span class="summary-label">Height</span>
+              <strong id="chain-height">-</strong>
+            </article>
+            <article class="chain-stat">
+              <span class="summary-label">Last Block</span>
+              <strong id="chain-last-block">-</strong>
+            </article>
+            <article class="chain-stat">
+              <span class="summary-label">Peers</span>
+              <strong id="chain-peers">-</strong>
+            </article>
+            <article class="chain-stat">
+              <span class="summary-label">Mempool</span>
+              <strong id="chain-mempool">-</strong>
+            </article>
+          </div>
+          <div class="chain-status-meta">
+            <span id="chain-meta-network">bitcoind</span>
+            <span id="chain-meta-sync">Waiting for node status</span>
+            <span id="chain-meta-refresh">-</span>
+          </div>
+          <div id="chain-status-warning" class="chain-status-warning hidden"></div>
+        </section>
+
         <section class="dashboard-grid">
           <section class="panel subpanel">
             <div class="panel-heading">

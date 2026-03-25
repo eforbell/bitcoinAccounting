@@ -37,6 +37,27 @@ class ReadinessResponse(APIModel):
     timestamp: datetime
 
 
+class ChainStatusResponse(APIModel):
+    """Chain status payload for optional Bitcoin node presence."""
+
+    enabled: bool = False
+    available: bool = False
+    source: str = "bitcoind"
+    network: str | None = None
+    block_height: int | None = None
+    header_height: int | None = None
+    verification_progress: float | None = None
+    is_synced: bool | None = None
+    last_block_at: datetime | None = None
+    seconds_since_last_block: int | None = None
+    peer_count: int | None = None
+    mempool_tx_count: int | None = None
+    mempool_usage_bytes: int | None = None
+    pruned: bool | None = None
+    warnings: list[str]
+    refreshed_at: datetime
+
+
 class WalletResource(APIModel):
     """Canonical wallet resource for web clients."""
 
