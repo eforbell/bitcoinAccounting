@@ -205,6 +205,11 @@ function renderPageState() {
   for (const item of document.querySelectorAll('[data-route]')) {
     item.classList.toggle('active', item.dataset.route === navRoute);
   }
+  // Highlight "More" button when a page inside the sheet is active
+  const moreBtn = document.getElementById('more-menu-toggle');
+  if (moreBtn) {
+    moreBtn.classList.toggle('active', ['tax', 'import'].includes(navRoute));
+  }
 }
 
 function renderWarnings(containerId, warnings) {
@@ -811,6 +816,33 @@ function bindEvents() {
 
   byId('session-action').addEventListener('click', handleSessionAction);
   byId('mobile-session-action').addEventListener('click', handleSessionAction);
+
+  // More-menu slide-up sheet
+  const moreToggle = byId('more-menu-toggle');
+  const moreSheet = byId('more-menu-sheet');
+  const moreOverlay = byId('more-menu-overlay');
+
+  function openMoreMenu() {
+    moreOverlay.classList.add('visible');
+    moreSheet.classList.add('visible');
+    moreOverlay.setAttribute('aria-hidden', 'false');
+  }
+  function closeMoreMenu() {
+    moreSheet.classList.remove('visible');
+    moreOverlay.classList.remove('visible');
+    moreOverlay.setAttribute('aria-hidden', 'true');
+  }
+
+  moreToggle.addEventListener('click', () => {
+    if (moreSheet.classList.contains('visible')) closeMoreMenu();
+    else openMoreMenu();
+  });
+  moreOverlay.addEventListener('click', closeMoreMenu);
+
+  // Close more-menu when navigating from it
+  for (const link of moreSheet.querySelectorAll('a[data-route]')) {
+    link.addEventListener('click', closeMoreMenu);
+  }
 
   // Record tab switching
   for (const tab of document.querySelectorAll('.record-tab')) {

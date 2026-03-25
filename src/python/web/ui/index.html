@@ -934,15 +934,35 @@
       <span class="nav-icon">⌂</span>
       <span class="nav-label">Wallets</span>
     </a>
-    <a class="nav-item" href="import" data-route="import">
-      <span class="nav-icon">↑</span>
-      <span class="nav-label">Import</span>
-    </a>
-    <button id="mobile-session-action" class="nav-item nav-brand-mobile" type="button" aria-label="Sign out or check session">
-      <span class="nav-brand-mark"><img src="static/brand/bitcoin-shield-logo.png" alt="" width="18" height="18"></span>
-      <span class="nav-label">Account</span>
+    <button id="more-menu-toggle" class="nav-item nav-brand-mobile" type="button" aria-label="More pages">
+      <span class="nav-icon">⋯</span>
+      <span class="nav-label">More</span>
     </button>
   </nav>
+
+  <div id="more-menu-overlay" class="more-menu-overlay" aria-hidden="true"></div>
+  <div id="more-menu-sheet" class="more-menu-sheet" role="dialog" aria-label="More pages">
+    <div class="more-menu-header">
+      <span class="more-menu-brand">
+        <img src="static/brand/bitcoin-shield-logo.png" alt="" width="22" height="22">
+        <strong>Bitcoin Accounting</strong>
+      </span>
+      <span class="more-menu-subtitle">Tax, import, settings</span>
+    </div>
+    <hr class="more-menu-divider">
+    <a class="more-menu-item" href="tax" data-route="tax">
+      <span class="more-menu-icon">₿</span>
+      <span>Tax</span>
+    </a>
+    <a class="more-menu-item" href="import" data-route="import">
+      <span class="more-menu-icon">↑</span>
+      <span>Import</span>
+    </a>
+    <button id="mobile-session-action" class="more-menu-item more-menu-signout" type="button">
+      <span class="more-menu-icon">⏻</span>
+      <span>Sign Out</span>
+    </button>
+  </div>
 
   <script src="static/app.js"></script>
 </body>
