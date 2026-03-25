@@ -3,8 +3,8 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: bitcoin_accounting
-      POSTGRES_PASSWORD: bitcoin_accounting
+      POSTGRES_USER: bitcoin_accountant
+      POSTGRES_PASSWORD: bitcoin_accountant
       POSTGRES_DB: bitcoin_accounting
       POSTGRES_TEST_DB: bitcoin_accounting_test
     ports:
