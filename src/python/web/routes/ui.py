@@ -57,6 +57,12 @@ def web_ledger_shell(request: Request) -> HTMLResponse:
     return _shell_response(request)
 
 
+@router.get("/import", include_in_schema=False)
+def web_import_shell(request: Request) -> HTMLResponse:
+    """Serve the import center page within the shared web shell."""
+    return _shell_response(request)
+
+
 @router.get("/wallets", include_in_schema=False)
 def web_wallets_shell(request: Request) -> HTMLResponse:
     """Serve the wallet management page within the shared web shell."""

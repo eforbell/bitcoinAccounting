@@ -34,7 +34,7 @@
       "priority": 1,
       "estimatedLines": "+180/-0",
       "testStrategy": "pytest upload/detection endpoint tests using fixture CSVs",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WIM-002",
@@ -48,7 +48,7 @@
       "priority": 2,
       "estimatedLines": "+120/-0",
       "testStrategy": "pytest import configuration tests across parser classes",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WIM-003",
@@ -62,7 +62,7 @@
       "priority": 3,
       "estimatedLines": "+140/-0",
       "testStrategy": "pytest duplicate-preview API tests + frontend warning-state smoke tests",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WIM-004",
@@ -76,7 +76,7 @@
       "priority": 4,
       "estimatedLines": "+150/-0",
       "testStrategy": "pytest end-to-end import route tests against fixture files and test database",
-      "passes": false
+      "passes": true
     },
     {
       "id": "WIM-005",
@@ -90,7 +90,7 @@
       "priority": 5,
       "estimatedLines": "+110/-0",
       "testStrategy": "Manual review + targeted API tests for import history metadata",
-      "passes": false
+      "passes": true
     }
   ],
   "riskAssessment": {

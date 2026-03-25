@@ -34,6 +34,7 @@ def test_wallet_resource_serializes_expected_fields() -> None:
         "wallet_type": "hardware",
         "custody": "self-custodied",
         "description": "Primary vault",
+        "notes": None,
         "active": True,
     }
 

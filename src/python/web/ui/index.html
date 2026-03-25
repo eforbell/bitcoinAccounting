@@ -41,6 +41,10 @@
         <span class="nav-icon">⌂</span>
         <span class="nav-label">Wallets</span>
       </a>
+      <a class="nav-item" href="import" data-route="import">
+        <span class="nav-icon">↑</span>
+        <span class="nav-label">Import</span>
+      </a>
     </div>
   </nav>
 
@@ -812,6 +816,104 @@
           </section>
         </section>
       </section>
+
+      <section id="import-view" class="view-stack hidden">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Private Sovereignty Treasury</p>
+              <h1>Import</h1>
+              <p class="muted">Upload exchange or wallet CSV exports to import transactions.</p>
+            </div>
+          </div>
+
+          <!-- Step 1: Upload & Configure -->
+          <div id="import-step-1" class="import-step">
+            <form id="import-upload-form" class="filters">
+              <label class="field">
+                <span>CSV File</span>
+                <input id="import-file" type="file" accept=".csv,.txt" required>
+              </label>
+              <label class="field">
+                <span>Format</span>
+                <select id="import-parser">
+                  <option value="">Auto-detect</option>
+                </select>
+              </label>
+              <label class="field" id="import-wallet-field" style="display:none">
+                <span>Wallet Name</span>
+                <select id="import-wallet-name">
+                  <option value="">Select wallet...</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Withdraw To (optional)</span>
+                <select id="import-withdraw-to">
+                  <option value="">Default (parser name)</option>
+                </select>
+              </label>
+              <div class="actions-row">
+                <button id="import-upload-btn" class="button" type="submit">Upload &amp; Preview</button>
+              </div>
+            </form>
+            <p id="import-status" class="status-line"></p>
+          </div>
+
+          <!-- Step 2: Preview & Review -->
+          <div id="import-step-2" class="import-step hidden">
+            <div class="import-preview-header">
+              <h3 id="import-preview-title">Preview</h3>
+              <p id="import-preview-meta" class="muted"></p>
+            </div>
+            <div id="import-validation-summary"></div>
+            <div id="import-duplicate-banner" class="hidden"></div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Type</th>
+                    <th>Date</th>
+                    <th>Buy</th>
+                    <th>Sell</th>
+                    <th>Fee</th>
+                    <th>Wallet</th>
+                    <th>Comment</th>
+                  </tr>
+                </thead>
+                <tbody id="import-preview-table">
+                </tbody>
+              </table>
+            </div>
+            <div class="actions-row">
+              <button id="import-back-btn" class="button button-ghost" type="button">Back</button>
+              <button id="import-commit-btn" class="button" type="button">Import Transactions</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Result -->
+          <div id="import-step-3" class="import-step hidden">
+            <div id="import-result-banner"></div>
+            <div class="actions-row">
+              <button id="import-another-btn" class="button button-ghost" type="button">Import Another</button>
+              <a id="import-view-ledger" href="ledger" class="button">View Ledger</a>
+            </div>
+          </div>
+        </section>
+
+        <!-- Import History -->
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h3>Recent Imports</h3>
+              <p class="muted">Previous import runs and their results.</p>
+            </div>
+          </div>
+          <div id="import-history-list" class="list-shell">
+            <p class="muted">No imports yet.</p>
+          </div>
+        </section>
+      </section>
     </main>
   </div>
 
@@ -831,6 +933,10 @@
     <a class="nav-item" href="wallets" data-route="wallets">
       <span class="nav-icon">⌂</span>
       <span class="nav-label">Wallets</span>
+    </a>
+    <a class="nav-item" href="import" data-route="import">
+      <span class="nav-icon">↑</span>
+      <span class="nav-label">Import</span>
     </a>
     <button id="mobile-session-action" class="nav-item nav-brand-mobile" type="button" aria-label="Sign out or check session">
       <span class="nav-brand-mark"><img src="static/brand/bitcoin-shield-logo.png" alt="" width="18" height="18"></span>

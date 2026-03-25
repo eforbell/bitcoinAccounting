@@ -1,34 +1,34 @@
 {
-  "currentFeature": "feature-20",
-  "featureName": "Web Ledger, Transaction Entry, and Wallet Management",
-  "prdPath": "planning/features/feature-20-prd.json",
-  "summaryPath": "planning/features/feature-20-summary.md",
-  "branch": "feature/web-ledger-transactions-wallets",
+  "currentFeature": "feature-21",
+  "featureName": "Web Import Center and Duplicate Review",
+  "prdPath": "planning/features/feature-21-prd.json",
+  "summaryPath": "planning/features/feature-21-summary.md",
+  "branch": "feature/web-import-center",
   "status": "in_progress",
   "stories": [
     {
-      "id": "WOP-001",
-      "title": "Ledger explorer API and responsive web table",
+      "id": "WIM-001",
+      "title": "Upload, detect, and parse import files",
       "status": "completed"
     },
     {
-      "id": "WOP-002",
-      "title": "Transaction detail, edit, delete, and restore flows",
+      "id": "WIM-002",
+      "title": "Import configuration and wallet assignment",
       "status": "completed"
     },
     {
-      "id": "WOP-003",
-      "title": "Manual transaction entry flows",
+      "id": "WIM-003",
+      "title": "Duplicate detection preview and review workflow",
       "status": "completed"
     },
     {
-      "id": "WOP-004",
-      "title": "Wallet management on the web",
+      "id": "WIM-004",
+      "title": "Execute import and return operator-friendly results",
       "status": "completed"
     },
     {
-      "id": "WOP-005",
-      "title": "Audit and safety polish for write operations",
+      "id": "WIM-005",
+      "title": "Import history and troubleshooting aids",
       "status": "completed"
     }
   ],
@@ -160,6 +160,14 @@
       "mergedDate": "2026-03-24",
       "stories": 5,
       "notes": "Mobile-first portfolio dashboard with total BTC balance, cost basis, custody breakdown, wallet balances with inactive toggle, recent transactions strip, and wallet detail view with deep-link support. Server-injected <base href> for subpath-safe routing. Clickable wallet list drills into per-wallet detail with filtered transactions. 14 API tests + Playwright smoke coverage for click-through and direct URL deep-links. Removed redundant quick-action buttons in favor of navbar navigation."
+    },
+    {
+      "featureId": "feature-20",
+      "featureName": "Web Ledger, Transaction Entry, and Wallet Management",
+      "branch": "feature/web-ledger-transactions-wallets",
+      "mergedDate": "2026-03-25",
+      "stories": 5,
+      "notes": "Ledger explorer with pagination/filters/summary, transaction detail/edit/delete/restore, manual transaction entry (buy/sell/transfer/interest), wallet CRUD with rename/merge/sync, audit logging, ledger wallet dropdown. 55 tests."
     }
   ],
   "futureEnhancements": [

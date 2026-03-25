@@ -11,6 +11,7 @@ const state = {
   forecastFilters: { coin: 'BTC', wallet: '', quantity: 0.1, salePriceUsd: 100000 },
   ledgerFilters: { coin: 'BTC', wallet: '', startDate: '', endDate: '', includeDeleted: false, page: 1, perPage: 50 },
   selectedTx: null,
+  importState: { parsers: [], preview: null, duplicateIndices: [], step: 1, wallets: [] },
 };
 
 function byId(id) {
@@ -46,6 +47,8 @@ function appBase() {
   if (recordIdx !== -1) return path.slice(0, recordIdx + 1);
   const walletsIdx = path.indexOf('/wallets');
   if (walletsIdx !== -1) return path.slice(0, walletsIdx + 1);
+  const importIdx = path.indexOf('/import');
+  if (importIdx !== -1) return path.slice(0, importIdx + 1);
   const walletIdx = path.indexOf('/wallet/');
   if (walletIdx !== -1) return path.slice(0, walletIdx + 1);
   return path.endsWith('/') ? path : path + '/';
@@ -57,6 +60,7 @@ function appPath(page) {
   if (page === 'ledger') return `${base}ledger`;
   if (page === 'record') return `${base}record`;
   if (page === 'wallets') return `${base}wallets`;
+  if (page === 'import') return `${base}import`;
   if (page === 'wallet' && state.currentWalletId) return `${base}wallet/${encodeURIComponent(state.currentWalletId)}`;
   return base;
 }
@@ -66,6 +70,7 @@ function currentRouteFromLocation() {
   if (path.endsWith('/tax')) return 'tax';
   if (path.endsWith('/record')) return 'record';
   if (path.endsWith('/wallets')) return 'wallets';
+  if (path.endsWith('/import')) return 'import';
   if (path.endsWith('/ledger')) {
     const params = new URLSearchParams(window.location.search);
     if (params.get('wallet')) {
@@ -94,6 +99,9 @@ function navigateTo(page, replace = false) {
   }
   if (page === 'ledger') {
     loadLedger();
+  }
+  if (page === 'import') {
+    loadImportPage();
   }
   if (page === 'wallets') {
     loadWalletsList();
@@ -168,6 +176,7 @@ function showLoggedOut() {
   byId('ledger-view').classList.add('hidden');
   byId('record-view').classList.add('hidden');
   byId('wallets-view').classList.add('hidden');
+  byId('import-view').classList.add('hidden');
   byId('operator-chip').textContent = 'operator';
   setSessionGlyph(false);
 }
@@ -182,7 +191,7 @@ function showLoggedIn(username) {
 function renderPageState() {
   document.body.classList.add('app-has-nav');
   const page = state.currentPage;
-  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet', wallets: 'Wallets', ledger: 'Ledger', record: 'Record' };
+  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet', wallets: 'Wallets', ledger: 'Ledger', record: 'Record', import: 'Import' };
   document.title = `Bitcoin Accounting | ${titles[page] || 'Dashboard'}`;
   byId('dashboard-view').classList.toggle('hidden', !state.session || page !== 'dashboard');
   byId('tax-view').classList.toggle('hidden', !state.session || page !== 'tax');
@@ -190,6 +199,7 @@ function renderPageState() {
   byId('ledger-view').classList.toggle('hidden', !state.session || page !== 'ledger');
   byId('record-view').classList.toggle('hidden', !state.session || page !== 'record');
   byId('wallets-view').classList.toggle('hidden', !state.session || page !== 'wallets');
+  byId('import-view').classList.toggle('hidden', !state.session || page !== 'import');
 
   const navRoute = (page === 'wallet') ? 'dashboard' : page;
   for (const item of document.querySelectorAll('[data-route]')) {
@@ -1201,6 +1211,255 @@ function bindEvents() {
     }
   });
 }
+
+/* ── Import Center ──────────────────────────────────────── */
+
+async function apiUpload(path, formData) {
+  const url = new URL(path, new URL(appBase(), window.location.origin)).href;
+  const response = await fetch(url, { method: 'POST', credentials: 'same-origin', body: formData });
+  if (!response.ok) {
+    let detail = `Request failed (${response.status})`;
+    try { const err = await response.json(); detail = err.detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return response.json();
+}
+
+async function loadImportPage() {
+  showImportStep(1);
+  await Promise.all([loadImportParsers(), loadImportWallets(), loadImportHistory()]);
+}
+
+async function loadImportParsers() {
+  try {
+    const data = await api('api/import/parsers');
+    state.importState.parsers = data.parsers || [];
+    const sel = byId('import-parser');
+    sel.innerHTML = '<option value="">Auto-detect</option>';
+    for (const p of state.importState.parsers) {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = `${p.display_name} (${p.source_type})`;
+      sel.appendChild(opt);
+    }
+  } catch {}
+}
+
+async function loadImportWallets() {
+  try {
+    const data = await api('api/wallets');
+    state.importState.wallets = (data.wallets || []).map(w => w.wallet_id);
+    for (const selId of ['import-wallet-name', 'import-withdraw-to']) {
+      const sel = byId(selId);
+      const placeholder = sel.options[0];
+      sel.innerHTML = '';
+      sel.appendChild(placeholder);
+      for (const id of state.importState.wallets) {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = id;
+        sel.appendChild(opt);
+      }
+    }
+  } catch {}
+}
+
+function showImportStep(step) {
+  state.importState.step = step;
+  byId('import-step-1').classList.toggle('hidden', step !== 1);
+  byId('import-step-2').classList.toggle('hidden', step !== 2);
+  byId('import-step-3').classList.toggle('hidden', step !== 3);
+}
+
+function updateImportWalletField() {
+  const sel = byId('import-parser');
+  const parser = state.importState.parsers.find(p => p.name === sel.value);
+  const show = parser && parser.source_type === 'wallet';
+  byId('import-wallet-field').style.display = show ? '' : 'none';
+}
+
+async function handleImportUpload(event) {
+  event.preventDefault();
+  const fileInput = byId('import-file');
+  const statusEl = byId('import-status');
+  if (!fileInput.files || !fileInput.files.length) {
+    statusEl.textContent = 'Please select a file.';
+    statusEl.style.color = 'var(--danger)';
+    return;
+  }
+  statusEl.textContent = 'Uploading and parsing...';
+  statusEl.style.color = 'var(--text-muted)';
+
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+  formData.append('parser', byId('import-parser').value);
+  formData.append('wallet_name', byId('import-wallet-name').value);
+  formData.append('withdraw_to', byId('import-withdraw-to').value);
+
+  try {
+    const data = await apiUpload('api/import/parse', formData);
+    state.importState.preview = data;
+    statusEl.textContent = '';
+    renderImportPreview(data);
+    // Auto-check duplicates
+    await checkImportDuplicates(data.transactions);
+    showImportStep(2);
+  } catch (error) {
+    statusEl.textContent = error.message;
+    statusEl.style.color = 'var(--danger)';
+  }
+}
+
+function renderImportPreview(data) {
+  byId('import-preview-title').textContent = `Preview — ${data.display_name || data.parser_used}`;
+  byId('import-preview-meta').textContent = `${data.row_count} transactions from ${escapeHtml(data.filename)}`;
+
+  // Validation summary
+  const v = data.validation;
+  const valEl = byId('import-validation-summary');
+  if (v.error_count > 0 || v.warning_count > 0) {
+    let html = '<div class="import-validation">';
+    if (v.error_count > 0) html += `<p class="text-danger">${v.error_count} error(s) found — these rows will be skipped.</p>`;
+    if (v.warning_count > 0) html += `<p class="text-warning">${v.warning_count} warning(s) — review before importing.</p>`;
+    html += '</div>';
+    valEl.innerHTML = html;
+  } else {
+    valEl.innerHTML = '<p class="text-success">All rows valid.</p>';
+  }
+
+  // Preview table — show all transactions
+  const tbody = byId('import-preview-table');
+  const txs = data.transactions;
+  if (!txs.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">No transactions parsed.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = txs.map((tx, i) => {
+    const buy = tx.buy ? `${Number(tx.buy).toFixed(8)} ${escapeHtml(tx.buy_curr || '')}` : '';
+    const sell = tx.sell ? `${Number(tx.sell).toFixed(8)} ${escapeHtml(tx.sell_curr || '')}` : '';
+    const fee = tx.fee ? `${Number(tx.fee).toFixed(8)} ${escapeHtml(tx.fee_curr || '')}` : '';
+    return `<tr data-idx="${i}">
+      <td><input type="checkbox" class="import-row-check" data-idx="${i}" checked></td>
+      <td>${escapeHtml(tx.trans_type || '')}</td>
+      <td>${escapeHtml((tx.created_date || '').slice(0, 16))}</td>
+      <td>${buy}</td>
+      <td>${sell}</td>
+      <td>${fee}</td>
+      <td>${escapeHtml(tx.exchange || '')}</td>
+      <td>${escapeHtml(tx.comment || '')}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function checkImportDuplicates(transactions) {
+  try {
+    const data = await api('api/import/check-duplicates', {
+      method: 'POST',
+      body: JSON.stringify({ transactions }),
+    });
+    state.importState.duplicateIndices = data.duplicate_indices || [];
+    const banner = byId('import-duplicate-banner');
+    if (data.duplicate_count > 0) {
+      banner.innerHTML = `<div class="import-warning"><strong>${data.duplicate_count} potential duplicate(s)</strong> found in your ledger. Duplicates are unchecked by default — re-check to import anyway.</div>`;
+      banner.classList.remove('hidden');
+      // Uncheck duplicate rows
+      for (const idx of data.duplicate_indices) {
+        const row = byId('import-preview-table').querySelector(`tr[data-idx="${idx}"]`);
+        if (row) {
+          row.classList.add('import-duplicate-row');
+          const cb = row.querySelector('.import-row-check');
+          if (cb) cb.checked = false;
+        }
+      }
+    } else {
+      banner.classList.add('hidden');
+    }
+  } catch {}
+}
+
+async function handleImportCommit() {
+  const btn = byId('import-commit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Importing...';
+
+  const preview = state.importState.preview;
+  if (!preview) return;
+
+  // Collect unchecked indices
+  const checkboxes = byId('import-preview-table').querySelectorAll('.import-row-check');
+  const skipIndices = [];
+  checkboxes.forEach(cb => { if (!cb.checked) skipIndices.push(Number(cb.dataset.idx)); });
+
+  try {
+    const result = await api('api/import/commit', {
+      method: 'POST',
+      body: JSON.stringify({
+        transactions: preview.transactions,
+        parser_name: preview.parser_used,
+        filename: preview.filename,
+        skip_indices: skipIndices,
+      }),
+    });
+
+    byId('import-result-banner').innerHTML = `
+      <div class="import-success">
+        <h3>Import Complete</h3>
+        <p><strong>${result.imported}</strong> transactions imported, <strong>${result.skipped}</strong> skipped.</p>
+        <p class="muted">Source: ${escapeHtml(result.parser_name)} — ${escapeHtml(result.filename)}</p>
+      </div>`;
+    showImportStep(3);
+    loadImportHistory();
+  } catch (error) {
+    byId('import-result-banner').innerHTML = `<div class="import-error"><p>${escapeHtml(error.message)}</p></div>`;
+    showImportStep(3);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Import Transactions';
+  }
+}
+
+async function loadImportHistory() {
+  try {
+    const data = await api('api/import/history');
+    const list = byId('import-history-list');
+    const imports = data.imports || [];
+    if (!imports.length) {
+      list.innerHTML = '<p class="muted">No imports yet.</p>';
+      return;
+    }
+    list.innerHTML = imports.map(entry => `
+      <div class="history-entry">
+        <div class="history-entry-heading">
+          <span class="history-entry-title">${escapeHtml(entry.parser_name || 'unknown')} — ${escapeHtml(entry.filename || '')}</span>
+          <span class="history-entry-date">${escapeHtml((entry.timestamp || '').slice(0, 16))}</span>
+        </div>
+        <p class="muted">${entry.imported} imported, ${entry.skipped} skipped</p>
+      </div>`).join('');
+  } catch {}
+}
+
+function resetImportForm() {
+  state.importState.preview = null;
+  state.importState.duplicateIndices = [];
+  byId('import-file').value = '';
+  byId('import-parser').value = '';
+  byId('import-wallet-name').value = '';
+  byId('import-withdraw-to').value = '';
+  byId('import-status').textContent = '';
+  byId('import-duplicate-banner').classList.add('hidden');
+  updateImportWalletField();
+  showImportStep(1);
+}
+
+function bindImportEvents() {
+  byId('import-upload-form').addEventListener('submit', handleImportUpload);
+  byId('import-parser').addEventListener('change', updateImportWalletField);
+  byId('import-commit-btn').addEventListener('click', handleImportCommit);
+  byId('import-back-btn').addEventListener('click', () => showImportStep(1));
+  byId('import-another-btn').addEventListener('click', resetImportForm);
+}
+
+bindImportEvents();
 
 state.currentPage = currentRouteFromLocation();
 bindEvents();
