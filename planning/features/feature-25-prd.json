@@ -1,0 +1,132 @@
+{
+  "branchName": "feature/web-wallet-verification-hardening",
+  "projectName": "Wallet Verification Hardening",
+  "description": "Harden the shipped wallet-verification flow by introducing Decimal-safe BTC arithmetic, real gap-limit-based discovery semantics, explicit confirmed-versus-unconfirmed verification policy, and verification-path performance and contract cleanup so the wallet and dashboard Verified posture remains trustworthy as operator usage grows.",
+  "timing": {
+    "draftedOn": "2026-03-26",
+    "plannedEarliestExecution": "2026-03-27",
+    "gatingCondition": "Proceed after Feature-23 merge so hardening work can target the shipped wallet and dashboard verification surfaces directly."
+  },
+  "principles": [
+    "Keep the Core-plus-Electrum verification architecture intact",
+    "Prefer correctness and operator trust over new convenience features",
+    "Implement the scan semantics that the UI and PRD already claim",
+    "Make pending or unconfirmed balance policy explicit rather than implicit",
+    "Reduce silent stringly-typed state where narrow enums can enforce consistency"
+  ],
+  "techStack": {
+    "backendLanguage": "Python 3.11+",
+    "backendFramework": "FastAPI with existing wallet verification service seams",
+    "frontend": "Existing dashboard and wallet detail verification surfaces",
+    "testing": "pytest service/API tests plus targeted browser smoke coverage",
+    "database": "PostgreSQL primary, SQLite supported",
+    "coreDependencies": "Existing Bitcoin Core descriptor RPC flow, Electrum-compatible balance queries, and shipped Feature-23 verification persistence"
+  },
+  "userStories": [
+    {
+      "id": "WVH-001",
+      "title": "Decimal-safe verified balance and drift arithmetic",
+      "acceptanceCriteria": [
+        "Replace float-sensitive verified balance and drift calculations with Decimal-safe BTC arithmetic or a satoshi-first comparison model",
+        "Prevent false drift_detected or false verified outcomes caused by IEEE 754 rounding",
+        "Keep API payloads stable for web clients while tightening internal comparison semantics"
+      ],
+      "priority": 1,
+      "estimatedLines": "+90/-40",
+      "testStrategy": "pytest verification-service tests covering exact-match, tiny rounding edge cases, and drift thresholds",
+      "passes": false
+    },
+    {
+      "id": "WVH-002",
+      "title": "Real gap-limit-based discovery semantics",
+      "acceptanceCriteria": [
+        "Make gap_limit materially affect address discovery rather than only storing it as metadata",
+        "Support iterative scanning or equivalent semantics that honor the declared discovery policy",
+        "Persist enough scan metadata to explain where and why a scan stopped",
+        "Keep operator ceilings and safety bounds in place so deep scans remain bounded"
+      ],
+      "priority": 2,
+      "estimatedLines": "+160/-50",
+      "testStrategy": "pytest verification-service tests with sparse/used-address fixtures and ceiling-hit scenarios",
+      "passes": false
+    },
+    {
+      "id": "WVH-003",
+      "title": "Confirmed versus unconfirmed balance policy",
+      "acceptanceCriteria": [
+        "Define whether verification compares ledger balance to confirmed-only chain balance or to confirmed-plus-unconfirmed balance",
+        "If unconfirmed funds are considered, surface that fact explicitly in the recorded result and UI",
+        "Avoid a silent pass or drift outcome that hides pending funds semantics from the operator"
+      ],
+      "priority": 3,
+      "estimatedLines": "+70/-20",
+      "testStrategy": "pytest service and route tests for confirmed-only, pending-only, and mixed-balance scenarios",
+      "passes": false
+    },
+    {
+      "id": "WVH-004",
+      "title": "Verification-path performance cleanup",
+      "acceptanceCriteria": [
+        "Reduce obvious repeated DB or table-initialization work on wallet and dashboard verification reads",
+        "Avoid redundant per-wallet verification lookups when building the portfolio dashboard",
+        "Preserve the shipped Electrum connection reuse improvements and extend cleanup only where it materially improves operator-facing responsiveness"
+      ],
+      "priority": 4,
+      "estimatedLines": "+110/-60",
+      "testStrategy": "pytest unit tests plus focused profiling or call-count assertions where practical",
+      "passes": false
+    },
+    {
+      "id": "WVH-005",
+      "title": "Typed verification status and coverage contracts",
+      "acceptanceCriteria": [
+        "Replace the loosest verification status and coverage strings with typed enums or Literal-style constraints where practical",
+        "Keep route, persistence, and UI code aligned on one canonical set of verification state values",
+        "Avoid regressions in the shipped wallet and dashboard badge behavior"
+      ],
+      "priority": 5,
+      "estimatedLines": "+70/-30",
+      "testStrategy": "pytest model/API tests ensuring valid states serialize cleanly and invalid states are rejected",
+      "passes": false
+    }
+  ],
+  "riskAssessment": {
+    "high": [
+      "If gap-limit semantics remain weaker than the UI implies, operators may over-trust the Verified posture on deeper wallets"
+    ],
+    "medium": [
+      "Changing confirmed versus unconfirmed balance policy can shift operator-visible results and needs careful rollout language",
+      "Internal arithmetic and enum tightening can create subtle regressions if persistence and UI state handling drift out of sync"
+    ],
+    "low": [
+      "The architecture is already proven on real wallets; this phase is about hardening rather than proving viability"
+    ]
+  },
+  "preFlightChecklist": [
+    "Decide whether the verified balance contract is satoshi-first internally or Decimal-first with exact quantization at the boundaries",
+    "Define the exact stop condition for gap-limit discovery so the implementation and UI claim match",
+    "Lock the initial confirmed-versus-unconfirmed balance policy and operator wording before changing dashboard or wallet badge semantics",
+    "Identify the minimum dashboard and wallet-path query cleanup needed before adding more verification-derived surfaces"
+  ],
+  "openQuestions": [
+    "Should the default verification result compare against confirmed-only balance, with pending funds surfaced separately as operator context?",
+    "What exact iterative scan policy best matches the current first-run ceiling prompt while remaining understandable to operators?"
+  ],
+  "metrics": {
+    "estimatedTotalLines": "+500/-200",
+    "storiesCount": 5,
+    "filesLikelyModified": [
+      "src/python/web/models_verification.py",
+      "src/python/web/routes/verification.py",
+      "src/python/web/services/electrum_client.py",
+      "src/python/web/services/wallet_verification.py",
+      "src/python/web/services/portfolio.py",
+      "src/python/web/ui/static/app.js",
+      "tests/test_web_verification.py",
+      "tests/test_web_verification_service.py",
+      "tests/test_web_verification_state.py",
+      "tests/test_web_portfolio.py"
+    ],
+    "filesLikelyCreated": []
+  }
+}

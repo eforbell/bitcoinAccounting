@@ -10,20 +10,18 @@ Older story-by-story work logs were intentionally consolidated here because they
 
 ## Current Status
 
-- Current planned feature: **Feature-23 - Descriptor-Based Wallet Verification**
+- Current planned feature: **Feature-25 - Wallet Verification Hardening**
 - Status: **planned**
-- Branch target: `feature/web-descriptor-wallet-verification`
-- Recommended earliest execution from planning: **April 21, 2026**
+- Branch target: `feature/web-wallet-verification-hardening`
+- Recommended earliest execution from planning: **March 27, 2026**
 
-### Feature-23 Story Queue
+### Feature-25 Story Queue
 
-- `WVV-001` Verification domain model and result persistence
-- `WVV-002` Electrum-compatible chain query backend abstraction
-- `WVV-003` Manual descriptor verification session
-- `WVV-004` Wallet detail and dashboard verification surfaces
-- `WVV-005` Optional remembered verification sources
-- `WVV-006` Sparrow-aware source integration path
-- `WVV-007` Integrity findings and alert integration
+- `WVH-001` Decimal-safe verified balance and drift arithmetic
+- `WVH-002` Real gap-limit discovery semantics
+- `WVH-003` Confirmed versus unconfirmed balance policy
+- `WVH-004` Verification-path performance cleanup
+- `WVH-005` Typed verification status and coverage contracts
 
 ## Completed Features
 
@@ -101,6 +99,9 @@ Older story-by-story work logs were intentionally consolidated here because they
 
 - **2026-03-25 - Feature-24: Web Trades and Liquidity View**
   Added a read-only trades page with paginated trade history, per-trade cost basis, exchange liquidity summary, and cost-basis overview cards.
+
+- **2026-03-26 - Feature-23: Descriptor-Based Wallet Verification**
+  Shipped descriptor-based BTC wallet verification using Bitcoin Core descriptor RPCs plus Electrum balance queries, with wallet detail workflow, dashboard `🔰` status, and production validation against real self-custody and multisig holdings without requiring wallet-enabled bitcoind.
 
 ## Planning Backlog
 

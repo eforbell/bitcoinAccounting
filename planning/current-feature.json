@@ -1,44 +1,34 @@
 {
-  "currentFeature": "feature-23",
-  "featureName": "Descriptor-Based Wallet Verification",
-  "prdPath": "planning/features/feature-23-prd.json",
-  "summaryPath": "planning/features/feature-23-summary.md",
-  "branch": "feature/web-descriptor-wallet-verification",
+  "currentFeature": "feature-25",
+  "featureName": "Wallet Verification Hardening",
+  "prdPath": "planning/features/feature-25-prd.json",
+  "summaryPath": "planning/features/feature-25-summary.md",
+  "branch": "feature/web-wallet-verification-hardening",
   "status": "planned",
   "stories": [
     {
-      "id": "WVV-001",
-      "title": "Verification domain model and result persistence",
+      "id": "WVH-001",
+      "title": "Decimal-safe verified balance and drift arithmetic",
       "status": "pending"
     },
     {
-      "id": "WVV-002",
-      "title": "Electrum-compatible chain query backend abstraction",
+      "id": "WVH-002",
+      "title": "Real gap-limit-based discovery semantics",
       "status": "pending"
     },
     {
-      "id": "WVV-003",
-      "title": "Manual descriptor verification session",
+      "id": "WVH-003",
+      "title": "Confirmed versus unconfirmed balance policy",
       "status": "pending"
     },
     {
-      "id": "WVV-004",
-      "title": "Wallet detail and dashboard verification surfaces",
+      "id": "WVH-004",
+      "title": "Verification-path performance cleanup",
       "status": "pending"
     },
     {
-      "id": "WVV-005",
-      "title": "Optional remembered verification sources",
-      "status": "pending"
-    },
-    {
-      "id": "WVV-006",
-      "title": "Sparrow-aware source integration path",
-      "status": "pending"
-    },
-    {
-      "id": "WVV-007",
-      "title": "Integrity findings and alert integration",
+      "id": "WVH-005",
+      "title": "Typed verification status and coverage contracts",
       "status": "pending"
     }
   ],
@@ -218,6 +208,14 @@
       "mergedDate": "2026-03-25",
       "stories": 5,
       "notes": "Optional bitcoind-backed chain status service and dashboard card showing height, sync posture, peer count, mempool summary, freshness, and degraded-state messaging. Includes API coverage and deployment docs for local-node environments."
+    },
+    {
+      "featureId": "feature-23",
+      "featureName": "Descriptor-Based Wallet Verification",
+      "branch": "feature/web-wallet-verification-foundation",
+      "mergedDate": "2026-03-26",
+      "stories": 7,
+      "notes": "Shipped private descriptor-based wallet verification using Bitcoin Core descriptor RPCs plus Electrum balance checks, wallet detail verification workflow, dashboard 🔰 verification posture, and production-proven support across real self-custody and multisig wallets without requiring wallet-enabled bitcoind."
     },
     {
       "featureId": "feature-24",
