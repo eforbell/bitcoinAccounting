@@ -32,6 +32,11 @@ class WebConfig:
     bitcoin_rpc_user: str | None = None
     bitcoin_rpc_password: str | None = None
     bitcoin_rpc_timeout_seconds: float = 3.0
+    electrum_host: str | None = None
+    electrum_port: int | None = None
+    electrum_use_ssl: bool = False
+    electrum_timeout_seconds: float = 5.0
+    verification_recency_days: int = 30
 
 
 def load_web_config() -> WebConfig:
@@ -62,6 +67,18 @@ def load_web_config() -> WebConfig:
     bitcoin_rpc_password = os.getenv("BITCOIN_RPC_PASSWORD")
     rpc_timeout_raw = os.getenv("BITCOIN_RPC_TIMEOUT_SECONDS", "3").strip()
     bitcoin_rpc_timeout_seconds = float(rpc_timeout_raw)
+    electrum_host = os.getenv("BITCOIN_ELECTRUM_HOST")
+    electrum_port_raw = os.getenv("BITCOIN_ELECTRUM_PORT")
+    electrum_port = int(electrum_port_raw) if electrum_port_raw else None
+    electrum_ssl_raw = os.getenv("BITCOIN_ELECTRUM_SSL", "0").strip().lower()
+    electrum_use_ssl = electrum_ssl_raw in {"1", "true", "on", "yes"}
+    electrum_timeout_raw = os.getenv("BITCOIN_ELECTRUM_TIMEOUT_SECONDS", "5").strip()
+    electrum_timeout_seconds = float(electrum_timeout_raw)
+    verification_recency_raw = os.getenv(
+        "BITCOIN_ACCOUNTING_VERIFICATION_RECENCY_DAYS",
+        "30",
+    ).strip()
+    verification_recency_days = int(verification_recency_raw)
     return WebConfig(
         app_env=app_env,
         web_base_path=web_base_path,
@@ -80,6 +97,11 @@ def load_web_config() -> WebConfig:
         bitcoin_rpc_user=bitcoin_rpc_user,
         bitcoin_rpc_password=bitcoin_rpc_password,
         bitcoin_rpc_timeout_seconds=bitcoin_rpc_timeout_seconds,
+        electrum_host=electrum_host,
+        electrum_port=electrum_port,
+        electrum_use_ssl=electrum_use_ssl,
+        electrum_timeout_seconds=electrum_timeout_seconds,
+        verification_recency_days=verification_recency_days,
     )
 
 
@@ -116,6 +138,12 @@ def validate_web_config(config: WebConfig) -> None:
 
     if config.bitcoin_rpc_timeout_seconds <= 0:
         raise WebConfigurationError("Bitcoin RPC timeout must be greater than zero.")
+
+    if config.electrum_timeout_seconds <= 0:
+        raise WebConfigurationError("Electrum timeout must be greater than zero.")
+
+    if config.verification_recency_days <= 0:
+        raise WebConfigurationError("Verification recency days must be greater than zero.")
 
     normalized_base_path(config.web_base_path)
 

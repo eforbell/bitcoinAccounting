@@ -116,6 +116,11 @@
             <span class="summary-label">Recent Activity</span>
             <strong id="dashboard-recent-count">0 tx</strong>
           </article>
+          <article id="dashboard-verification-card" class="summary-card">
+            <span class="summary-label">Bitcoin Verification</span>
+            <strong id="dashboard-verification">🔰 Unverified</strong>
+            <p id="dashboard-verification-meta" class="muted">No eligible wallet posture yet.</p>
+          </article>
         </section>
 
         <section id="custody-warning" class="policy-banner hidden"></section>
@@ -229,6 +234,94 @@
             <span class="summary-label">% of Stack</span>
             <strong id="wallet-view-pct-card">0%</strong>
           </article>
+        </section>
+
+        <section class="panel subpanel">
+          <div class="panel-heading">
+            <div>
+              <h3>Wallet Verification</h3>
+              <p>Descriptor-based balance verification against your local Bitcoin Core and Electrum stack.</p>
+            </div>
+            <div id="wallet-verification-chip" class="chain-status-chip">unverified</div>
+          </div>
+
+          <div class="verification-summary">
+            <article class="summary-card verification-card verification-card-featured">
+              <span class="summary-label">Current Posture</span>
+              <strong id="wallet-verification-status">Unverified</strong>
+              <p id="wallet-verification-caption" class="muted">No verification has been run for this wallet yet.</p>
+            </article>
+            <article class="summary-card verification-card">
+              <span class="summary-label">Coverage</span>
+              <strong id="wallet-verification-coverage">-</strong>
+              <p id="wallet-verification-scan" class="muted">No scan metadata yet.</p>
+            </article>
+            <article class="summary-card verification-card">
+              <span class="summary-label">Verified Balance</span>
+              <strong id="wallet-verification-balance">-</strong>
+              <p id="wallet-verification-drift" class="muted">No comparison result yet.</p>
+            </article>
+          </div>
+
+          <div id="wallet-verification-message" class="status-line">Paste a wallet descriptor to run the first verification.</div>
+
+          <div class="verification-grid">
+            <section class="panel verification-subpanel">
+              <div class="panel-heading">
+                <div>
+                  <h3>Manual Run</h3>
+                  <p>Use a combined wallet descriptor when possible. First-run scan depth defaults to 50 addresses.</p>
+                </div>
+              </div>
+              <form id="wallet-verification-form" class="stack">
+                <label class="field">
+                  <span>Descriptor Input Mode</span>
+                  <select id="wallet-verification-mode">
+                    <option value="combined">Combined wallet descriptor</option>
+                    <option value="branches">Separate receive and change descriptors</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Combined Output Descriptor</span>
+                  <textarea id="wallet-verification-descriptor" rows="4" placeholder="wpkh([fingerprint/path]xpub.../&lt;0;1&gt;/*)#checksum"></textarea>
+                </label>
+                <div id="wallet-verification-branch-fields" class="stack hidden">
+                  <label class="field">
+                    <span>Receive / External Descriptor</span>
+                    <textarea id="wallet-verification-external" rows="3" placeholder="wpkh([fingerprint/path]xpub.../0/*)#checksum"></textarea>
+                  </label>
+                  <label class="field">
+                    <span>Change / Internal Descriptor</span>
+                    <textarea id="wallet-verification-change" rows="3" placeholder="wpkh([fingerprint/path]xpub.../1/*)#checksum"></textarea>
+                  </label>
+                </div>
+                <p id="wallet-verification-eligibility" class="muted">Use a combined wallet descriptor when possible. First-run scan depth defaults to 50 addresses.</p>
+                <div class="filters compact">
+                  <label class="field">
+                    <span>First Scan Ceiling</span>
+                    <input id="wallet-verification-ceiling" type="number" min="1" max="5000" value="50">
+                  </label>
+                </div>
+                <div class="actions-row">
+                  <button id="wallet-verification-submit" class="button" type="submit">Run Verification</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="panel verification-subpanel">
+              <div class="panel-heading">
+                <div>
+                  <h3>Recent Runs</h3>
+                  <p>Latest verification attempts for this wallet.</p>
+                </div>
+              </div>
+              <div id="wallet-verification-history" class="stack">
+                <div class="list-item">
+                  <div class="list-item-meta">No verification history yet.</div>
+                </div>
+              </div>
+            </section>
+          </div>
         </section>
 
         <section class="panel subpanel">

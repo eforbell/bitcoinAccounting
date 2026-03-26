@@ -5,6 +5,7 @@ const state = {
   chainStatus: null,
   chainStatusRefreshHandle: null,
   walletDetail: null,
+  walletVerificationHistory: null,
   walletsList: [],
   currentPage: 'dashboard',
   currentWalletId: null,
@@ -379,6 +380,7 @@ function renderDashboard(dashboard) {
   byId('dashboard-active-wallets').textContent = String(dashboard.summary.active_wallet_count);
   byId('dashboard-recent-count').textContent = `${dashboard.recent_transactions.length} tx`;
   byId('hero-wallet-count').textContent = `${dashboard.summary.active_wallet_count} / ${dashboard.summary.wallet_count}`;
+  renderDashboardVerificationPosture(dashboard.portfolio_verification);
 
   const warning = byId('custody-warning');
   if (dashboard.using_inferred_custody) {
@@ -407,6 +409,7 @@ function renderDashboard(dashboard) {
             <div class="wallet-title">${escapeHtml(wallet.wallet_id)}</div>
             <div class="tx-detail">
               <span class="wallet-badge">${escapeHtml(wallet.custody)}</span>
+              ${renderWalletVerificationBadge(wallet)}
               <span>${escapeHtml(wallet.wallet_type)}</span>
               ${wallet.description ? `<span>${escapeHtml(wallet.description)}</span>` : ''}
               ${wallet.active ? '' : '<span>inactive</span>'}
@@ -428,6 +431,54 @@ function renderDashboard(dashboard) {
   }
 
   byId('recent-transactions-list').innerHTML = renderTransactionRows(dashboard.recent_transactions);
+}
+
+function renderDashboardVerificationPosture(posture) {
+  const card = byId('dashboard-verification-card');
+  const label = byId('dashboard-verification');
+  const meta = byId('dashboard-verification-meta');
+  card.classList.remove('summary-card-verified', 'summary-card-warning', 'summary-card-danger');
+
+  if (!posture || posture.eligible_wallet_count === 0) {
+    label.textContent = '🔰 Ineligible';
+    meta.textContent = 'No active self-custodied or multisig wallets with BTC balance are eligible yet.';
+    return;
+  }
+
+  if (posture.status === 'verified') {
+    card.classList.add('summary-card-verified');
+    label.textContent = '🔰 Verified';
+    meta.textContent = `${posture.verified_wallet_count}/${posture.eligible_wallet_count} eligible wallets verified within ${posture.recency_window_days} days.`;
+    return;
+  }
+
+  if (posture.status === 'failed' || posture.status === 'drift_detected') {
+    card.classList.add('summary-card-danger');
+  } else {
+    card.classList.add('summary-card-warning');
+  }
+
+  const problemCount = posture.failed_wallet_count + posture.drift_wallet_count + posture.partial_wallet_count + posture.stale_wallet_count;
+  label.textContent = '🔰 Not Fully Verified';
+  meta.textContent = `${posture.verified_wallet_count}/${posture.eligible_wallet_count} eligible wallets verified. ${problemCount} need attention.`;
+}
+
+function renderWalletVerificationBadge(wallet) {
+  if (!wallet.verification_eligible) return '';
+  const status = wallet.verification_status;
+  if (!status) {
+    return '<span class="wallet-badge wallet-badge-warning">🔰 unverified</span>';
+  }
+  const label = verificationStatusLabel(status, wallet.verification_is_recent);
+  let badgeClass = 'wallet-badge-warning';
+  if (status === 'verified' && wallet.verification_is_recent && wallet.verification_coverage === 'full') {
+    badgeClass = 'wallet-badge-verified';
+  } else if (status === 'failed') {
+    badgeClass = 'wallet-badge-danger';
+  } else if (status === 'drift_detected') {
+    badgeClass = 'wallet-badge-danger';
+  }
+  return `<span class="wallet-badge ${badgeClass}">🔰 ${escapeHtml(label.toLowerCase())}</span>`;
 }
 
 async function loadDashboard() {
@@ -478,6 +529,194 @@ function renderTransactionRows(transactions) {
   }).join('');
 }
 
+function verificationStatusLabel(status, isRecent = true) {
+  if (!status) return 'Unverified';
+  if (status === 'verified' && !isRecent) return 'Stale';
+  if (status === 'verified') return 'Verified';
+  if (status === 'drift_detected') return 'Drift Detected';
+  if (status === 'failed') return 'Failed';
+  if (status === 'not_meaningful') return 'Not Meaningful';
+  return status.replaceAll('_', ' ').replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function verificationTone(latest) {
+  if (!latest) return 'idle';
+  if (latest.status === 'verified' && latest.is_recent) return 'verified';
+  if (latest.status === 'verified' && !latest.is_recent) return 'stale';
+  if (latest.status === 'drift_detected') return 'drift';
+  if (latest.status === 'failed') return 'failed';
+  if (latest.status === 'not_meaningful') return 'not-meaningful';
+  if (latest.coverage === 'partial') return 'partial';
+  return 'neutral';
+}
+
+function applyVerificationChip(el, latest) {
+  el.classList.remove('chip-live', 'chip-syncing', 'chip-down');
+  const tone = verificationTone(latest);
+  if (tone === 'verified') el.classList.add('chip-live');
+  if (tone === 'stale' || tone === 'drift' || tone === 'partial' || tone === 'not-meaningful') {
+    el.classList.add('chip-syncing');
+  }
+  if (tone === 'failed') el.classList.add('chip-down');
+}
+
+function verificationRunChipClass(run) {
+  const tone = verificationTone(run);
+  if (tone === 'verified') return 'is-verified';
+  if (tone === 'drift') return 'is-drift';
+  if (tone === 'partial') return 'is-partial';
+  if (tone === 'stale') return 'is-stale';
+  if (tone === 'not-meaningful') return 'is-not-meaningful';
+  if (tone === 'failed') return 'is-failed';
+  return '';
+}
+
+function formatVerificationTime(value) {
+  if (!value) return 'Unknown time';
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return value;
+  return dt.toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function renderWalletVerificationEligibility(eligibility) {
+  const helperEl = byId('wallet-verification-eligibility');
+  const modeEl = byId('wallet-verification-mode');
+  const descriptorEl = byId('wallet-verification-descriptor');
+  const externalEl = byId('wallet-verification-external');
+  const changeEl = byId('wallet-verification-change');
+  const ceilingEl = byId('wallet-verification-ceiling');
+  const submitEl = byId('wallet-verification-submit');
+
+  const eligible = !eligibility || eligibility.eligible;
+  const disabled = !eligible;
+  modeEl.disabled = disabled;
+  descriptorEl.disabled = disabled;
+  externalEl.disabled = disabled;
+  changeEl.disabled = disabled;
+  ceilingEl.disabled = disabled;
+  submitEl.disabled = disabled;
+
+  if (!eligibility) {
+    helperEl.textContent = 'Use a combined wallet descriptor when possible. First-run scan depth defaults to 50 addresses.';
+    return;
+  }
+
+  ceilingEl.value = String(eligibility.recommended_first_scan_ceiling || 50);
+  helperEl.textContent = eligibility.eligible
+    ? 'Eligible for descriptor-based verification. Combined wallet descriptors are preferred, but receive/change descriptors are also supported.'
+    : (eligibility.reason || 'This wallet is not eligible for descriptor-based verification.');
+}
+
+function updateVerificationModeUI() {
+  const mode = byId('wallet-verification-mode').value;
+  const branchFields = byId('wallet-verification-branch-fields');
+  const combinedField = byId('wallet-verification-descriptor').closest('.field');
+  const useBranches = mode === 'branches';
+  branchFields.classList.toggle('hidden', !useBranches);
+  combinedField.classList.toggle('hidden', useBranches);
+}
+
+function renderWalletVerificationSummary(latest, walletBalance) {
+  const chip = byId('wallet-verification-chip');
+  const statusEl = byId('wallet-verification-status');
+  const captionEl = byId('wallet-verification-caption');
+  const coverageEl = byId('wallet-verification-coverage');
+  const scanEl = byId('wallet-verification-scan');
+  const balanceEl = byId('wallet-verification-balance');
+  const driftEl = byId('wallet-verification-drift');
+  const messageEl = byId('wallet-verification-message');
+  const ceilingInput = byId('wallet-verification-ceiling');
+
+  applyVerificationChip(chip, latest);
+
+  if (!latest) {
+    chip.textContent = 'unverified';
+    statusEl.textContent = 'Unverified';
+    captionEl.textContent = 'No verification has been run for this wallet yet.';
+    coverageEl.textContent = '-';
+    scanEl.textContent = 'No scan metadata yet.';
+    balanceEl.textContent = `${Number(walletBalance || 0).toFixed(8)} BTC ledger`;
+    driftEl.textContent = 'Paste a descriptor and run the first verification.';
+    messageEl.textContent = 'Paste a wallet descriptor to run the first verification.';
+    messageEl.style.color = 'var(--text-muted)';
+    ceilingInput.value = '50';
+    return;
+  }
+
+  const label = verificationStatusLabel(latest.status, latest.is_recent);
+  chip.textContent = label.toLowerCase();
+  statusEl.textContent = label;
+  captionEl.textContent = `${latest.is_recent ? 'Recent under current policy.' : 'Outside the current recency window.'} Last run ${formatVerificationTime(latest.verified_at)}.`;
+  coverageEl.textContent = latest.coverage === 'full' ? 'Full' : latest.coverage === 'partial' ? 'Partial' : latest.coverage;
+
+  const scanBits = [];
+  if (latest.highest_scanned_index != null) scanBits.push(`scanned through #${latest.highest_scanned_index}`);
+  if (latest.scan_ceiling != null) scanBits.push(`ceiling ${latest.scan_ceiling}`);
+  if (latest.gap_limit != null) scanBits.push(`gap ${latest.gap_limit}`);
+  scanEl.textContent = scanBits.length ? scanBits.join(' · ') : 'No scan metadata recorded.';
+
+  if (latest.verified_balance == null) {
+    balanceEl.textContent = '-';
+    driftEl.textContent = latest.warning_text || latest.error_text || 'No verified balance recorded.';
+  } else {
+    const drift = Number(latest.drift_btc || 0);
+    balanceEl.textContent = `${Number(latest.verified_balance).toFixed(8)} BTC`;
+    driftEl.textContent = `Ledger ${Number(latest.ledger_balance || 0).toFixed(8)} BTC · Drift ${drift >= 0 ? '+' : ''}${drift.toFixed(8)} BTC`;
+  }
+
+  messageEl.textContent = latest.error_text || latest.warning_text || `${label} as of ${formatVerificationTime(latest.verified_at)}.`;
+  messageEl.style.color = latest.status === 'failed'
+    ? 'var(--danger)'
+    : (latest.status === 'drift_detected' || !latest.is_recent || latest.coverage === 'partial')
+      ? 'var(--warning)'
+      : 'var(--success)';
+  ceilingInput.value = String(latest.scan_ceiling || 50);
+}
+
+function renderWalletVerificationHistory(data) {
+  state.walletVerificationHistory = data;
+  const list = byId('wallet-verification-history');
+  const runs = (data && data.runs) || [];
+  if (!runs.length) {
+    list.innerHTML = '<div class="list-item"><div class="list-item-meta">No verification history yet.</div></div>';
+    return;
+  }
+
+  list.innerHTML = runs.map((run) => `
+    <div class="list-item verification-list-item">
+      <div class="verification-list-main">
+        <div class="verification-list-title">
+          <span>${escapeHtml(verificationStatusLabel(run.status, run.is_recent))}</span>
+          <span class="verification-run-chip ${verificationRunChipClass(run)}">${escapeHtml(run.coverage)}</span>
+        </div>
+        <div class="tx-detail">
+          <span>${escapeHtml(formatVerificationTime(run.verified_at))}</span>
+          ${run.scan_ceiling != null ? `<span>ceiling ${escapeHtml(String(run.scan_ceiling))}</span>` : ''}
+          ${run.highest_scanned_index != null ? `<span>through #${escapeHtml(String(run.highest_scanned_index))}</span>` : ''}
+        </div>
+        <div class="list-item-meta">
+          ${run.verified_balance == null ? escapeHtml(run.warning_text || run.error_text || 'No verified balance recorded.') : `${Number(run.verified_balance).toFixed(8)} BTC vs ledger ${Number(run.ledger_balance || 0).toFixed(8)} BTC`}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadWalletVerificationHistory(walletId) {
+  try {
+    const data = await api(`api/verification/wallets/${encodeURIComponent(walletId)}`);
+    renderWalletVerificationHistory(data);
+  } catch (error) {
+    byId('wallet-verification-history').innerHTML = `<div class="list-item"><div class="list-item-meta">${escapeHtml(error.message)}</div></div>`;
+  }
+}
+
 async function loadWalletDetail(walletId) {
   try {
     const params = new URLSearchParams({ coin: 'BTC', recent_limit: '20' });
@@ -496,7 +735,10 @@ async function loadWalletDetail(walletId) {
     byId('wallet-view-tx-count').textContent = String(detail.recent_transactions.length);
     byId('wallet-view-pct-card').textContent = `${w.percentage.toFixed(1)}%`;
 
+    renderWalletVerificationEligibility(detail.verification_eligibility);
+    renderWalletVerificationSummary(detail.latest_verification, w.balance);
     byId('wallet-tx-list').innerHTML = renderTransactionRows(detail.recent_transactions);
+    await loadWalletVerificationHistory(walletId);
 
     const viewAllLink = byId('wallet-view-all-link');
     viewAllLink.href = `${appBase()}ledger?wallet=${encodeURIComponent(walletId)}`;
@@ -507,6 +749,13 @@ async function loadWalletDetail(walletId) {
       navigateTo('ledger');
     };
   } catch (error) {
+    renderWalletVerificationEligibility({
+      eligible: false,
+      reason: 'Wallet verification is unavailable right now.',
+      recommended_first_scan_ceiling: 50,
+    });
+    renderWalletVerificationSummary(null, 0);
+    byId('wallet-verification-history').innerHTML = '<div class="list-item"><div class="list-item-meta">Verification history unavailable.</div></div>';
     byId('wallet-tx-list').innerHTML = `<div class="tx-row"><div class="list-item-meta">${escapeHtml(error.message)}</div></div>`;
   }
 }
@@ -813,6 +1062,7 @@ function renderWalletsList(wallets) {
       <td>${w.active ? 'Active' : 'Inactive'}</td>
       <td>${w.transaction_count}</td>
       <td class="actions-cell">
+        <button class="button button-ghost button-inline" data-wallet-open="${escapeHtml(w.wallet_id)}">Open</button>
         <button class="button button-ghost button-inline" data-wallet-edit="${escapeHtml(w.wallet_id)}">Edit</button>
         <button class="button button-ghost button-inline" data-wallet-toggle="${escapeHtml(w.wallet_id)}" data-active="${w.active}">${w.active ? 'Deactivate' : 'Activate'}</button>
         <button class="button button-ghost button-inline" data-wallet-rename="${escapeHtml(w.wallet_id)}" data-tx-count="${w.transaction_count}">Rename</button>
@@ -821,6 +1071,9 @@ function renderWalletsList(wallets) {
     </tr>
   `).join('');
 
+  for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-open]')) {
+    btn.addEventListener('click', () => navigateToWallet(btn.dataset.walletOpen));
+  }
   for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-edit]')) {
     btn.addEventListener('click', () => openWalletEdit(btn.dataset.walletEdit));
   }
@@ -1138,6 +1391,65 @@ function bindEvents() {
     };
     await loadLedger();
   });
+
+  byId('wallet-verification-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!state.currentWalletId) return;
+
+    const mode = byId('wallet-verification-mode').value;
+    const descriptor = byId('wallet-verification-descriptor').value.trim();
+    const externalDescriptor = byId('wallet-verification-external').value.trim();
+    const changeDescriptor = byId('wallet-verification-change').value.trim();
+    const statusEl = byId('wallet-verification-message');
+    const submitBtn = byId('wallet-verification-submit');
+    const ceilingValue = Number(byId('wallet-verification-ceiling').value || 50);
+
+    if (mode === 'combined' && !descriptor) {
+      statusEl.textContent = 'Paste an output descriptor before running verification.';
+      statusEl.style.color = 'var(--danger)';
+      return;
+    }
+
+    if (mode === 'branches' && !externalDescriptor && !changeDescriptor) {
+      statusEl.textContent = 'Paste at least one receive or change descriptor before running verification.';
+      statusEl.style.color = 'var(--danger)';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Running...';
+    statusEl.textContent = `Running wallet verification for ${state.currentWalletId}...`;
+    statusEl.style.color = 'var(--text-muted)';
+
+    try {
+      const response = await api('api/verification/run', {
+        method: 'POST',
+        body: JSON.stringify({
+          wallet_id: state.currentWalletId,
+          descriptor: mode === 'combined' ? descriptor : null,
+          external_descriptor: mode === 'branches' ? (externalDescriptor || null) : null,
+          change_descriptor: mode === 'branches' ? (changeDescriptor || null) : null,
+          first_scan_ceiling: Math.max(1, Math.floor(ceilingValue || 50)),
+        }),
+      });
+      statusEl.textContent = response.meaningful_to_verify
+        ? `${verificationStatusLabel(response.result.status, response.result.is_recent)} completed.`
+        : 'This wallet has no meaningful on-chain activity to verify yet.';
+      statusEl.style.color = response.result.status === 'failed'
+        ? 'var(--danger)'
+        : (response.result.status === 'drift_detected' ? 'var(--warning)' : 'var(--success)');
+      await loadWalletDetail(state.currentWalletId);
+    } catch (error) {
+      statusEl.textContent = error.message;
+      statusEl.style.color = 'var(--danger)';
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Run Verification';
+    }
+  });
+
+  byId('wallet-verification-mode').addEventListener('change', updateVerificationModeUI);
+  updateVerificationModeUI();
 
   byId('tx-detail-close').addEventListener('click', closeTransactionDetail);
 

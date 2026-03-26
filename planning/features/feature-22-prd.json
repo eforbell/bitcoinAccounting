@@ -35,7 +35,8 @@
       "priority": 1,
       "estimatedLines": "+150/-0",
       "testStrategy": "pytest config and service tests covering enabled, disabled, and unreachable-node cases",
-      "passes": false
+      "passes": true,
+      "closureNotes": "Added optional Bitcoin RPC config and request-safe chain status service seam without making the rest of the web app depend on node availability."
     },
     {
       "id": "BTC-002",
@@ -49,7 +50,8 @@
       "priority": 2,
       "estimatedLines": "+140/-0",
       "testStrategy": "pytest API tests for available, syncing, unavailable, and disabled states",
-      "passes": false
+      "passes": true,
+      "closureNotes": "Shipped canonical chain-status payloads and API coverage for available, syncing, unavailable, and disabled states."
     },
     {
       "id": "BTC-003",
@@ -63,7 +65,8 @@
       "priority": 3,
       "estimatedLines": "+170/-0",
       "testStrategy": "frontend smoke coverage plus targeted rendering tests for normal and degraded states",
-      "passes": false
+      "passes": true,
+      "closureNotes": "Integrated the Bitcoin Timechain card into the dashboard with compact operator-facing metrics and degraded-state rendering."
     },
     {
       "id": "BTC-004",
@@ -77,7 +80,8 @@
       "priority": 4,
       "estimatedLines": "+90/-0",
       "testStrategy": "manual behavior verification plus targeted stale-state tests",
-      "passes": false
+      "passes": true,
+      "closureNotes": "Implemented freshness/stale indicators and conservative refresh behavior so slower node calls do not dominate dashboard interaction."
     },
     {
       "id": "BTC-005",
@@ -91,7 +95,8 @@
       "priority": 5,
       "estimatedLines": "+70/-0",
       "testStrategy": "manual doc review + deployment checklist validation",
-      "passes": false
+      "passes": true,
+      "closureNotes": "Documented local bitcoind environment variables and scope boundaries, and aligned planning metadata with the shipped feature."
     }
   ],
   "riskAssessment": {

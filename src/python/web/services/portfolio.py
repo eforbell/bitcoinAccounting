@@ -13,6 +13,11 @@ from web.models import (
     WalletBalanceResource,
     WalletDetailResponse,
 )
+from web.services.wallet_verification import (
+    build_portfolio_verification_posture,
+    get_latest_wallet_verification,
+    get_wallet_verification_eligibility,
+)
 
 _CUSTODY_PRIORITY = {
     "self-custodied": 0,
@@ -79,6 +84,7 @@ def build_portfolio_dashboard(
         "unknown": 0.0,
     }
     wallet_rows: list[WalletBalanceResource] = []
+    eligible_wallet_ids: list[str] = []
 
     for wallet in visible_wallets:
         wallet_id = str(wallet.get("wallet_id", ""))
@@ -86,6 +92,8 @@ def build_portfolio_dashboard(
         custody = _normalize_custody(wallet.get("custody"))
         percentage = (wallet_balance / total_balance * 100) if total_balance > 0 else 0.0
         active = bool(wallet.get("active", True))
+        eligibility = get_wallet_verification_eligibility(accounts, wallet_id)
+        latest_verification = get_latest_wallet_verification(accounts.backend, wallet_id)
 
         if wallet.get("type") == "unknown":
             using_inferred_custody = True
@@ -99,8 +107,15 @@ def build_portfolio_dashboard(
                 active=active,
                 balance=wallet_balance,
                 percentage=percentage,
+                verification_eligible=eligibility.eligible,
+                verification_status=latest_verification.status if latest_verification is not None else None,
+                verification_coverage=latest_verification.coverage if latest_verification is not None else None,
+                verification_is_recent=latest_verification.is_recent if latest_verification is not None else None,
             )
         )
+
+        if active and wallet_balance > 0 and eligibility.eligible:
+            eligible_wallet_ids.append(wallet_id)
 
         if wallet_balance > 0:
             custody_totals[custody] = custody_totals.get(custody, 0.0) + wallet_balance
@@ -125,6 +140,10 @@ def build_portfolio_dashboard(
     ]
 
     wallet_rows.sort(key=lambda row: (-row.balance, row.wallet_id.lower()))
+    portfolio_verification = build_portfolio_verification_posture(
+        accounts.backend,
+        eligible_wallet_ids=eligible_wallet_ids,
+    )
 
     return PortfolioDashboardResponse(
         summary=PortfolioSummaryResource(
@@ -136,6 +155,7 @@ def build_portfolio_dashboard(
         ),
         custody_breakdown=custody_rows,
         wallets=wallet_rows,
+        portfolio_verification=portfolio_verification,
         recent_transactions=recent_transactions,
         using_inferred_custody=using_inferred_custody,
     )
@@ -178,5 +198,7 @@ def build_wallet_detail(
 
     return WalletDetailResponse(
         wallet=wallet_resource,
+        verification_eligibility=get_wallet_verification_eligibility(accounts, wallet_id),
+        latest_verification=get_latest_wallet_verification(accounts.backend, wallet_id),
         recent_transactions=recent_transactions,
     )

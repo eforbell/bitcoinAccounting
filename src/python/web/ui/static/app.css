@@ -354,6 +354,21 @@ h3 {
   border-color: rgba(247, 147, 26, 0.18);
 }
 
+.summary-card-verified {
+  background: linear-gradient(145deg, rgba(120, 192, 145, 0.16), rgba(247, 147, 26, 0.08));
+  border-color: rgba(120, 192, 145, 0.24);
+}
+
+.summary-card-warning {
+  background: linear-gradient(145deg, rgba(255, 183, 71, 0.14), rgba(247, 147, 26, 0.08));
+  border-color: rgba(255, 183, 71, 0.22);
+}
+
+.summary-card-danger {
+  background: linear-gradient(145deg, rgba(255, 125, 107, 0.14), rgba(247, 147, 26, 0.06));
+  border-color: rgba(255, 125, 107, 0.22);
+}
+
 .chain-panel {
   background: linear-gradient(180deg, rgba(247, 147, 26, 0.03), rgba(17, 17, 17, 0.62));
 }
@@ -524,6 +539,24 @@ h3 {
   border: 1px solid rgba(247, 147, 26, 0.2);
 }
 
+.wallet-badge-verified {
+  background: rgba(120, 192, 145, 0.12);
+  border-color: rgba(120, 192, 145, 0.22);
+  color: #9de27a;
+}
+
+.wallet-badge-warning {
+  background: rgba(255, 183, 71, 0.12);
+  border-color: rgba(255, 183, 71, 0.22);
+  color: var(--warning);
+}
+
+.wallet-badge-danger {
+  background: rgba(255, 125, 107, 0.12);
+  border-color: rgba(255, 125, 107, 0.22);
+  color: var(--danger);
+}
+
 .wallet-balance-wrap {
   text-align: right;
   flex-shrink: 0;
@@ -578,7 +611,8 @@ h3 {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-width: 0;
   border: 1px solid rgba(244, 241, 234, 0.12);
@@ -590,6 +624,11 @@ select {
 
 input::placeholder {
   color: rgba(244, 241, 234, 0.42);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 7rem;
 }
 
 .actions-row {
@@ -630,6 +669,89 @@ input::placeholder {
   border-radius: 0.95rem;
   background: rgba(255, 183, 71, 0.12);
   border: 1px solid rgba(255, 183, 71, 0.2);
+}
+
+.verification-summary,
+.verification-grid {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.verification-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 0.9rem;
+}
+
+.verification-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0.9rem;
+}
+
+.verification-card {
+  min-height: 8.6rem;
+}
+
+.verification-card-featured {
+  background: linear-gradient(145deg, rgba(247, 147, 26, 0.16), rgba(120, 192, 145, 0.08));
+  border-color: rgba(247, 147, 26, 0.22);
+}
+
+.verification-subpanel {
+  padding: 1rem;
+}
+
+.verification-list-item {
+  align-items: flex-start;
+}
+
+.verification-list-main {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.verification-list-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  font-weight: 600;
+}
+
+.verification-run-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 241, 234, 0.12);
+  background: rgba(244, 241, 234, 0.05);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.verification-run-chip.is-verified {
+  color: #9de27a;
+  border-color: rgba(157, 226, 122, 0.24);
+  background: rgba(157, 226, 122, 0.1);
+}
+
+.verification-run-chip.is-drift,
+.verification-run-chip.is-partial,
+.verification-run-chip.is-stale,
+.verification-run-chip.is-not-meaningful {
+  color: var(--warning);
+  border-color: rgba(255, 183, 71, 0.24);
+  background: rgba(255, 183, 71, 0.1);
+}
+
+.verification-run-chip.is-failed,
+.verification-run-chip.is-error {
+  color: var(--danger);
+  border-color: rgba(255, 125, 107, 0.24);
+  background: rgba(255, 125, 107, 0.1);
 }
 
 .toggle-label {
@@ -881,6 +1003,11 @@ th {
 
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .verification-summary,
+  .verification-grid {
+    grid-template-columns: 1fr;
   }
 
   .chain-status-grid {

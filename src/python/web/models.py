@@ -4,16 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
-
-
-class APIModel(BaseModel):
-    """Base model with strict-ish API defaults."""
-
-    model_config = ConfigDict(
-        extra="forbid",
-        populate_by_name=True,
-    )
+from web.model_base import APIModel
+from web.models_verification import (
+    PortfolioVerificationPostureResource,
+    WalletVerificationEligibilityResource,
+    WalletVerificationResource,
+)
 
 
 class HealthResponse(APIModel):
@@ -115,6 +111,10 @@ class WalletBalanceResource(APIModel):
     active: bool
     balance: float
     percentage: float
+    verification_eligible: bool = False
+    verification_status: str | None = None
+    verification_coverage: str | None = None
+    verification_is_recent: bool | None = None
 
 
 class PortfolioDashboardResponse(APIModel):
@@ -123,6 +123,7 @@ class PortfolioDashboardResponse(APIModel):
     summary: PortfolioSummaryResource
     custody_breakdown: list[CustodyBreakdownResource]
     wallets: list[WalletBalanceResource]
+    portfolio_verification: PortfolioVerificationPostureResource
     recent_transactions: list[TransactionResource]
     using_inferred_custody: bool = False
 
@@ -131,6 +132,8 @@ class WalletDetailResponse(APIModel):
     """Single wallet detail payload with balance and recent activity."""
 
     wallet: WalletBalanceResource
+    verification_eligibility: WalletVerificationEligibilityResource
+    latest_verification: WalletVerificationResource | None = None
     recent_transactions: list[TransactionResource]
 
 

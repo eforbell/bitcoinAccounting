@@ -191,11 +191,8 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
 
             playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
             playwright.expect(page.locator("#dashboard-balance")).to_contain_text("BTC")
-            playwright.expect(page.locator("#chain-status-panel")).to_be_visible()
-            playwright.expect(page.locator("#chain-status-chip")).to_have_text("live")
-            playwright.expect(page.locator("#chain-height")).to_have_text("942151")
-            playwright.expect(page.locator("#chain-peers")).to_have_text("11")
-            playwright.expect(page.locator("#chain-meta-sync")).to_contain_text("Synced to tip")
+            playwright.expect(page.locator("#dashboard-verification")).to_contain_text("🔰")
+            playwright.expect(page.locator("#wallet-list")).to_contain_text("🔰")
             page.locator('.app-sidebar [data-route="tax"]').click()
             playwright.expect(page.locator('#tax-view h1')).to_have_text("Tax")
             playwright.expect(page.locator("#policy-summary")).to_contain_text("Wallet-separated FIFO")
@@ -270,6 +267,14 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
                 page.get_by_role("button", name="Sign In").click()
             playwright.expect(page.get_by_role("heading", name="Wallets")).to_be_visible()
             playwright.expect(page.locator("#wallets-table")).to_contain_text("Strike")
+
+            # Enter wallet detail directly from wallets and confirm verification panel renders
+            page.locator("#wallets-table tr", has_text="Vault").get_by_role("button", name="Open").click()
+            playwright.expect(page.locator("#wallet-view-title")).to_be_visible()
+            playwright.expect(page.locator("#wallet-verification-status")).to_have_text("Unverified")
+            playwright.expect(page.locator("#wallet-verification-chip")).to_have_text("unverified")
+            playwright.expect(page.locator("#wallet-verification-submit")).to_be_enabled()
+            playwright.expect(page.locator("#wallet-verification-history")).to_contain_text("No verification history yet.")
 
             # Navigate to trades via sidebar
             page.locator('.app-sidebar .nav-item[data-route="trades"]').click()

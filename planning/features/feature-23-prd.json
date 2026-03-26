@@ -1,14 +1,15 @@
 {
   "branchName": "feature/web-descriptor-wallet-verification",
   "projectName": "Descriptor-Based Wallet Verification",
-  "description": "Add private, on-demand Bitcoin wallet verification to the web app by comparing ledger balances against balances derived from descriptor-backed Bitcoin accounts over a local Electrum-compatible server, while keeping sensitive descriptor material out of the normal accounting data model by default.",
+  "description": "Add private, on-demand Bitcoin wallet verification to the web app by comparing ledger balances against balances derived from descriptor-backed Bitcoin accounts, using local Bitcoin Core for descriptor normalization and address derivation plus a local Electrum-compatible server for balance/history queries, while keeping sensitive descriptor material out of the normal accounting data model by default.",
   "timing": {
     "draftedOn": "2026-03-25",
     "plannedEarliestExecution": "2026-04-21",
-    "gatingCondition": "Proceed after Feature-22 establishes Bitcoin node presence on the dashboard and after the team resolves the descriptor parsing and Sparrow wallet-file strategy documented in this PRD."
+    "gatingCondition": "Proceed after Feature-22 establishes Bitcoin node presence on the dashboard and after the team locks the v1 Core-backed descriptor-engine posture and Sparrow wallet-file strategy documented in this PRD."
   },
   "principles": [
     "Descriptor First - multisig and modern wallet setups require full descriptor coverage rather than xpub-only shortcuts",
+    "Core as Descriptor Authority for V1 - Python owns the workflow through a DescriptorEngine interface, but local bitcoind is the source of truth for descriptor normalization, multipath expansion, and address derivation in the first production path",
     "Private by Default - verification secrets are handled ephemerally unless the operator explicitly opts into persistence",
     "Electrum as Common Ground - verification depends on the Electrum protocol, not on any one server implementation",
     "Results Persist, Secrets Usually Do Not - verification outcomes belong in the app's durable record; descriptors usually do not",
@@ -21,7 +22,7 @@
     "frontend": "Existing responsive web shell with dashboard and wallet detail surfaces",
     "testing": "pytest API/service tests + targeted frontend smoke coverage",
     "database": "PostgreSQL primary, SQLite supported",
-    "coreDependencies": "Electrum-compatible JSON-RPC server + existing wallet/balance query services + descriptor parsing/derivation layer"
+    "coreDependencies": "Bitcoin Core 29+ descriptor RPCs + Electrum-compatible JSON-RPC server + existing wallet/balance query services + Python-owned DescriptorEngine abstraction"
   },
   "userStories": [
     {
@@ -42,7 +43,9 @@
       "id": "WVV-002",
       "title": "Electrum-compatible chain query backend abstraction",
       "acceptanceCriteria": [
+        "Add a Python-owned DescriptorEngine interface with a Core-backed v1 implementation responsible for descriptor validation, normalization, multipath expansion, and ranged address derivation",
         "Create a chain-query interface that targets the Electrum protocol rather than a single deployment such as electrs, mempool/electrs, or Frigate",
+        "Use local bitcoind descriptor RPCs rather than custom Python grammar logic as the production source of truth for descriptor semantics in v1",
         "Support the minimum RPC set required for verification including version negotiation, header/tip awareness, balance lookup, history lookup, and optionally UTXO lookup",
         "Handle unreachable, incompatible, or partially degraded servers with operator-readable failure states",
         "Keep the abstraction narrow enough that alternate backends such as Esplora or bitcoind scan RPC could be added later without rewriting verification semantics"
@@ -57,9 +60,12 @@
       "title": "Manual descriptor verification session",
       "acceptanceCriteria": [
         "Allow an operator to provide descriptor input on demand for a verification session without requiring persistence",
-        "Support descriptor sets sufficient for common single-sig and multisig wallet layouts, including external and change branches when applicable",
-        "Derive verification targets for a bounded scan window and compare computed chain balance to the ledger balance for the mapped wallet",
-        "Discard session-provided descriptor material after verification completes or fails"
+        "Support modern output descriptor inputs sufficient for common single-sig and multisig wallet layouts, including either one combined descriptor that already covers the needed branches or the complete set of branch-specific descriptors",
+        "Run a cheap preflight plausibility check before the deeper scan so obviously wrong descriptors or wallets with no meaningful on-chain ledger activity fail fast rather than consuming unnecessary Electrum work",
+        "Derive verification targets using a gap-limit-based discovery policy rather than a one-shot fixed range, and compare computed chain balance to the ledger balance for the mapped wallet",
+        "Discard session-provided descriptor material after verification completes or fails",
+        "Persist enough non-sensitive scan metadata, such as branch coverage and highest scanned or used index, to make later verification runs more efficient and to keep scope claims auditable",
+        "Label verification scope accurately so runs with incomplete branch coverage are reported as partial coverage rather than full verification"
       ],
       "priority": 3,
       "estimatedLines": "+220/-0",
@@ -71,7 +77,9 @@
       "title": "Wallet detail and dashboard verification surfaces",
       "acceptanceCriteria": [
         "Expose verified balance, ledger balance, drift, verification status, and last checked time on wallet-facing web surfaces",
-        "Clearly distinguish unverified, verified, stale, failed, and partially configured states",
+        "Clearly distinguish unverified, verified, stale, failed, partial coverage, and drift-detected states",
+        "Show a strong positive wallet-level Verified state when a self-custody wallet has been successfully verified recently and has no drift",
+        "Expose a stricter portfolio-level verification posture that is only shown as Verified when all eligible self-custody wallets are recently verified, have full coverage, and have no drift or failure state",
         "Avoid language that implies complete wallet proof when only a registered descriptor account has been checked",
         "Keep the UI useful on mobile while allowing richer drill-down on desktop"
       ],
@@ -139,19 +147,18 @@
     ]
   },
   "preFlightChecklist": [
-    "Decide whether descriptor parsing/derivation stays in Python or uses a helper/library seam backed by Rust tooling such as rust-miniscript or BDK",
-    "Decide the exact v1 descriptor input format and whether both external and change descriptors are mandatory for multisig verification",
+    "Make the v1 descriptor-engine posture explicit: Python owns the DescriptorEngine interface, but the first production implementation uses local Bitcoin Core 29+ descriptor RPCs for normalization, multipath expansion, and ranged address derivation",
+    "Define the exact v1 descriptor input contract: accept either one combined descriptor that already encodes all required branches (for example a multipath form such as /<0;1>/*) or the complete set of branch-specific descriptors; full coverage depends on descriptor scope, not on the number of strings provided",
     "Confirm the initial Electrum protocol compatibility target and transport assumptions for local household deployments",
-    "Decide whether v1 will persist only verification results or also permit opt-in persistence of descriptor sources",
-    "Determine whether a remembered source should store raw descriptor material, encrypted descriptor material, or only an indirect Sparrow/local-file reference",
+    "Lock the MVP persistence posture: persist verification results only in v1 and defer remembered descriptor sources until after the manual-session baseline ships",
+    "Define the v1 scan policy as gap-limit-based discovery over derived addresses, with persisted scan metadata, a conservative default ceiling, and an operator override rather than a naive fixed one-shot range",
     "Research Sparrow wallet-file encryption and unlock flow from primary sources before promising native wallet-file support",
-    "Define the exact claim language for verified, stale, failed, and partial-coverage states so the UI does not over-promise"
+    "Define the exact claim language for verified, stale, failed, drift-detected, and partial-coverage states so the UI does not over-promise, especially when the supplied descriptor material covers only part of the wallet account",
+    "Define the portfolio-level Verified posture as a strict aggregate state shown only when all eligible self-custody wallets are recently verified, fully covered, and clean",
+    "Set the default verification recency window to 30 days for wallet and portfolio Verified posture, with environment-based override support for operators who want a different policy"
   ],
   "openQuestions": [
-    "Is there a production-credible Python-native descriptor parsing and derivation stack for the descriptor types we care about, or should the project plan on a Rust-backed helper from the outset?",
-    "Should v1 verification be balance-only, or should it also query history/UTXOs to better explain drift when the balance mismatches?",
-    "What is the minimum safe scan policy for descriptor-derived addresses or scriptPubKeys: fixed gap limit, wallet-provided range, or operator override?",
-    "If persisted sources are allowed, what encryption-at-rest posture is acceptable for stored descriptor material in a single-operator private app?",
+    "What exact internal gap-limit setting should back the v1 discovery policy when the first-run scan ceiling defaults to 50 addresses unless the operator chooses a different range?",
     "Can Sparrow wallet-file decryption be supported safely and maintainably enough to include in Feature-23 proper, or should it remain a follow-on story after manual descriptor sessions ship?"
   ],
   "metrics": {
