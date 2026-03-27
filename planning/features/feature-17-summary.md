@@ -1,63 +1,82 @@
-# Feature-17: Web Foundation, API Layer, Auth, and Deployment
+# Feature 17: MCP Stdio Server — Bitcoin Treasury Tools
 
-## Purpose
+**Status**: In Progress
+**Branch**: `feature/mcp-stdio-server`
+**Stories**: MCP-001 through MCP-004 (4 stories, ~500 lines)
 
-Feature-17 establishes the production web architecture for Bitcoin Accounting: a Python API layer in front of the existing domain core, stable JSON contracts for frontend consumption, private auth suitable for a sovereignty app, and a deployment posture optimized for self-hosted bare metal over Tailscale.
+## Summary
 
-## Timing
+Exposes the Bitcoin Accounting data layer as a read-only MCP stdio server
+so AI clients (primarily Claude Desktop) can query treasury details,
+capital gains, tax summaries, and integrity health directly. Primary use
+case: financial planning, mid-year tax optimization, and 1099-B generation
+awareness via Claude Desktop as a life-coach / financial advisor.
 
-Drafted on **March 24, 2026**.
+### Goals
+- Enable Claude Desktop to answer "what's my tax exposure this year?" and
+  "which lots should I sell for best tax treatment?" using live ledger data
+- Expose 10 focused read-only tools — zero write operations via MCP
+- Add `bitcoin-mcp` CLI entry point alongside existing `bitcoin-accounting`
+  and `bitcoin-integrity` commands
 
-Recommended earliest execution: **March 25, 2026**.
+## File Structure
 
-## Scope
+```
+src/python/
+└── mcp_server.py           NEW — FastMCP server, 10 tools, main()
 
-1. Choose and scaffold the Python web framework.
-2. Define canonical JSON models for core resources.
-3. Add lightweight private auth and session handling.
-4. Formalize PostgreSQL-first production policy and request-safe DB lifecycle.
-5. Document deployment, health checks, and operational posture.
+tests/
+└── test_mcp_server.py      NEW — unit + integration tests
 
-## Key Platform Decision
+pyproject.toml              MODIFIED — mcp dep, bitcoin-mcp script
+```
 
-For the web app:
+## Tool Groups
 
-- **PostgreSQL is the recommended production backend**
-- **SQLite remains supported but is not the default recommendation**
+| Group | Tools | Primary Value |
+|-------|-------|---------------|
+| Financial Snapshot | get_treasury_summary, get_wallet_balances, get_transactions | Portfolio awareness |
+| **Tax & Capital Gains** | **get_purchase_lots, forecast_capital_gains, get_tax_summary** | **Financial planning** |
+| Integrity & Attestation | get_treasury_health, get_unresolved_findings, run_integrity_check_tool, get_attestation_bundle | Audit & monitoring |
 
-Rationale:
+## Key Decisions
 
-- The primary production deployment already runs on PostgreSQL.
-- A concurrent web/API process model fits PostgreSQL better than the current TUI-style single-connection SQLite usage.
-- SQLite is still useful for evaluation, local demos, and low-concurrency/self-contained installs.
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **Write ops** | None exposed | AI advises, human executes in TUI |
+| **DB lifecycle** | Open/close per tool call | Matches CLI pattern; avoids async/sync contention |
+| **Tax year** | Current year supported | YTD gains is the core mid-year planning use case |
+| **Lot unrealized P&L** | Computed at call time via price_lookup | Foundation for tax-optimal lot selection advice |
 
-## Why Feature-17 Exists
+## Story Breakdown
 
-The TUI already proves the Python domain model is reusable, but it is not itself a stable web API. This feature creates the missing application layer so frontend work can consume explicit JSON endpoints rather than screen-oriented Python calls.
+| ID | Title | Lines | Key Deliverable |
+|----|-------|-------|-----------------|
+| MCP-001 | Server scaffold | +80 | FastMCP server starts, bitcoin-mcp entry point works |
+| MCP-002 | Financial snapshot tools | +120 | 3 portfolio tools |
+| MCP-003 | Tax & capital gains tools | +140 | 3 tax planning tools |
+| MCP-004 | Integrity & attestation tools | +160 | 4 audit tools |
 
-## Proposed Story Order
+## Verification
 
-| ID | Story | Why this order |
-|----|-------|----------------|
-| WEB-001 | Framework choice + application structure | Locks the backend shape before route sprawl starts |
-| WEB-002 | Canonical JSON models | Prevents TUI-shaped responses from leaking into the web contract |
-| WEB-003 | Private auth baseline | Required before exposing meaningful data over Tailscale/internet |
-| WEB-004 | DB policy + connection lifecycle | Prevents correctness issues from an unsafe request model |
-| WEB-005 | Deployment + observability baseline | Makes the stack operable before feature growth |
+```bash
+# Install
+pip install -e .
 
-## Risk Controls
+# Confirm FastMCP import works
+python -c "from mcp.server.fastmcp import FastMCP; print('OK')"
 
-1. Shared-connection web risk
-   Control: use request-safe backend/session acquisition, not a single long-lived TUI-style connection.
-2. Contract drift risk
-   Control: define JSON models early and test them directly.
-3. Overbuilt auth risk
-   Control: keep auth optimized for a private single-operator app rather than multi-tenant roles and policies.
+# Run tests
+python -m pytest tests/test_mcp_server.py -v
 
-## Definition of Done
+# Manual smoke test (stdio mode)
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | bitcoin-mcp
+```
 
-- Python API service boots cleanly with authenticated and unauthenticated routes separated.
-- Core web resources have stable JSON contracts.
-- PostgreSQL is documented as primary production backend for web mode.
-- SQLite support stance and limitations are explicit.
-- Deployment instructions are sufficient for self-hosted bare-metal usage.
+## Risk Areas
+
+**High:** FastMCP import path must be verified against installed mcp version before writing tool code.
+
+**Medium:** `get_purchase_lots` unrealized P&L requires a current price — must handle missing price gracefully. `get_attestation_bundle` runs all 4 integrity checks and can be slow.
+
+- PRD: [feature-17-prd.json](feature-17-prd.json)

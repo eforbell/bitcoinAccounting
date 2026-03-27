@@ -1,36 +1,15 @@
 {
-  "currentFeature": "feature-25",
-  "featureName": "Wallet Verification Hardening",
-  "prdPath": "planning/features/feature-25-prd.json",
-  "summaryPath": "planning/features/feature-25-summary.md",
-  "branch": "feature/web-wallet-verification-hardening",
-  "status": "planned",
+  "currentFeature": "feature-17",
+  "featureName": "MCP Stdio Server",
+  "prdPath": "planning/features/feature-17-prd.json",
+  "summaryPath": "planning/features/feature-17-summary.md",
+  "branch": "feature/mcp-stdio-server",
+  "status": "in-progress",
   "stories": [
-    {
-      "id": "WVH-001",
-      "title": "Decimal-safe verified balance and drift arithmetic",
-      "status": "pending"
-    },
-    {
-      "id": "WVH-002",
-      "title": "Real gap-limit-based discovery semantics",
-      "status": "pending"
-    },
-    {
-      "id": "WVH-003",
-      "title": "Confirmed versus unconfirmed balance policy",
-      "status": "pending"
-    },
-    {
-      "id": "WVH-004",
-      "title": "Verification-path performance cleanup",
-      "status": "pending"
-    },
-    {
-      "id": "WVH-005",
-      "title": "Typed verification status and coverage contracts",
-      "status": "pending"
-    }
+    {"id": "MCP-001", "title": "Server scaffold, helpers, and infrastructure", "passes": false},
+    {"id": "MCP-002", "title": "Financial snapshot tools: treasury summary, wallet balances, transactions", "passes": false},
+    {"id": "MCP-003", "title": "Tax and capital gains tools: purchase lots, forecast, 1099-B summary", "passes": false},
+    {"id": "MCP-004", "title": "Integrity and attestation tools: health, findings, full check, attestation bundle", "passes": false}
   ],
   "completedFeatures": [
     {
@@ -122,14 +101,6 @@
       "notes": "Dedicated TUI screen for wallet CRUD operations: create, edit, rename, merge, toggle active. WalletQuery extensions with atomic rename/merge. Transaction count warnings for destructive operations. Dashboard wallet card with clickable link."
     },
     {
-      "featureId": "feature-12",
-      "featureName": "Transaction Editor",
-      "branch": "feature/transaction-editor",
-      "mergedDate": "2026-02-13",
-      "stories": 6,
-      "notes": "Added TUI transaction detail, edit, soft-delete, restore, and show-deleted flows backed by ledger soft-delete columns and new LedgerWriter update/delete/restore methods."
-    },
-    {
       "featureId": "feature-13",
       "featureName": "Bitcoin Accounting Rebrand and Compatibility Migration",
       "branch": "feature/bitcoin-accounting-rebrand",
@@ -160,75 +131,11 @@
       "mergedDate": "2026-02-24",
       "stories": 5,
       "notes": "Month-end attestation bundle generation (JSON/CSV) with deterministic run IDs, optional PDF reports via reportlab with graceful degradation, TUI monitoring dashboard with TreasuryIntegrityPanel and AttestationScreen (findings drill-down, source/severity filters, inline export), rule-based AlertEngine with AlertRule, finding lifecycle tracker (FindingTracker: new→acknowledged→resolved) persisted in SQLite. 148 tests across 4 test files."
-    },
-    {
-      "featureId": "feature-17",
-      "featureName": "Web Foundation, API Layer, Auth, and Deployment",
-      "branch": "feature/web-foundation",
-      "mergedDate": "2026-03-24",
-      "stories": 5,
-      "notes": "Established the FastAPI web foundation with canonical JSON models, signed-cookie auth, request-scoped database dependencies, readiness/liveness endpoints, deployment bootstrap, and subpath-aware runtime configuration."
-    },
-    {
-      "featureId": "feature-18",
-      "featureName": "Web Tax Reporting and Forecasting",
-      "branch": "feature/web-tax-reporting",
-      "mergedDate": "2026-03-24",
-      "stories": 5,
-      "notes": "Delivered web gains tracking, 1099-B export, sale forecasting, 2025+ wallet-separation policy enforcement, and lightweight preset/history support while preserving parity with the core Python tax logic."
-    },
-    {
-      "featureId": "feature-19",
-      "featureName": "Web Portfolio Dashboard and Wallet Views",
-      "branch": "feature/web-wallet-detail",
-      "mergedDate": "2026-03-24",
-      "stories": 5,
-      "notes": "Mobile-first portfolio dashboard with total BTC balance, cost basis, custody breakdown, wallet balances with inactive toggle, recent transactions strip, and wallet detail view with deep-link support. Server-injected <base href> for subpath-safe routing. Clickable wallet list drills into per-wallet detail with filtered transactions. 14 API tests + Playwright smoke coverage for click-through and direct URL deep-links. Removed redundant quick-action buttons in favor of navbar navigation."
-    },
-    {
-      "featureId": "feature-20",
-      "featureName": "Web Ledger, Transaction Entry, and Wallet Management",
-      "branch": "feature/web-ledger-transactions-wallets",
-      "mergedDate": "2026-03-25",
-      "stories": 5,
-      "notes": "Ledger explorer with pagination/filters/summary, transaction detail/edit/delete/restore, manual transaction entry (buy/sell/transfer/interest), wallet CRUD with rename/merge/sync, audit logging, ledger wallet dropdown. 55 tests."
-    },
-    {
-      "featureId": "feature-21",
-      "featureName": "Web Import Center and Duplicate Review",
-      "branch": "feature/web-import-center",
-      "mergedDate": "2026-03-24",
-      "stories": 5,
-      "notes": "Authenticated web import center with upload, parser detection, preview, duplicate review, commit flow, and import history/troubleshooting aids. Browser flow stays aligned with the existing Python import pipeline."
-    },
-    {
-      "featureId": "feature-22",
-      "featureName": "Web Block Clock and Bitcoin Node Presence",
-      "branch": "feature/web-bitcoin-block-clock",
-      "mergedDate": "2026-03-25",
-      "stories": 5,
-      "notes": "Optional bitcoind-backed chain status service and dashboard card showing height, sync posture, peer count, mempool summary, freshness, and degraded-state messaging. Includes API coverage and deployment docs for local-node environments."
-    },
-    {
-      "featureId": "feature-23",
-      "featureName": "Descriptor-Based Wallet Verification",
-      "branch": "feature/web-wallet-verification-foundation",
-      "mergedDate": "2026-03-26",
-      "stories": 7,
-      "notes": "Shipped private descriptor-based wallet verification using Bitcoin Core descriptor RPCs plus Electrum balance checks, wallet detail verification workflow, dashboard 🔰 verification posture, and production-proven support across real self-custody and multisig wallets without requiring wallet-enabled bitcoind."
-    },
-    {
-      "featureId": "feature-24",
-      "featureName": "Web Trades and Liquidity View",
-      "branch": "feature/web-trades-liquidity",
-      "mergedDate": "2026-03-25",
-      "stories": 4,
-      "notes": "Read-only web trades page with paginated trade history, per-trade cost basis, liquidity-by-exchange summary, and cost-basis overview cards. Includes authenticated API routes, responsive SPA views, exchange filtering, and pytest/Playwright coverage."
     }
   ],
   "futureEnhancements": [
-    "Pair price management (import/export)",
-    "Multi-coin support (ETH, other assets)",
-    "Per-exchange coverage monitor (\"liquidity wall\" early warning) — see planning/fixes_todo.md"
+    "Feature #17: Pair price management (import/export)",
+    "Feature #18: Multi-coin support (ETH, other assets)",
+    "Per-exchange coverage monitor (liquidity wall early warning) — see planning/fixes_todo.md"
   ]
 }

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bitcoin-accounting"
-version = "0.9.0"
+version = "1.0.0"
 description = "Bitcoin accounting toolkit with an interactive Textual TUI and optional web app."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,7 +22,8 @@ dependencies = [
     "fastapi>=0.115,<1.0",
     "uvicorn>=0.30,<1.0",
     "textual>=0.47.0",
-    "python-multipart"
+    "python-multipart",
+    "mcp",
 ]
 
 [project.optional-dependencies]
@@ -38,10 +39,11 @@ bitcoin-accounting = "bitcoinAccounting:main"
 bitcoin-integrity = "integrity.cli:main"
 bitcoin-accounting-web-init = "web.cli:main"
 bitcoin-accounting-web = "web.server:main"
+bitcoin-mcp        = "mcp_server:main"
 
 [tool.setuptools]
 package-dir = {"" = "src/python"}
-py-modules = ["bitcoinAccounts", "bitcoinAccounting"]
+py-modules = ["bitcoinAccounts", "bitcoinAccounting", "mcp_server"]
 include-package-data = true
 
 [tool.setuptools.packages.find]

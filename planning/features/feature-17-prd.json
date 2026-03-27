@@ -1,141 +1,183 @@
 {
-  "branchName": "feature/web-foundation-api-platform",
-  "projectName": "Web Foundation, API Layer, Auth, and Deployment",
-  "description": "Establish the production architecture for a private web application on top of the existing Python accounting core: a Python API/service layer, stable JSON contracts, lightweight private auth, and deployment posture for PostgreSQL-first self-hosting over Tailscale.",
+  "branchName": "feature/mcp-stdio-server",
+  "projectName": "MCP Stdio Server — Bitcoin Treasury Tools",
+  "description": "Expose the Bitcoin Accounting data layer as a read-only MCP stdio server so AI clients (primarily Claude Desktop) can query treasury details, capital gains, tax summaries, and integrity health directly. Primary use case: financial planning, mid-year tax optimization, and 1099-B generation awareness.",
+
   "timing": {
-    "draftedOn": "2026-03-24",
-    "plannedEarliestExecution": "2026-03-25",
-    "gatingCondition": "Proceed after confirming PostgreSQL remains the primary production backend and after agreeing on Python API framework choice."
+    "draftedOn": "2026-02-25",
+    "plannedEarliestExecution": "2026-02-25",
+    "gatingCondition": "Feature-16 (Treasury Attestation Monitoring) merged to master — provides integrity/attestation modules this feature consumes."
   },
+
   "principles": [
-    "Python Owns The Domain - no duplication of accounting or tax logic in Node/Express",
-    "PostgreSQL First - production web deployment is optimized for the existing PostgreSQL installation",
-    "SQLite Supported, Not Primary - retain compatibility for evaluation and low-concurrency installs",
-    "Stable JSON Contracts - frontend consumes explicit API models rather than TUI-shaped tables",
-    "Private Sovereignty App - auth is mandatory, but optimized for one trusted primary user rather than multi-tenant complexity",
-    "TUI Remains Fallback - web work must not degrade the existing TUI operating path"
+    "Read-only: zero write operations via MCP — all mutations stay in the TUI",
+    "Minimal surface: 10 focused tools covering portfolio, tax, integrity, and attestation",
+    "Thin wrapper: reuse existing BitcoinAccounts and integrity/attestation APIs unchanged",
+    "Async-safe: synchronous DB layer wrapped in asyncio.to_thread() per call, open/close per tool invocation",
+    "Financial planning first: tax and capital gains tools are the highest-value group for the Claude Desktop use case"
   ],
+
   "techStack": {
-    "backendLanguage": "Python 3.11+",
-    "backendFramework": "FastAPI or Flask with explicit service/router separation",
-    "frontend": "Express-served static app or React SPA consuming Python JSON endpoints",
-    "testing": "pytest for backend contracts + frontend smoke tests",
-    "database": "PostgreSQL primary, SQLite supported via existing DatabaseBackend abstraction",
-    "deployment": "Bare metal service on Tailscale network with reverse proxy and systemd/PM2 as appropriate"
+    "language": "Python 3.12",
+    "runtime": "MCP stdio server (bitcoin-mcp CLI entry point)",
+    "testing": "pytest + pytest-asyncio",
+    "storage": "SQLite / PostgreSQL (via existing db.get_backend())",
+    "dependencies": "mcp (adds FastMCP stdio transport)"
   },
+
+  "testingRequirements": {
+    "coverage": "85% line coverage on mcp_server.py",
+    "unitTests": "Mock BitcoinAccounts and backend; test each tool's return shape, error handling, and edge cases in isolation",
+    "integrationTests": "Start FastMCP test client; call each tool end-to-end against a real in-memory SQLite DB",
+    "edgeCases": "Empty snapshot table (get_treasury_health), quantity<=0 (forecast_capital_gains), invalid month (get_attestation_bundle), limit capping (get_transactions), missing price data (get_purchase_lots)",
+    "ci": "All 4 story test files must pass with no asyncio warnings"
+  },
+
+  "fileStructure": {
+    "description": "Single new source file plus a test file. Two lines change in pyproject.toml. No changes to existing modules.",
+    "layout": {
+      "src/python/": {
+        "mcp_server.py": "NEW — FastMCP server with 10 read-only tools, helpers, and main()"
+      },
+      "tests/": {
+        "test_mcp_server.py": "NEW — unit and integration tests for all 10 tools"
+      },
+      "pyproject.toml": "MODIFIED — add mcp dep, add bitcoin-mcp entry point",
+      "planning/features/": {
+        "feature-17-prd.json": "NEW — this file",
+        "feature-17-summary.md": "NEW — one-page overview"
+      }
+    }
+  },
+
+  "keyDecisions": {
+    "connection_lifecycle": {
+      "decision": "Open a fresh DatabaseBackend per tool call inside asyncio.to_thread(); close in finally block",
+      "rationale": "Matches the existing CLI pattern. Avoids shared-state concurrency issues. For a stdio server with a single AI client the overhead is acceptable.",
+      "example": "def _run():\n    accts = _make_accounts()\n    try: return accts.get_balance()\n    finally: accts.close()"
+    },
+    "no_write_tools": {
+      "decision": "Expose zero write/mutate operations (no deposit, withdraw, record_trade, etc.)",
+      "rationale": "Keeps the MCP surface safe for untrusted AI use. All mutations go through the TUI with human confirmation. The AI can advise; the human executes.",
+      "example": "N/A"
+    },
+    "tax_year_current": {
+      "decision": "get_tax_summary accepts any tax_year including the current year",
+      "rationale": "Mid-year realized gains are the primary financial planning use case. Passing the current year returns partial-year 1099-B data which Claude Desktop can use to advise on tax exposure.",
+      "example": "get_tax_summary(tax_year=2026) returns YTD realized gains for planning"
+    },
+    "purchase_lots_unrealized": {
+      "decision": "get_purchase_lots fetches current price via price_lookup and computes unrealized P&L per lot",
+      "rationale": "This is the foundation for tax-optimal selling advice. Knowing which lots are short-term vs long-term with their unrealized gain/loss lets Claude suggest which to sell first.",
+      "example": "{acquire_date, quantity, unit_cost, current_price, unrealized_pnl, holding_days, term: Short|Long}"
+    },
+    "serialize_helper": {
+      "decision": "Single _serialize() recursive helper converts datetime/date/Decimal before returning from each tool",
+      "rationale": "FastMCP serializes return values to JSON; Python datetime and Decimal are not JSON-native. Centralizing conversion avoids repetition across 10 tools.",
+      "example": "_serialize(obj): datetime → .isoformat(), Decimal → float(), recurse dicts/lists"
+    }
+  },
+
   "userStories": [
     {
-      "id": "WEB-001",
-      "title": "Select Python web framework and establish application structure",
+      "id": "MCP-001",
+      "title": "Server scaffold, helpers, and infrastructure",
       "acceptanceCriteria": [
-        "Choose and document the Python web framework for long-running API service",
-        "Create app structure separating routers, request/response models, and domain service adapters",
-        "Keep BitcoinAccounts and query classes reusable without moving accounting logic into the web layer",
-        "Document how the web app coexists with the TUI and CLI entrypoints"
+        "mcp added to pyproject.toml dependencies",
+        "bitcoin-mcp entry point added to [project.scripts]",
+        "src/python/mcp_server.py created with FastMCP instance, _make_accounts(), _open_backend(), _serialize(), and main()",
+        "bitcoin-mcp command starts without error and responds to MCP initialize handshake",
+        "_serialize() handles datetime, date, Decimal, None, nested dicts and lists correctly",
+        "main() loads .env from CWD before starting server"
       ],
       "priority": 1,
-      "estimatedLines": "+220/-0",
-      "testStrategy": "pytest backend app import and health-route smoke tests",
-      "passes": true
+      "estimatedLines": "+80/-0",
+      "testStrategy": "pytest tests/test_mcp_server.py::TestScaffold -v",
+      "passes": false
     },
     {
-      "id": "WEB-002",
-      "title": "Define canonical JSON models for core resources",
+      "id": "MCP-002",
+      "title": "Financial snapshot tools: treasury summary, wallet balances, transactions",
       "acceptanceCriteria": [
-        "Create stable API response models for portfolio summary, wallet, transaction, gains lot, forecast summary, and integrity finding resources",
-        "Normalize field naming away from TUI/table labels such as 'Buy Cur.' and 'Sell Cur.'",
-        "Document model versioning strategy and nullability rules",
-        "Expose transformed JSON without breaking existing Python domain logic"
+        "get_treasury_summary returns total_balance, avg_cost_basis_usd, wallet_count, active_wallet_count, custody_breakdown dict",
+        "get_wallet_balances returns list of wallets with balance, custody, wallet_type, active fields; zero-balance wallets omitted",
+        "get_transactions returns columns list, transactions list of dicts, total_returned; respects limit param capped at 500",
+        "All three tools handle DB errors by raising RuntimeError with descriptive message",
+        "All datetime values in transaction rows serialized to ISO strings"
       ],
       "priority": 2,
-      "estimatedLines": "+180/-0",
-      "testStrategy": "pytest model serialization tests with representative fixtures",
-      "passes": true
+      "estimatedLines": "+120/-0",
+      "testStrategy": "pytest tests/test_mcp_server.py::TestFinancialSnapshot -v",
+      "passes": false
     },
     {
-      "id": "WEB-003",
-      "title": "Implement baseline private auth and session model",
+      "id": "MCP-003",
+      "title": "Tax and capital gains tools: purchase lots, forecast, 1099-B summary",
       "acceptanceCriteria": [
-        "Add login/logout/session endpoints suitable for a private single-operator household app",
-        "Support secure password or passphrase authentication with signed session cookie or equivalent token strategy",
-        "Protect all non-health API routes by default",
-        "Document bootstrap flow for first-time setup on bare metal"
+        "get_purchase_lots returns each open lot with acquire_date, quantity, unit_cost, current_price, unrealized_pnl, holding_days, term (Short/Long)",
+        "get_purchase_lots handles missing price gracefully (current_price=null, unrealized_pnl=null)",
+        "forecast_capital_gains raises ValueError for quantity <= 0",
+        "forecast_capital_gains returns lots list and summary with short/long term breakdown",
+        "get_tax_summary returns form_8949_entries, worksheet, counts, and per_wallet_compliance_required flag",
+        "get_tax_summary works for current (partial) tax year returning YTD realized gains",
+        "All date/datetime fields serialized to ISO strings"
       ],
       "priority": 3,
-      "estimatedLines": "+220/-0",
-      "testStrategy": "pytest auth route tests and unauthenticated access checks",
-      "passes": true
+      "estimatedLines": "+140/-0",
+      "testStrategy": "pytest tests/test_mcp_server.py::TestTaxTools -v",
+      "passes": false
     },
     {
-      "id": "WEB-004",
-      "title": "Production database policy and connection lifecycle",
+      "id": "MCP-004",
+      "title": "Integrity and attestation tools: health, findings, full check, attestation bundle",
       "acceptanceCriteria": [
-        "Define PostgreSQL as recommended production backend for the web app",
-        "Implement request-safe backend/session acquisition rather than reusing one long-lived SQLite/TUI-style connection object",
-        "Document SQLite support boundaries for low-concurrency deployments",
-        "Add configuration notes for connection pooling, transaction handling, and rollback behavior"
+        "get_treasury_health returns latest/previous snapshot dicts and delta float; returns null fields gracefully when no snapshots exist",
+        "get_unresolved_findings filters correctly by source, severity, coin, wallet",
+        "run_integrity_check_tool returns overall_score, tier, sub_scores dict, finding_counts dict",
+        "run_integrity_check_tool does not persist results (persist=False)",
+        "get_attestation_bundle validates 1 <= month <= 12 and raises ValueError otherwise",
+        "get_attestation_bundle returns parsed JSON dict (not a string)",
+        "All four tools handle empty DB / missing tables gracefully"
       ],
       "priority": 4,
       "estimatedLines": "+160/-0",
-      "testStrategy": "pytest backend factory tests for postgres/sqlite selection and per-request lifecycle behavior",
-      "passes": true
-    },
-    {
-      "id": "WEB-005",
-      "title": "Operational deployment and observability baseline",
-      "acceptanceCriteria": [
-        "Document deployment topology for Python API plus frontend on Tailscale-accessible bare metal",
-        "Provide health endpoint, startup validation, and structured logging baseline",
-        "Document environment variables, secrets handling, and backup expectations",
-        "Record known limits and support stance for PostgreSQL vs SQLite in web mode"
-      ],
-      "priority": 5,
-      "estimatedLines": "+120/-0",
-      "testStrategy": "Manual deployment checklist + backend health probe verification",
-      "passes": true
+      "testStrategy": "pytest tests/test_mcp_server.py::TestIntegrityTools -v",
+      "passes": false
     }
   ],
+
   "riskAssessment": {
     "high": [
-      "Treating the TUI orchestration layer as if it were already a stable API could produce brittle web contracts",
-      "Reusing a TUI-style shared connection model in a concurrent web server would create correctness and stability risk"
+      "mcp package API surface: FastMCP is a relatively new SDK — confirm mcp.server.fastmcp.FastMCP import path matches installed version before writing tool code"
     ],
     "medium": [
-      "Framework choice made too late could create avoidable churn in routing and validation patterns",
-      "Overbuilding auth for a private single-user app could slow delivery without adding proportional value"
+      "get_purchase_lots unrealized P&L: requires a current price from price_lookup which may not exist for all coins; must handle None gracefully",
+      "get_attestation_bundle performance: runs all 4 integrity checks scoped to a month — can be slow on large ledgers; no timeout mechanism in stdio transport"
     ],
     "low": [
-      "The existing Python domain/query core is already mature enough to support an API adapter layer",
-      "Tailscale-based private hosting reduces exposure and simplifies first deployment"
+      "Name collision: run_integrity_check tool function vs imported integrity.cli.run_integrity_check — resolved by naming tool function run_integrity_check_tool",
+      "Decimal serialization from PostgreSQL backend: handled by _serialize() helper",
+      "dotenv loading order: db/__init__.py also loads .env; the double-load with override=False is harmless"
     ]
   },
+
   "preFlightChecklist": [
-    "Confirm Python API framework preference (FastAPI favored for typed JSON contracts)",
-    "Confirm PostgreSQL remains the recommended production backend for web mode",
-    "Decide whether frontend will be simple server-rendered/static JS or a React SPA",
-    "Choose auth bootstrapping approach appropriate for private household use"
+    "Confirm FastMCP import path: python -c 'from mcp.server.fastmcp import FastMCP; print(FastMCP)'",
+    "Confirm bitcoin-mcp entry point resolves after pip install -e .",
+    "Verify capital_gains.get_purchase_lots() method signature in src/python/db/queries/capital_gains.py",
+    "Verify price_lookup.get_price(coin, 'USD') returns current price when no date passed"
   ],
+
   "metrics": {
-    "estimatedTotalLines": "+900/-0",
-    "storiesCount": 5,
+    "estimatedTotalLines": "+500/-0",
+    "storiesCount": 4,
     "filesLikelyModified": [
+      "src/python/mcp_server.py",
+      "tests/test_mcp_server.py",
       "pyproject.toml",
-      "README.md",
-      "GETTING_STARTED.md",
-      "planning/current-feature.json",
-      "planning/progress.txt",
-      "src/python/db/__init__.py",
-      "src/python/bitcoinAccounts.py"
-    ],
-    "filesLikelyCreated": [
-      "src/python/web/__init__.py",
-      "src/python/web/app.py",
-      "src/python/web/auth.py",
-      "src/python/web/models.py",
-      "src/python/web/dependencies.py",
-      "tests/test_web_auth.py",
-      "tests/test_web_models.py",
-      "tests/test_web_health.py"
+      "planning/features/feature-17-prd.json",
+      "planning/features/feature-17-summary.md",
+      "planning/current-feature.json"
     ]
   }
 }
