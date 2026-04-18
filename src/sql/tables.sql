@@ -97,9 +97,9 @@ CREATE TABLE public.integrity_health_snapshots (
 );
 
 
-GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.coins TO "bitcoinAccountant";
-GRANT UPDATE, SELECT, INSERT ON TABLE public.ledger TO "bitcoinAccountant";
-GRANT SELECT, USAGE ON SEQUENCE public.ledger_id_seq TO "bitcoinAccountant";
-GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.pair_price TO "bitcoinAccountant";
-GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.wallets TO "bitcoinAccountant";
-GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.integrity_health_snapshots TO "bitcoinAccountant";
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.coins TO bitcoin_accountant;
+GRANT UPDATE, SELECT, INSERT ON TABLE public.ledger TO bitcoin_accountant;
+GRANT SELECT, USAGE ON SEQUENCE public.ledger_id_seq TO bitcoin_accountant;
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.pair_price TO bitcoin_accountant;
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.wallets TO bitcoin_accountant;
+GRANT DELETE, UPDATE, SELECT, INSERT ON TABLE public.integrity_health_snapshots TO bitcoin_accountant;
