@@ -4,7 +4,7 @@ After=network.target postgresql.service
 
 [Service]
 Type=simple
-User=forbell
+User=bitcoin-accounting
 WorkingDirectory=/data/apps/bitcoinAccounting
 EnvironmentFile=/data/apps/bitcoinAccounting/.env
 Environment=PYTHONUNBUFFERED=1

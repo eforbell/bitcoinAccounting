@@ -1,6 +1,6 @@
 # Web UI: Mobile-First CSS Guidelines
 
-Design rules for the Bitcoin Accounting web frontend. These patterns are shared across all Forbell household web apps (see `familyPulse/public/style.css` for the canonical reference).
+Design rules for the Bitcoin Accounting web frontend. These patterns are shared across all your household web apps (see `familyPulse/public/style.css` for the canonical reference).
 
 ## Viewport Containment (iPhone / Mobile Safari)
 
