@@ -19,6 +19,11 @@
 - Keep nginx responsible for stripping the external subpath prefix before proxying upstream, while still setting `BITCOIN_ACCOUNTING_WEB_BASE_PATH` so cookies/docs/frontend paths remain correct
 - A repo-local `deploy/deploy.sh` should handle venv creation, editable install, `bitcoin-accounting-web-init`, and service restart in one path for host prep on `numenor`
 
+## Web UI: iOS Input Auto-Zoom Guard
+
+- iOS Safari/WKWebView auto-zooms focused form controls when their computed font-size is below 16px; keep interactive `input`, `select`, and `textarea` controls at `font-size: 1rem` minimum
+- Do not rely on surrounding label/container text sizing for form controls; set the control font-size explicitly so mobile breakpoints cannot reintroduce sub-16px inputs
+
 ## Feature-18: Web Tax Reporting and Forecasting - WTX-001 / WTX-004
 
 ### Tax API Translation Layer

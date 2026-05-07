@@ -620,6 +620,7 @@ textarea {
   background: rgba(0, 0, 0, 0.18);
   color: var(--ivory);
   padding: 0.8rem 0.9rem;
+  font-size: 1rem;
 }
 
 input::placeholder {
