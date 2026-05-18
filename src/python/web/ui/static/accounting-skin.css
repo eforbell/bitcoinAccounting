@@ -1,0 +1,4 @@
+/* Bitcoin Accounting app-specific skin layer (kept intentionally thin for phase 1) */
+:root {
+  --radius: 14px;
+}
