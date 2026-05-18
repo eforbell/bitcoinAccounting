@@ -16,6 +16,13 @@
 
 /* Tablet-with-sidebar band: avoid ultra-skinny 4-col controls before mobile nav kicks in. */
 @media (min-width: 769px) and (max-width: 1120px) {
+  body.app-has-nav .page-shell {
+    width: calc(100% - 1rem);
+    max-width: none;
+    margin-left: 0;
+    margin-right: auto;
+  }
+
   .filters,
   .filters.compact,
   .summary-grid,
