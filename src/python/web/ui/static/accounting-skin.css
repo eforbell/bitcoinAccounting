@@ -13,3 +13,36 @@
     padding-right: var(--s-4);
   }
 }
+
+/* Tablet-with-sidebar band: avoid ultra-skinny 4-col controls before mobile nav kicks in. */
+@media (min-width: 769px) and (max-width: 1120px) {
+  .filters,
+  .filters.compact,
+  .summary-grid,
+  .summary-grid-dashboard,
+  .verification-summary,
+  .verification-grid,
+  .chain-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero-card,
+  .hero-card-brand,
+  .panel-heading,
+  .dashboard-grid,
+  .dual-column {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .list-item,
+  .tx-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .wallet-balance-wrap {
+    text-align: left;
+  }
+}
