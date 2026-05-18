@@ -2,3 +2,14 @@
 :root {
   --radius: 14px;
 }
+
+/* Desktop nav layout: accounting keeps its own shell offset via body padding-left.
+   Neutralize chassis #app offset to avoid double-gutter with left sidebar. */
+@media (min-width: 900px) {
+  body.app-has-nav #app {
+    margin-left: 0;
+    max-width: none;
+    padding-left: var(--s-4);
+    padding-right: var(--s-4);
+  }
+}
