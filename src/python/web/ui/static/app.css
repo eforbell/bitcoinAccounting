@@ -168,7 +168,7 @@ body.app-has-nav {
 
 .eyebrow {
   margin: 0 0 0.28rem;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--warning);
@@ -182,17 +182,17 @@ p {
 }
 
 h1 {
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-size: var(--text-2xl);
   letter-spacing: -0.03em;
 }
 
 h2 {
-  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-size: var(--text-xl);
   letter-spacing: -0.02em;
 }
 
 h3 {
-  font-size: 1.15rem;
+  font-size: var(--text-lg);
   letter-spacing: -0.01em;
 }
 
@@ -320,7 +320,7 @@ h3 {
 .summary-label {
   display: block;
   margin-bottom: 0.28rem;
-  font-size: 0.74rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -328,7 +328,7 @@ h3 {
 
 .hero-stat strong,
 .summary-card strong {
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
 }
 
 .summary-grid {
@@ -397,7 +397,7 @@ h3 {
   border: 1px solid rgba(244, 241, 234, 0.1);
   background: rgba(244, 241, 234, 0.04);
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -427,7 +427,7 @@ h3 {
   gap: 0.8rem;
   margin-top: 0.8rem;
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .chain-status-warning {
@@ -534,7 +534,7 @@ h3 {
   gap: 0.25rem;
   padding: 0.16rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   background: rgba(247, 147, 26, 0.1);
   border: 1px solid rgba(247, 147, 26, 0.2);
 }
@@ -587,7 +587,7 @@ h3 {
   align-items: center;
   padding: 0.16rem 0.48rem;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   background: rgba(247, 147, 26, 0.12);
   color: var(--warning);
 }
@@ -596,7 +596,7 @@ h3 {
   display: grid;
   gap: 0.42rem;
   min-width: 0;
-  font-size: 0.92rem;
+  font-size: var(--text-base);
 }
 
 .filters {
@@ -620,7 +620,7 @@ textarea {
   background: rgba(0, 0, 0, 0.18);
   color: var(--ivory);
   padding: 0.8rem 0.9rem;
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
 input::placeholder {
@@ -727,7 +727,7 @@ textarea {
   border: 1px solid rgba(244, 241, 234, 0.12);
   background: rgba(244, 241, 234, 0.05);
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -793,7 +793,7 @@ td {
 th {
   background: rgba(0, 0, 0, 0.22);
   color: var(--warning);
-  font-size: 0.78rem;
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -807,7 +807,7 @@ th {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
@@ -836,7 +836,7 @@ th {
 }
 
 .wallet-view-hero-balance {
-  font-size: clamp(1.4rem, 3vw, 1.8rem);
+  font-size: var(--text-2xl);
   letter-spacing: -0.02em;
 }
 
@@ -951,7 +951,7 @@ th {
   }
 
   .app-bottom-bar .nav-label {
-    font-size: 0.66rem;
+    font-size: var(--text-xs);
     font-weight: 600;
   }
 
@@ -1083,14 +1083,14 @@ th {
   align-items: center;
   gap: 0.5rem;
   color: var(--text);
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 .more-menu-brand img {
   border-radius: 6px;
 }
 .more-menu-subtitle {
   margin-left: auto;
-  font-size: 0.78rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .more-menu-divider {
@@ -1105,7 +1105,7 @@ th {
   gap: 0.75rem;
   width: 100%;
   padding: 0.85rem 0.5rem;
-  font-size: 1rem;
+  font-size: var(--text-md);
   color: var(--text);
   text-decoration: none;
   background: none;
@@ -1126,7 +1126,7 @@ th {
   align-items: center;
   justify-content: center;
   width: 28px;
-  font-size: 1.15rem;
+  font-size: var(--text-lg);
   opacity: 0.75;
 }
 .more-menu-signout {
@@ -1153,7 +1153,7 @@ th {
   .list-item-meta,
   .field,
   .tx-detail {
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   .subpanel .panel-heading p {
@@ -1192,7 +1192,7 @@ th {
 
 .actions-cell .button {
   padding: 0.25rem 0.5rem;
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .button-danger {
