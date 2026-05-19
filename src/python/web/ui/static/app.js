@@ -170,7 +170,7 @@ async function api(path, options = {}) {
 function setAuthStatus(message, isError = false) {
   const status = byId('auth-status');
   status.textContent = message;
-  status.style.color = isError ? 'var(--danger)' : 'var(--text-muted)';
+  status.style.color = isError ? 'var(--bad)' : 'var(--muted)';
 }
 
 function setSessionGlyph(authenticated) {
@@ -644,7 +644,7 @@ function renderWalletVerificationSummary(latest, walletBalance) {
     balanceEl.textContent = `${Number(walletBalance || 0).toFixed(8)} BTC ledger`;
     driftEl.textContent = 'Paste a descriptor and run the first verification.';
     messageEl.textContent = 'Paste a wallet descriptor to run the first verification.';
-    messageEl.style.color = 'var(--text-muted)';
+    messageEl.style.color = 'var(--muted)';
     ceilingInput.value = '50';
     return;
   }
@@ -672,10 +672,10 @@ function renderWalletVerificationSummary(latest, walletBalance) {
 
   messageEl.textContent = latest.error_text || latest.warning_text || `${label} as of ${formatVerificationTime(latest.verified_at)}.`;
   messageEl.style.color = latest.status === 'failed'
-    ? 'var(--danger)'
+    ? 'var(--bad)'
     : (latest.status === 'drift_detected' || !latest.is_recent || latest.coverage === 'partial')
-      ? 'var(--warning)'
-      : 'var(--success)';
+      ? 'var(--warn)'
+      : 'var(--ok)';
   ceilingInput.value = String(latest.scan_ceiling || 50);
 }
 
@@ -878,7 +878,7 @@ function toggleLedgerFilters(force) {
 function showTxStatus(message, isError = false) {
   const el = byId('tx-edit-status');
   el.textContent = message;
-  el.style.color = isError ? 'var(--danger)' : 'var(--success)';
+  el.style.color = isError ? 'var(--bad)' : 'var(--ok)';
   el.classList.remove('hidden');
 }
 
@@ -1128,7 +1128,7 @@ async function toggleWalletActive(walletId, currentlyActive) {
   } catch (error) {
     const statusEl = byId('wallets-status');
     statusEl.textContent = error.message;
-    statusEl.style.color = 'var(--danger)';
+    statusEl.style.color = 'var(--bad)';
     statusEl.classList.remove('hidden');
   }
 }
@@ -1290,7 +1290,7 @@ function bindEvents() {
   function showRecordStatus(message, isError = false) {
     const el = byId('record-status');
     el.textContent = message;
-    el.style.color = isError ? 'var(--danger)' : 'var(--success)';
+    el.style.color = isError ? 'var(--bad)' : 'var(--ok)';
     el.classList.remove('hidden');
   }
 
@@ -1418,20 +1418,20 @@ function bindEvents() {
 
     if (mode === 'combined' && !descriptor) {
       statusEl.textContent = 'Paste an output descriptor before running verification.';
-      statusEl.style.color = 'var(--danger)';
+      statusEl.style.color = 'var(--bad)';
       return;
     }
 
     if (mode === 'branches' && !externalDescriptor && !changeDescriptor) {
       statusEl.textContent = 'Paste at least one receive or change descriptor before running verification.';
-      statusEl.style.color = 'var(--danger)';
+      statusEl.style.color = 'var(--bad)';
       return;
     }
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Running...';
     statusEl.textContent = `Running wallet verification for ${state.currentWalletId}...`;
-    statusEl.style.color = 'var(--text-muted)';
+    statusEl.style.color = 'var(--muted)';
 
     try {
       const response = await api('api/verification/run', {
@@ -1448,12 +1448,12 @@ function bindEvents() {
         ? `${verificationStatusLabel(response.result.status, response.result.is_recent)} completed.`
         : 'This wallet has no meaningful on-chain activity to verify yet.';
       statusEl.style.color = response.result.status === 'failed'
-        ? 'var(--danger)'
-        : (response.result.status === 'drift_detected' ? 'var(--warning)' : 'var(--success)');
+        ? 'var(--bad)'
+        : (response.result.status === 'drift_detected' ? 'var(--warn)' : 'var(--ok)');
       await loadWalletDetail(state.currentWalletId);
     } catch (error) {
       statusEl.textContent = error.message;
-      statusEl.style.color = 'var(--danger)';
+      statusEl.style.color = 'var(--bad)';
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Run Verification';
@@ -1661,7 +1661,7 @@ function bindEvents() {
           }),
         });
         statusEl.textContent = 'Wallet created.';
-        statusEl.style.color = 'var(--success)';
+        statusEl.style.color = 'var(--ok)';
       } else {
         const walletId = byId('wallet-form-original-id').value;
         const orig = (state.walletsList || []).find((w) => w.wallet_id === walletId) || {};
@@ -1679,13 +1679,13 @@ function bindEvents() {
           body: JSON.stringify(body),
         });
         statusEl.textContent = 'Wallet updated.';
-        statusEl.style.color = 'var(--success)';
+        statusEl.style.color = 'var(--ok)';
       }
       statusEl.classList.remove('hidden');
       await loadWalletsList();
     } catch (error) {
       statusEl.textContent = error.message;
-      statusEl.style.color = 'var(--danger)';
+      statusEl.style.color = 'var(--bad)';
       statusEl.classList.remove('hidden');
     }
   });
@@ -1695,12 +1695,12 @@ function bindEvents() {
     try {
       const result = await api('api/wallets/sync', { method: 'POST' });
       statusEl.textContent = `Sync complete. ${result.created} wallet(s) created.`;
-      statusEl.style.color = 'var(--success)';
+      statusEl.style.color = 'var(--ok)';
       statusEl.classList.remove('hidden');
       await loadWalletsList();
     } catch (error) {
       statusEl.textContent = error.message;
-      statusEl.style.color = 'var(--danger)';
+      statusEl.style.color = 'var(--bad)';
       statusEl.classList.remove('hidden');
     }
   });
@@ -1722,12 +1722,12 @@ function bindEvents() {
         body: JSON.stringify({ wallet_id: oldId, new_wallet_id: newId }),
       });
       statusEl.textContent = `Renamed to "${newId}".`;
-      statusEl.style.color = 'var(--success)';
+      statusEl.style.color = 'var(--ok)';
       statusEl.classList.remove('hidden');
       await loadWalletsList();
     } catch (error) {
       statusEl.textContent = error.message;
-      statusEl.style.color = 'var(--danger)';
+      statusEl.style.color = 'var(--bad)';
       statusEl.classList.remove('hidden');
     }
   });
@@ -1748,12 +1748,12 @@ function bindEvents() {
         body: JSON.stringify({ source_wallet_id: sourceId, target_wallet_id: targetId }),
       });
       statusEl.textContent = `Merged into "${targetId}".`;
-      statusEl.style.color = 'var(--success)';
+      statusEl.style.color = 'var(--ok)';
       statusEl.classList.remove('hidden');
       await loadWalletsList();
     } catch (error) {
       statusEl.textContent = error.message;
-      statusEl.style.color = 'var(--danger)';
+      statusEl.style.color = 'var(--bad)';
       statusEl.classList.remove('hidden');
     }
   });
@@ -1831,11 +1831,11 @@ async function handleImportUpload(event) {
   const statusEl = byId('import-status');
   if (!fileInput.files || !fileInput.files.length) {
     statusEl.textContent = 'Please select a file.';
-    statusEl.style.color = 'var(--danger)';
+    statusEl.style.color = 'var(--bad)';
     return;
   }
   statusEl.textContent = 'Uploading and parsing...';
-  statusEl.style.color = 'var(--text-muted)';
+  statusEl.style.color = 'var(--muted)';
 
   const formData = new FormData();
   formData.append('file', fileInput.files[0]);
@@ -1853,7 +1853,7 @@ async function handleImportUpload(event) {
     showImportStep(2);
   } catch (error) {
     statusEl.textContent = error.message;
-    statusEl.style.color = 'var(--danger)';
+    statusEl.style.color = 'var(--bad)';
   }
 }
 
