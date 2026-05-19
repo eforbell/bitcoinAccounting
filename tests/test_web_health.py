@@ -50,6 +50,8 @@ def test_create_app_serves_web_ui_shell() -> None:
     assert response.headers["content-type"].startswith("text/html")
     assert "Bitcoin Accounting" in response.text
     assert "Private Sovereignty Treasury" in response.text
+    assert 'href="sovereign-fonts.css"' in response.text
+    assert 'href="static/sovereign-chassis.css"' in response.text
     assert 'href="static/app.css"' in response.text
     assert 'src="static/app.js"' in response.text
 

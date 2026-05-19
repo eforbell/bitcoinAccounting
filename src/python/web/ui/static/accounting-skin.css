@@ -1,0 +1,90 @@
+/* Bitcoin Accounting app-specific skin layer (kept intentionally thin for phase 1) */
+:root {
+  --radius: 14px;
+}
+
+/* Desktop nav layout: accounting keeps its own shell offset via body padding-left.
+   Neutralize chassis #app offset to avoid double-gutter with left sidebar. */
+@media (min-width: 769px) {
+  body.app-has-nav #app {
+    margin-left: 0;
+    max-width: none;
+    padding-left: var(--s-4);
+    padding-right: var(--s-4);
+  }
+}
+
+/* Mobile: chassis #app padding (20px sides) stacks with page-shell width constraints.
+   Strip it so page-shell alone controls mobile gutters (matches master behavior). */
+@media (max-width: 768px) {
+  #app {
+    padding-left: 0;
+    padding-right: 0;
+    max-width: none;
+  }
+}
+
+/* Tablet-with-sidebar band: avoid ultra-skinny 4-col controls before mobile nav kicks in. */
+@media (min-width: 769px) and (max-width: 1120px) {
+  body.app-has-nav .page-shell {
+    width: calc(100% - 1rem);
+    max-width: none;
+    margin-left: 0;
+    margin-right: auto;
+  }
+
+  .filters,
+  .filters.compact,
+  .summary-grid,
+  .summary-grid-dashboard,
+  .verification-summary,
+  .verification-grid,
+  .chain-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero-card,
+  .hero-card-brand,
+  .panel-heading,
+  .dashboard-grid,
+  .dual-column {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .list-item,
+  .tx-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .wallet-balance-wrap {
+    text-align: left;
+  }
+}
+
+/* Transaction detail modal: 4-col grid on desktop, 2-col on narrow */
+.tx-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+@media (max-width: 640px) {
+  .tx-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Filter disclosure action row */
+.filter-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-2);
+}
+.filter-rail {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}

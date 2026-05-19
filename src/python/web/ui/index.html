@@ -12,7 +12,11 @@
   <link rel="icon" type="image/png" sizes="32x32" href="static/brand/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="static/brand/favicon-16x16.png">
   <link rel="icon" type="image/x-icon" href="static/brand/favicon.ico">
+  <link rel="stylesheet" href="sovereign-fonts.css">
+  <link rel="stylesheet" href="static/sovereign-chassis.css">
+  <link rel="stylesheet" href="static/tokens.css">
   <link rel="stylesheet" href="static/app.css">
+  <link rel="stylesheet" href="static/accounting-skin.css">
 </head>
 <body>
   <nav class="app-sidebar" aria-label="Primary">
@@ -346,32 +350,41 @@
             </div>
           </div>
 
-          <form id="ledger-form" class="filters">
-            <label class="field">
-              <span>Coin</span>
+          <div class="filter-rail" id="ledger-filter-chips">
+            <button type="button" class="filter-chip" id="ledger-filter-toggle" aria-expanded="false">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+              <span>Filters</span>
+            </button>
+          </div>
+          <form id="ledger-form" class="filter-disclosure hidden">
+            <div class="filter-field">
+              <label for="ledger-coin">Coin</label>
               <input id="ledger-coin" type="text" value="BTC" required>
-            </label>
-            <label class="field">
-              <span>Wallet</span>
+            </div>
+            <div class="filter-field">
+              <label for="ledger-wallet">Wallet</label>
               <select id="ledger-wallet">
                 <option value="">All wallets</option>
               </select>
-            </label>
-            <label class="field">
-              <span>Start Date</span>
+            </div>
+            <div class="filter-field">
+              <label for="ledger-start">From</label>
               <input id="ledger-start" type="date">
-            </label>
-            <label class="field">
-              <span>End Date</span>
+            </div>
+            <div class="filter-field">
+              <label for="ledger-end">To</label>
               <input id="ledger-end" type="date">
-            </label>
-            <div class="actions-row">
-              <button class="button" type="submit">Apply Filters</button>
-              <button id="ledger-clear" class="button button-ghost" type="button">Clear</button>
+            </div>
+            <div class="filter-field">
+              <label for="ledger-deleted-toggle">Options</label>
               <label class="toggle-label">
                 <input id="ledger-deleted-toggle" type="checkbox">
                 <span>Show deleted</span>
               </label>
+            </div>
+            <div class="filter-actions">
+              <button class="button" type="submit">Apply Filters</button>
+              <button id="ledger-clear" class="button button-ghost" type="button">Clear</button>
             </div>
           </form>
 
@@ -418,70 +431,74 @@
           <div id="ledger-pagination" class="ledger-pagination"></div>
         </section>
 
-        <section id="tx-detail-panel" class="panel subpanel hidden">
-          <div class="panel-heading">
-            <div>
-              <h3>Transaction Detail</h3>
-              <p id="tx-detail-id" class="muted"></p>
+        <div id="tx-detail-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="tx-detail-title">
+          <div class="overlay-box wide">
+            <div class="modal-head">
+              <div>
+                <h2 id="tx-detail-title">Transaction Detail</h2>
+                <p id="tx-detail-id" class="modal-sub"></p>
+              </div>
+              <button type="button" class="modal-close" id="tx-detail-close" aria-label="Close">&times;</button>
             </div>
-            <button id="tx-detail-close" class="button button-ghost button-inline" type="button">Close</button>
-          </div>
-          <div id="tx-transfer-warning" class="policy-banner hidden">
-            This transaction belongs to a transfer pair. Editing or deleting it may affect the paired transaction.
-          </div>
-          <form id="tx-edit-form" class="filters">
-            <label class="field">
-              <span>Date</span>
-              <input id="tx-edit-date" type="text" placeholder="YYYY-MM-DD HH:MM:SS">
-            </label>
-            <label class="field">
-              <span>Type</span>
-              <input id="tx-edit-type" type="text">
-            </label>
-            <label class="field">
-              <span>Buy</span>
-              <input id="tx-edit-buy" type="number" step="any">
-            </label>
-            <label class="field">
-              <span>Buy Currency</span>
-              <input id="tx-edit-buy-curr" type="text">
-            </label>
-            <label class="field">
-              <span>Sell</span>
-              <input id="tx-edit-sell" type="number" step="any">
-            </label>
-            <label class="field">
-              <span>Sell Currency</span>
-              <input id="tx-edit-sell-curr" type="text">
-            </label>
-            <label class="field">
-              <span>Fee</span>
-              <input id="tx-edit-fee" type="number" step="any">
-            </label>
-            <label class="field">
-              <span>Fee Currency</span>
-              <input id="tx-edit-fee-curr" type="text">
-            </label>
-            <label class="field">
-              <span>Wallet</span>
-              <input id="tx-edit-wallet" type="text">
-            </label>
-            <label class="field">
-              <span>Group</span>
-              <input id="tx-edit-group" type="text">
-            </label>
-            <label class="field">
-              <span>Comment</span>
-              <input id="tx-edit-comment" type="text">
-            </label>
-            <div class="actions-row">
-              <button class="button" type="submit">Save Changes</button>
-              <button id="tx-delete-btn" class="button button-ghost button-danger" type="button">Delete</button>
+            <div class="modal-body">
+              <div id="tx-transfer-warning" class="policy-banner hidden">
+                This transaction belongs to a transfer pair. Editing or deleting it may affect the paired transaction.
+              </div>
+              <form id="tx-edit-form" class="tx-detail-grid">
+                <div class="filter-field">
+                  <label for="tx-edit-date">Date</label>
+                  <input id="tx-edit-date" type="text" placeholder="YYYY-MM-DD HH:MM:SS">
+                </div>
+                <div class="filter-field">
+                  <label for="tx-edit-type">Type</label>
+                  <input id="tx-edit-type" type="text">
+                </div>
+                <div class="filter-field">
+                  <label for="tx-edit-buy">Buy</label>
+                  <input id="tx-edit-buy" type="number" step="any">
+                </div>
+                <div class="filter-field">
+                  <label for="tx-edit-buy-curr">Buy Currency</label>
+                  <input id="tx-edit-buy-curr" type="text">
+                </div>
+                <div class="filter-field">
+                  <label for="tx-edit-sell">Sell</label>
+                  <input id="tx-edit-sell" type="number" step="any">
+                </div>
+                <div class="filter-field">
+                  <label for="tx-edit-sell-curr">Sell Currency</label>
+                  <input id="tx-edit-sell-curr" type="text">
+                </div>
+                <div class="filter-field">
+                  <label for="tx-edit-fee">Fee</label>
+                  <input id="tx-edit-fee" type="number" step="any">
+                </div>
+                <div class="filter-field">
+                  <label for="tx-edit-fee-curr">Fee Currency</label>
+                  <input id="tx-edit-fee-curr" type="text">
+                </div>
+                <div class="filter-field">
+                  <label for="tx-edit-wallet">Wallet</label>
+                  <input id="tx-edit-wallet" type="text">
+                </div>
+                <div class="filter-field">
+                  <label for="tx-edit-group">Group</label>
+                  <input id="tx-edit-group" type="text">
+                </div>
+                <div class="filter-field" style="grid-column: 1 / -1;">
+                  <label for="tx-edit-comment">Comment</label>
+                  <input id="tx-edit-comment" type="text">
+                </div>
+              </form>
+              <p id="tx-edit-status" class="status-line hidden"></p>
+            </div>
+            <div class="modal-foot">
               <button id="tx-restore-btn" class="button button-ghost hidden" type="button">Restore</button>
+              <button id="tx-delete-btn" class="button button-ghost button-danger" type="button">Delete</button>
+              <button id="tx-save-btn" class="button" type="button">Save Changes</button>
             </div>
-          </form>
-          <p id="tx-edit-status" class="status-line hidden"></p>
-        </section>
+          </div>
+        </div>
       </section>
 
       <section id="trades-view" class="view-stack hidden">
