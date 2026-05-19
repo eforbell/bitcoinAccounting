@@ -5,12 +5,22 @@
 
 /* Desktop nav layout: accounting keeps its own shell offset via body padding-left.
    Neutralize chassis #app offset to avoid double-gutter with left sidebar. */
-@media (min-width: 900px) {
+@media (min-width: 769px) {
   body.app-has-nav #app {
     margin-left: 0;
     max-width: none;
     padding-left: var(--s-4);
     padding-right: var(--s-4);
+  }
+}
+
+/* Mobile: chassis #app padding (20px sides) stacks with page-shell width constraints.
+   Strip it so page-shell alone controls mobile gutters (matches master behavior). */
+@media (max-width: 768px) {
+  #app {
+    padding-left: 0;
+    padding-right: 0;
+    max-width: none;
   }
 }
 
