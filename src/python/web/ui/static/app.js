@@ -828,6 +828,7 @@ async function openTransactionDetail(txId) {
   try {
     const tx = await api(`api/ledger/${txId}`);
     state.selectedTx = tx;
+    byId('tx-detail-title').textContent = `${tx.transaction_type || 'Transaction'} Detail`;
     byId('tx-detail-id').textContent = `#${tx.transaction_id}`;
     byId('tx-edit-date').value = tx.created_at || '';
     byId('tx-edit-type').value = tx.transaction_type || '';
@@ -851,16 +852,27 @@ async function openTransactionDetail(txId) {
     byId('tx-delete-btn').classList.toggle('hidden', tx.deleted);
     byId('tx-restore-btn').classList.toggle('hidden', !tx.deleted);
     byId('tx-edit-status').classList.add('hidden');
-    byId('tx-detail-panel').classList.remove('hidden');
-    byId('tx-detail-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    byId('tx-detail-overlay').classList.remove('hidden');
+    document.body.classList.add('modal-open');
   } catch (error) {
-    byId('tx-detail-panel').classList.add('hidden');
+    byId('tx-detail-overlay').classList.add('hidden');
+    document.body.classList.remove('modal-open');
   }
 }
 
 function closeTransactionDetail() {
-  byId('tx-detail-panel').classList.add('hidden');
+  byId('tx-detail-overlay').classList.add('hidden');
+  document.body.classList.remove('modal-open');
   state.selectedTx = null;
+}
+
+function toggleLedgerFilters(force) {
+  const panel = byId('ledger-form');
+  const btn = byId('ledger-filter-toggle');
+  const shouldOpen = typeof force === 'boolean' ? force : panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !shouldOpen);
+  btn.setAttribute('aria-expanded', String(shouldOpen));
+  sessionStorage.setItem('ledger-filters-open', shouldOpen ? '1' : '0');
 }
 
 function showTxStatus(message, isError = false) {
@@ -1453,8 +1465,23 @@ function bindEvents() {
 
   byId('tx-detail-close').addEventListener('click', closeTransactionDetail);
 
-  byId('tx-edit-form').addEventListener('submit', async (event) => {
-    event.preventDefault();
+  byId('tx-detail-overlay').addEventListener('click', (event) => {
+    if (event.target === byId('tx-detail-overlay')) closeTransactionDetail();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !byId('tx-detail-overlay').classList.contains('hidden')) {
+      closeTransactionDetail();
+    }
+  });
+
+  byId('ledger-filter-toggle').addEventListener('click', () => toggleLedgerFilters());
+
+  if (sessionStorage.getItem('ledger-filters-open') === '1') {
+    toggleLedgerFilters(true);
+  }
+
+  function saveTxEdits() {
     if (!state.selectedTx) return;
     const txId = state.selectedTx.transaction_id;
     const body = {};
@@ -1498,15 +1525,24 @@ function bindEvents() {
       showTxStatus('No changes detected.');
       return;
     }
-    try {
-      await api(`api/ledger/${txId}`, { method: 'PATCH', body: JSON.stringify(body) });
-      showTxStatus('Transaction updated.');
-      await loadLedger();
-      await openTransactionDetail(txId);
-    } catch (error) {
-      showTxStatus(error.message, true);
-    }
+    (async () => {
+      try {
+        await api(`api/ledger/${txId}`, { method: 'PATCH', body: JSON.stringify(body) });
+        showTxStatus('Transaction updated.');
+        await loadLedger();
+        await openTransactionDetail(txId);
+      } catch (error) {
+        showTxStatus(error.message, true);
+      }
+    })();
+  }
+
+  byId('tx-edit-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    saveTxEdits();
   });
+
+  byId('tx-save-btn').addEventListener('click', () => saveTxEdits());
 
   byId('tx-delete-btn').addEventListener('click', async () => {
     if (!state.selectedTx) return;

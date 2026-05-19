@@ -63,3 +63,28 @@
     text-align: left;
   }
 }
+
+/* Transaction detail modal: 4-col grid on desktop, 2-col on narrow */
+.tx-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+@media (max-width: 640px) {
+  .tx-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Filter disclosure action row */
+.filter-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-2);
+}
+.filter-rail {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
