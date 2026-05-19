@@ -18,7 +18,7 @@ def test_static_assets_are_served_from_relative_paths() -> None:
 
     assert css_response.status_code == 200
     assert css_response.headers["content-type"].startswith("text/css")
-    assert "--orange-primary: #F7931A;" in css_response.text
+    assert ".page-shell" in css_response.text
 
     assert js_response.status_code == 200
     assert js_response.headers["content-type"].startswith("text/javascript")
