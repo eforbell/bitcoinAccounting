@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # deploy.sh — git-based deploy for bitcoinAccounting web service on numenor
 # Usage:
-#   ./deploy/deploy.sh                   # deploy origin/master
+#   ./deploy/deploy.sh                   # deploy origin/main
 #   ./deploy/deploy.sh feature/my-branch # deploy a specific ref
 #   ./deploy/deploy.sh --restore-stash   # restore last auto-stashed local changes
 
@@ -10,7 +10,7 @@ set -euo pipefail
 APP_DIR="/data/apps/bitcoinAccounting"
 SERVICE="bitcoin-accounting-web"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REF="${1:-origin/master}"
+REF="${1:-origin/main}"
 
 if [[ -d "$APP_DIR/.git" ]]; then
   GIT_CMD=(git -C "$APP_DIR")

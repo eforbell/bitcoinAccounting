@@ -182,7 +182,7 @@ if [[ -n "$REPO_URL" ]]; then
       CHECKOUT_REF=""
     fi
   fi
-  CHECKOUT_REF="${CHECKOUT_REF:-master}"
+  CHECKOUT_REF="${CHECKOUT_REF:-main}"
   run "${git_prefix[@]}" git -C "$TARGET_APP_DIR" checkout --force -B "$CHECKOUT_REF" "origin/$CHECKOUT_REF"
 fi
 
