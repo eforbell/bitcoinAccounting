@@ -123,3 +123,5 @@ venv.bak/
 # Database credentials
 src/python/config.py
 output/
+.omc/
+test-results/
