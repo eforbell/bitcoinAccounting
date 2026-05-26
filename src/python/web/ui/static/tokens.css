@@ -1,19 +1,43 @@
-/* Sovereign tokens — bitcoinAccounting */
+/* ════════════════════════════════════════════════════════════════════════
+   Bitcoin Accounting — tokens
+   Overrides the shared chassis with this app's accent + display family.
+   Load AFTER sovereign-chassis.css, BEFORE app.css and accounting-skin.css.
+   ════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --font-display: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --accent: #F7931A;
-  --accent-pale: rgba(247, 147, 26, 0.18);
-  --accent-wash: rgba(247, 147, 26, 0.06);
-  --accent-soft: rgba(247, 147, 26, 0.1);
-  --accent-soft-strong: rgba(247, 147, 26, 0.18);
-  --accent-border-soft: rgba(247, 147, 26, 0.28);
+  /* Same display family as Pulse — Source Sans 3 carries every display
+     moment. Zero new font load on top of body. */
+  --font-display: 'Source Sans 3', -apple-system, BlinkMacSystemFont,
+                  'Segoe UI', Roboto, sans-serif;
+
+  /* ── Dark mode accent (the default) ───────────────────────────────
+     #F7931A is the canonical Bitcoin orange. Desaturated half a stop
+     to #F5A059 so it sits properly on warm-black surfaces at AA contrast
+     without going neon. Pair pale is a deep brown for tinted bg blocks. */
+  --accent:               #F5A059;
+  --accent-pale:          #2A1E11;
+  --accent-wash:          rgba(245, 160, 89, 0.05);
+  --accent-soft:          rgba(245, 160, 89, 0.10);
+  --accent-soft-strong:   rgba(245, 160, 89, 0.18);
+  --accent-border-soft:   rgba(245, 160, 89, 0.28);
 }
 
 :root[data-theme="light"] {
-  --accent: #B65F00;
-  --accent-pale: rgba(182, 95, 0, 0.18);
-  --accent-wash: rgba(182, 95, 0, 0.06);
-  --accent-soft: rgba(182, 95, 0, 0.1);
-  --accent-soft-strong: rgba(182, 95, 0, 0.18);
-  --accent-border-soft: rgba(182, 95, 0, 0.28);
+  /* ── Light mode accent ─────────────────────────────────────────────
+     Deeper bitcoin tone — the canonical orange would muddy against the
+     cream surface. #B8651F keeps the bitcoin feel while reading clean.   */
+  --accent:               #B8651F;
+  --accent-pale:          #F8E8D5;
+  --accent-wash:          rgba(184, 101, 31, 0.04);
+  --accent-soft:          rgba(184, 101, 31, 0.08);
+  --accent-soft-strong:   rgba(184, 101, 31, 0.16);
+  --accent-border-soft:   rgba(184, 101, 31, 0.25);
+}
+
+/* ── Density override ───────────────────────────────────────────────
+   Bitcoin Accounting is information-dense by nature (8-decimal precision,
+   703-tx ledgers, 13 wallets). Tighten the chassis spacing tokens for this
+   app only. Pulse and Plan stay at the default density. */
+:root {
+  --shell-max: 1080px;     /* slightly wider than Pulse's 920 */
 }

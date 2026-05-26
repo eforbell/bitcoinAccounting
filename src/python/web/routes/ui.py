@@ -98,6 +98,12 @@ def web_import_shell(request: Request) -> HTMLResponse:
     return _shell_response(request)
 
 
+@router.get("/settings", include_in_schema=False)
+def web_settings_shell(request: Request) -> HTMLResponse:
+    """Serve the settings page within the shared web shell."""
+    return _shell_response(request)
+
+
 @router.get("/wallets", include_in_schema=False)
 def web_wallets_shell(request: Request) -> HTMLResponse:
     """Serve the wallet management page within the shared web shell."""

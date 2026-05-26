@@ -1,10 +1,909 @@
-/* Bitcoin Accounting app-specific skin layer (kept intentionally thin for phase 1) */
-:root {
-  --radius: 14px;
+/* ════════════════════════════════════════════════════════════════════════
+   Bitcoin Accounting — app skin
+   Per-app layout + density overrides. Load AFTER tokens.css.
+
+   What's in here:
+     1.  Density resets (padding/radius/size — the "less chunky" pass)
+     2.  Page header card (replaces .hero-card from app.css)
+     3.  Segmented control (.seg — replaces .record-tabs + .trades-tabs)
+     4.  Button discipline (drop the solid-orange default)
+     5.  BTC numeric component (.btc-amount)
+     6.  Custody glyph + verification dot
+     7.  Stat strip
+     8.  Wallet list rows
+     9.  Dense data table + mobile card-stack fallback
+     10. Tax-page form pattern
+     11. Light-mode adjustments not handled by tokens alone
+
+   Element rules in app.css remain authoritative; this file just tightens
+   them. Selectors here repeat app.css's selectors where needed and override
+   specific properties. No new HTML required for §§1–8.
+   ════════════════════════════════════════════════════════════════════════ */
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   1 · DENSITY RESETS
+   The biggest visual win in this whole file. ~30% padding everywhere.
+   ────────────────────────────────────────────────────────────────────── */
+
+/* Hero card → page header */
+.hero-card {
+  padding: 14px 18px;
+  border-radius: 10px;
+  gap: 14px;
+  align-items: center;       /* was flex-end — looked bottom-heavy */
+}
+.hero-card-brand { gap: 14px; }
+.hero-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+.hero-copy {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  max-width: 50ch;
+}
+.hero-meta {
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(96px, max-content));
+}
+.hero-stat {
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.hero-stat strong, .summary-card strong {
+  font-size: var(--text-md);          /* down from --text-lg */
 }
 
-/* Desktop nav layout: accounting keeps its own shell offset via body padding-left.
-   Neutralize chassis #app offset to avoid double-gutter with left sidebar. */
+.eyebrow {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--dim);                  /* was --warn — see §4 */
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+h1 {
+  font-size: 22px;                    /* down from --text-2xl */
+  letter-spacing: -0.018em;
+  line-height: 1.1;
+}
+h2 {
+  font-size: 17px;
+  letter-spacing: -0.012em;
+  line-height: 1.2;
+}
+h3 {
+  font-size: 14px;
+  letter-spacing: -0.005em;
+  line-height: 1.25;
+}
+
+.panel {
+  padding: 14px;
+  border-radius: 10px;
+}
+.panel-heading {
+  margin-bottom: 10px;
+  gap: 12px;
+}
+
+.summary-grid, .chain-status-grid {
+  gap: 8px;
+}
+.summary-card, .chain-stat {
+  padding: 10px 13px;
+  border-radius: 8px;
+}
+.summary-card.summary-card-featured {
+  background: var(--accent-wash);     /* one step quieter — was -soft-strong */
+  border-color: var(--accent-border-soft);
+}
+
+.hero-label, .summary-label {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.nav-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: var(--text-sm);
+}
+.nav-item.active { font-weight: 600; }
+
+.button {
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: var(--text-sm);
+  min-height: 38px;
+  font-weight: 600;
+}
+.button.button-inline { min-height: 32px; padding: 6px 12px; }
+
+.actions-row .button { min-height: 40px; }   /* was 3.1rem */
+.button { min-height: 40px; }                /* phone floor */
+@media (max-width: 600px) { .button { min-height: 44px; } }
+
+input, select, textarea {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--surface2);                /* was rgba(0,0,0,0.18) */
+}
+textarea { min-height: 5.5rem; }
+
+.session-button {
+  width: 36px; height: 36px;
+}
+
+/* Rows live inside list-groups, not as individual cards */
+.list-shell, .stack { gap: 0; }
+.list-item, .tx-row, .custody-row {
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  padding: 9px 13px;
+}
+.list-item:last-child, .tx-row:last-child, .custody-row:last-child {
+  border-bottom: 0;
+}
+/* Wrap them in a single bordered .list-group instead */
+.list-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+/* When a list-shell is used standalone (no .list-group wrap), give the
+   first/last children rounded corners and put a border on the wrapper itself. */
+.list-shell:not(.list-group) {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   2 · PAGE HEADER (compact rewrite of .hero-card)
+   No new class required — this file tightens .hero-card from app.css.
+   For NEW screens, prefer .page-header (defined here) which is cleaner.
+   ────────────────────────────────────────────────────────────────────── */
+
+.page-header {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+.page-header .ph-seal {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: var(--accent-pale);
+  border: 1px solid var(--accent-border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-size: 17px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.page-header .ph-main { min-width: 0; }
+.page-header .ph-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 1px;
+}
+.page-header .ph-eyebrow {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 700;
+}
+.page-header .ph-meta-inline {
+  font-size: 11px;
+  color: var(--muted);
+}
+.page-header h1, .page-header .ph-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  line-height: 1.1;
+  margin: 0;
+}
+.page-header .ph-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .page-header {
+    grid-template-columns: 32px 1fr;
+    grid-template-rows: auto auto;
+    gap: 10px 12px;
+  }
+  .page-header .ph-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   3 · SEGMENTED CONTROL (.seg)
+   Replaces both .record-tabs and .trades-tabs with a single primitive.
+   Soft pill rail, ~30px tall, --accent-wash on active.
+   ────────────────────────────────────────────────────────────────────── */
+
+.seg, .record-tabs, .trades-tabs {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 0;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.seg::-webkit-scrollbar,
+.record-tabs::-webkit-scrollbar,
+.trades-tabs::-webkit-scrollbar { display: none; }
+
+.seg button,
+.record-tab,
+.trades-tab {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: 6px 13px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  white-space: nowrap;
+  min-height: 32px;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.seg button:hover,
+.record-tab:hover,
+.trades-tab:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.seg button.active,
+.record-tab.active,
+.trades-tab.active {
+  background: var(--accent-wash);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-border-soft);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   4 · BUTTON DISCIPLINE
+   Solid-accent fill is reserved for "the page's one commit action."
+   Everything else uses the soft pill style.
+
+   .button (default) → soft-accent pill
+   .button.is-primary → solid orange (e.g. final Record commit, Disconnect wallet)
+   .button-ghost → outlined neutral
+   .button-danger → soft red
+   ────────────────────────────────────────────────────────────────────── */
+
+.button {
+  background: var(--accent-wash);
+  color: var(--accent);
+  border: 1px solid var(--accent-border-soft);
+}
+.button:hover { background: var(--accent-soft); }
+
+.button.is-primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+.button.is-primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--text));
+}
+
+.button-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.button-ghost:hover { color: var(--text); border-color: var(--accent-border-soft); background: var(--accent-wash); }
+
+.button-danger {
+  background: var(--bad-bg);
+  color: var(--bad);
+  border-color: var(--bad-border);
+}
+.button-danger:hover { background: color-mix(in srgb, var(--bad) 16%, transparent); }
+
+/* Old "Load Gains" + similar prominent action buttons that lived in app.css
+   as `<button class="button">` will inherit the soft style automatically.
+   To opt back into solid orange for a specific button: add `.is-primary`. */
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   5 · BTC NUMERIC COMPONENT (.btc-amount)
+   Wrap every BTC value in this. Single style rule formats every occurrence.
+   The unit + USD reference are siblings, not children of the number.
+
+   HTML shape:
+     <span class="btc-amount">
+       <span class="v">5.27109487</span>
+       <span class="u">BTC</span>
+       <span class="sub">$233,243.66</span>
+     </span>
+
+   .btc-amount.sm   = list rows, table cells
+   .btc-amount.md   = stat cards (default)
+   .btc-amount.lg   = hero balance
+
+   Color: NEVER use ok/bad on .btc-amount.v — BTC moves, it doesn't
+   credit/debit. Color the .type pill in the row instead.
+   ────────────────────────────────────────────────────────────────────── */
+
+.btc-amount {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  font-variant-numeric: tabular-nums lining-nums;
+  text-align: right;
+}
+.btc-amount .v {
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  font-family: var(--font-display);
+}
+.btc-amount .u {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.65em;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin-left: 0.3em;
+}
+.btc-amount .v + .u { display: inline; margin-left: 0.35em; }
+.btc-amount .sub {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.7em;
+  color: var(--dim);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* The first row holds .v + .u inline; .sub stacks below. We achieve that
+   by wrapping .v + .u in their own .row, OR by using grid:           */
+.btc-amount {
+  display: grid;
+  grid-template-columns: auto;
+  justify-items: end;
+}
+.btc-amount > .v,
+.btc-amount > .u { display: inline; }
+
+/* Sizes */
+.btc-amount.sm .v { font-size: 13px; }
+.btc-amount.sm .u { font-size: 9.5px; }
+.btc-amount.sm .sub { font-size: 10px; }
+
+.btc-amount.md .v { font-size: 15px; }
+.btc-amount.md .u { font-size: 10.5px; }
+.btc-amount.md .sub { font-size: 10.5px; }
+
+.btc-amount.lg .v { font-size: 30px; letter-spacing: -0.022em; line-height: 1; }
+.btc-amount.lg .u { font-size: 13px; }
+.btc-amount.lg .sub { font-size: 11.5px; margin-top: 4px; }
+
+/* Left-aligned variant (rare — usually for inline body copy) */
+.btc-amount.start {
+  justify-items: start;
+  text-align: left;
+}
+
+
+/* Denomination toggle — three-state pill rail, persists per user */
+.denom-toggle {
+  display: inline-flex;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.denom-toggle button {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  min-height: 28px;
+  cursor: pointer;
+}
+.denom-toggle button.active {
+  background: var(--accent-wash);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-border-soft);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   6 · CUSTODY GLYPH + VERIFICATION DOT
+   Replace the emoji-shield-tag system with a glyph (custody type) and
+   a dot (verification status).
+
+   HTML shape (wallet row):
+     <div class="wallet-row">
+       <div class="custody-glyph multisig">{svg}</div>
+       <div class="wallet-main">
+         <div class="wallet-name">
+           Vault
+           <span class="vstatus verified"><span class="dot"></span>verified</span>
+         </div>
+         <div class="wallet-sub">multisig 2-of-3 · hardware · 94.1%</div>
+       </div>
+       <span class="btc-amount sm">
+         <span class="v">4.95855861</span><span class="u">BTC</span>
+         <span class="sub">$219,452.00</span>
+       </span>
+     </div>
+   ────────────────────────────────────────────────────────────────────── */
+
+.custody-glyph {
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.custody-glyph svg { width: 14px; height: 14px; }
+
+/* Custody type colors — each one maps to a brand semantic */
+.custody-glyph.self     { background: var(--ok-bg);   border-color: var(--ok-border);   color: var(--ok); }
+.custody-glyph.multisig { background: var(--accent-wash); border-color: var(--accent-border-soft); color: var(--accent); }
+.custody-glyph.collab   { background: var(--info-bg); border-color: var(--info-border); color: var(--info); }
+.custody-glyph.exchange { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn); }
+
+/* Custody gauge bar */
+.custody-gauge {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  background: var(--surface2);
+}
+.custody-gauge .cg-seg {
+  min-width: 3px;
+  transition: width 0.3s ease;
+}
+.custody-gauge .cg-seg.multisig  { background: var(--accent); }
+.custody-gauge .cg-seg.self,
+.custody-gauge .cg-seg.selfcustodied { background: var(--ok); }
+.custody-gauge .cg-seg.collab,
+.custody-gauge .cg-seg.collaborative { background: var(--info); }
+.custody-gauge .cg-seg.exchange,
+.custody-gauge .cg-seg.custodial { background: var(--warn); }
+.custody-gauge .cg-seg.unknown   { background: var(--dim); }
+
+/* Custody row with color dot */
+.custody-row .custody-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.custody-dot.multisig  { background: var(--accent); }
+.custody-dot.self,
+.custody-dot.selfcustodied { background: var(--ok); }
+.custody-dot.collab,
+.custody-dot.collaborative { background: var(--info); }
+.custody-dot.exchange,
+.custody-dot.custodial { background: var(--warn); }
+.custody-dot.unknown   { background: var(--dim); }
+
+.custody-row {
+  display: grid;
+  grid-template-columns: 14px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+  padding: 6px 0;
+}
+.custody-row .custody-pct {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Verification dot — inline beside the wallet name */
+.vstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ok);
+}
+.vstatus .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.vstatus.stale, .vstatus.drift, .vstatus.partial { color: var(--warn); }
+.vstatus.failed, .vstatus.error { color: var(--bad); }
+.vstatus.unverified {
+  color: var(--dim);
+}
+.vstatus.unverified .dot {
+  background: transparent;
+  border: 1.5px solid currentColor;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   7 · STAT STRIP — refinements
+   Adds the "value sub" line for context (USD reference, percentage, etc.)
+   ────────────────────────────────────────────────────────────────────── */
+
+.summary-grid .summary-card .v-sub,
+.hero-stat .v-sub {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--dim);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   8 · WALLET LIST ROW
+   Reuses .list-row from chassis + adds the BTC-specific columns.
+   ────────────────────────────────────────────────────────────────────── */
+
+.wallet-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  align-items: center;
+}
+.wallet-row:last-child { border-bottom: 0; }
+.wallet-row:hover { background: var(--surface2); }
+.wallet-row .wallet-main { min-width: 0; }
+.wallet-row .wallet-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: 1px;
+}
+.wallet-row .wallet-sub {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.wallet-row .wallet-sub .sep { color: var(--dim); }
+
+@media (max-width: 600px) {
+  .wallet-row { grid-template-columns: 28px 1fr; gap: 10px; row-gap: 6px; }
+  .wallet-row .btc-amount {
+    grid-column: 2 / -1;
+    justify-items: start;
+    text-align: left;
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 8px;
+  }
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   9 · DENSE DATA TABLE + MOBILE CARD STACK
+   Tightens table rows from ~65px to ~36px. Sub-720px: hide the table
+   and show .ledger-cards (same data, different layout).
+   ────────────────────────────────────────────────────────────────────── */
+
+.table-shell {
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+}
+table {
+  font-size: 12.5px;
+}
+th {
+  background: var(--surface2);
+  color: var(--dim);                  /* was --warn — too loud */
+  padding: 8px 12px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+td {
+  padding: 9px 12px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  border-bottom: 1px solid var(--border-soft);
+}
+tr:last-child td { border-bottom: 0; }
+
+td.num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+
+/* Type pill inline in tables */
+.tx-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tx-type .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.tx-type.deposit  .dot { background: var(--ok); }
+.tx-type.withdraw .dot { background: var(--bad); }
+.tx-type.trade    .dot { background: var(--accent); }
+.tx-type.transfer .dot { background: var(--info); }
+
+/* Mobile: hide the table, show the cards version */
+.ledger-cards {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.trades-cards {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+@media (max-width: 720px) {
+  .table-shell.ledger, .table-shell.trades { display: none; }
+  .ledger-cards, .trades-cards { display: grid; gap: 1px; background: var(--border-soft); }
+}
+
+.ledger-card {
+  background: var(--surface);
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 10px;
+  align-items: flex-start;
+}
+.ledger-card .lc-glyph {
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.ledger-card.deposit  .lc-glyph { background: var(--ok-bg);   border-color: var(--ok-border);   color: var(--ok); }
+.ledger-card.withdraw .lc-glyph { background: var(--bad-bg);  border-color: var(--bad-border);  color: var(--bad); }
+.ledger-card.trade    .lc-glyph { background: var(--accent-wash); border-color: var(--accent-border-soft); color: var(--accent); }
+.ledger-card .lc-type-label { font-size: 12.5px; font-weight: 600; }
+.ledger-card .lc-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+
+/* Trade cards — mobile fallback for 7-col trades table */
+.trade-card {
+  background: var(--surface);
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 10px;
+  align-items: flex-start;
+}
+.trade-card .tc-glyph {
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  background: var(--accent-wash);
+  border: 1px solid var(--accent-border-soft);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.trade-card .tc-main { min-width: 0; }
+.trade-card .tc-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.trade-card .tc-tag {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  border: 1px solid var(--accent-border-soft);
+}
+.trade-card .tc-tag.sell {
+  background: var(--bad-bg);
+  color: var(--bad);
+  border-color: var(--bad-border);
+}
+.trade-card .tc-sub {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.trade-card .tc-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+.trade-card .tc-qty {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-display);
+}
+.trade-card .tc-unit {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  display: block;
+  margin-top: 1px;
+}
+.trade-card .tc-cost {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--dim);
+  font-weight: 500;
+  display: block;
+  margin-top: 1px;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   10 · TAX PAGE FORM PATTERN
+   Realized Gains + Sale Forecast share the same skeleton.
+   Compress into a tighter form-results pattern.
+   ────────────────────────────────────────────────────────────────────── */
+
+.tax-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.tax-form .field { gap: 4px; font-size: var(--text-sm); }
+.tax-form .actions-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.tax-results {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+.tax-results .results-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+.tax-results .result-card {
+  padding: 10px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.tax-results .result-card .k {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.tax-results .result-card .v {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.tax-results .footnote {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: transparent;
+  border-left: 2px solid var(--warn-border);
+  border-radius: 0;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   11 · LIGHT-MODE ADJUSTMENTS
+   Things tokens alone can't handle.
+   ────────────────────────────────────────────────────────────────────── */
+
+:root[data-theme="light"] .hero-card-brand .hero-logo {
+  filter: none;       /* drop the drop-shadow that worked for dark */
+}
+:root[data-theme="light"] .nav-logo-mark {
+  filter: none;
+}
+/* The .hero-stat had a dark rgba bg — already replaced in §1 to var(--surface2). */
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   12 · BREAKPOINT NEUTRALIZATIONS
+   Preserves the existing app.css adjustments at < 769 / < 600 that
+   the skin's tighter base already mostly handles. Keep these from
+   accounting-skin.css's earlier phase:
+   ────────────────────────────────────────────────────────────────────── */
+
+/* Desktop: chassis #app offset is neutralized so the sidebar lives at
+   left:0 and the page-shell handles the gutter. (Unchanged from phase 1.) */
 @media (min-width: 769px) {
   body.app-has-nav #app {
     margin-left: 0;
@@ -14,8 +913,6 @@
   }
 }
 
-/* Mobile: chassis #app padding (20px sides) stacks with page-shell width constraints.
-   Strip it so page-shell alone controls mobile gutters (matches master behavior). */
 @media (max-width: 768px) {
   #app {
     padding-left: 0;
@@ -24,7 +921,8 @@
   }
 }
 
-/* Tablet-with-sidebar band: avoid ultra-skinny 4-col controls before mobile nav kicks in. */
+/* Tablet-with-sidebar band: keep the 2-col collapse from phase 1, but
+   adjusted for the tighter card design. */
 @media (min-width: 769px) and (max-width: 1120px) {
   body.app-has-nav .page-shell {
     width: calc(100% - 1rem);
@@ -52,19 +950,9 @@
     flex-direction: column;
     align-items: flex-start;
   }
-
-  .list-item,
-  .tx-row {
-    grid-template-columns: 1fr;
-    align-items: flex-start;
-  }
-
-  .wallet-balance-wrap {
-    text-align: left;
-  }
 }
 
-/* Transaction detail modal: 4-col grid on desktop, 2-col on narrow */
+/* Tx detail modal grid — unchanged */
 .tx-detail-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -76,15 +964,56 @@
   }
 }
 
-/* Filter disclosure action row */
-.filter-actions {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--s-2);
+
+/* ──────────────────────────────────────────────────────────────────────
+   13 · SETTINGS PAGE
+   ────────────────────────────────────────────────────────────────────── */
+
+.settings-group {
+  margin-bottom: 16px;
 }
-.filter-rail {
+.settings-group-title {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 700;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+.settings-row {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.settings-row:last-child { border-bottom: 0; }
+.settings-row .sr-label {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.settings-row .sr-desc {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.settings-row.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.settings-row .sr-badge {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-weight: 700;
+  white-space: nowrap;
 }

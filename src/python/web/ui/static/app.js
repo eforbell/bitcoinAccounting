@@ -1,3 +1,18 @@
+function denomFormat(btcAmount) {
+  return window.BtcDenom ? BtcDenom.format(btcAmount) : Number(btcAmount).toFixed(8) + ' BTC';
+}
+function denomUnit() {
+  return window.BtcDenom ? BtcDenom.unit() : 'BTC';
+}
+var FIAT_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'USDC', 'USDT', 'GUSD', 'BUSD', 'DAI', 'PYUSD'];
+function formatAmount(amount, curr) {
+  var n = Number(amount);
+  if (isNaN(n)) return '';
+  var c = (curr || '').toUpperCase();
+  var decimals = FIAT_CURRENCIES.indexOf(c) !== -1 ? 2 : 8;
+  return n.toFixed(decimals) + ' ' + c;
+}
+
 const state = {
   session: null,
   policy: null,
@@ -66,6 +81,7 @@ function appPath(page) {
   if (page === 'record') return `${base}record`;
   if (page === 'wallets') return `${base}wallets`;
   if (page === 'import') return `${base}import`;
+  if (page === 'settings') return `${base}settings`;
   if (page === 'wallet' && state.currentWalletId) return `${base}wallet/${encodeURIComponent(state.currentWalletId)}`;
   return base;
 }
@@ -77,6 +93,7 @@ function currentRouteFromLocation() {
   if (path.endsWith('/record')) return 'record';
   if (path.endsWith('/wallets')) return 'wallets';
   if (path.endsWith('/import')) return 'import';
+  if (path.endsWith('/settings')) return 'settings';
   if (path.endsWith('/ledger')) {
     const params = new URLSearchParams(window.location.search);
     if (params.get('wallet')) {
@@ -118,6 +135,9 @@ function navigateTo(page, replace = false) {
   if (page === 'record') {
     initRecordDates();
   }
+  if (page === 'settings') {
+    initSettingsPage();
+  }
 }
 
 function initRecordDates() {
@@ -127,6 +147,33 @@ function initRecordDates() {
   for (const id of ['buy-date', 'sell-date', 'transfer-date', 'interest-date']) {
     const el = byId(id);
     if (el && !el.value) el.value = local;
+  }
+}
+
+function initSettingsPage() {
+  const themeToggle = byId('settings-theme-toggle');
+  if (themeToggle) {
+    const pref = window.BtcTheme ? BtcTheme.getPreference() : 'system';
+    for (const btn of themeToggle.querySelectorAll('button')) {
+      btn.classList.toggle('active', btn.dataset.value === pref);
+      btn.onclick = function () {
+        for (const b of themeToggle.querySelectorAll('button')) b.classList.remove('active');
+        btn.classList.add('active');
+        if (window.BtcTheme) BtcTheme.setPreference(btn.dataset.value);
+      };
+    }
+  }
+  const denomToggle = byId('settings-denom-toggle');
+  if (denomToggle) {
+    const pref = window.BtcDenom ? BtcDenom.getPreference() : 'btc';
+    for (const btn of denomToggle.querySelectorAll('button')) {
+      btn.classList.toggle('active', btn.dataset.value === pref);
+      btn.onclick = function () {
+        for (const b of denomToggle.querySelectorAll('button')) b.classList.remove('active');
+        btn.classList.add('active');
+        if (window.BtcDenom) BtcDenom.setPreference(btn.dataset.value);
+      };
+    }
   }
 }
 
@@ -188,13 +235,14 @@ function showLoggedOut() {
   byId('record-view').classList.add('hidden');
   byId('wallets-view').classList.add('hidden');
   byId('import-view').classList.add('hidden');
-  byId('operator-chip').textContent = 'operator';
+  byId('settings-view').classList.add('hidden');
+  if (byId('operator-chip')) byId('operator-chip').textContent = 'operator';
   setSessionGlyph(false);
 }
 
 function showLoggedIn(username) {
   byId('login-panel').classList.add('hidden');
-  byId('operator-chip').textContent = username;
+  if (byId('operator-chip')) byId('operator-chip').textContent = username;
   setSessionGlyph(true);
   renderPageState();
 }
@@ -221,7 +269,7 @@ function scheduleChainStatusRefresh(delayMs) {
 function renderPageState() {
   document.body.classList.add('app-has-nav');
   const page = state.currentPage;
-  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet', wallets: 'Wallets', ledger: 'Ledger', trades: 'Trades', record: 'Record', import: 'Import' };
+  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet', wallets: 'Wallets', ledger: 'Ledger', trades: 'Trades', record: 'Record', import: 'Import', settings: 'Settings' };
   document.title = `Bitcoin Accounting | ${titles[page] || 'Dashboard'}`;
   byId('dashboard-view').classList.toggle('hidden', !state.session || page !== 'dashboard');
   byId('tax-view').classList.toggle('hidden', !state.session || page !== 'tax');
@@ -231,6 +279,7 @@ function renderPageState() {
   byId('record-view').classList.toggle('hidden', !state.session || page !== 'record');
   byId('wallets-view').classList.toggle('hidden', !state.session || page !== 'wallets');
   byId('import-view').classList.toggle('hidden', !state.session || page !== 'import');
+  byId('settings-view').classList.toggle('hidden', !state.session || page !== 'settings');
 
   const navRoute = (page === 'wallet') ? 'dashboard' : page;
   for (const item of document.querySelectorAll('[data-route]')) {
@@ -239,7 +288,11 @@ function renderPageState() {
   // Highlight "More" button when a page inside the sheet is active
   const moreBtn = document.getElementById('more-menu-toggle');
   if (moreBtn) {
-    moreBtn.classList.toggle('active', ['tax', 'trades', 'import'].includes(navRoute));
+    moreBtn.classList.toggle('active', ['tax', 'wallets', 'import', 'settings'].includes(navRoute));
+  }
+
+  if (state.session && page === 'settings') {
+    initSettingsPage();
   }
 
   if (page !== 'dashboard') {
@@ -373,13 +426,12 @@ async function loadChainStatus() {
 
 function renderDashboard(dashboard) {
   state.dashboard = dashboard;
-  byId('dashboard-balance').textContent = `${Number(dashboard.summary.total_balance).toFixed(8)} ${dashboard.summary.coin}`;
+  byId('dashboard-balance').textContent = denomFormat(dashboard.summary.total_balance);
   byId('dashboard-basis').textContent = dashboard.summary.average_cost_basis_usd == null
     ? 'Unpriced'
     : currency(dashboard.summary.average_cost_basis_usd);
-  byId('dashboard-active-wallets').textContent = String(dashboard.summary.active_wallet_count);
   byId('dashboard-recent-count').textContent = `${dashboard.recent_transactions.length} tx`;
-  byId('hero-wallet-count').textContent = `${dashboard.summary.active_wallet_count} / ${dashboard.summary.wallet_count}`;
+  byId('hero-wallet-count').textContent = `${dashboard.summary.active_wallet_count} of ${dashboard.summary.wallet_count} wallets`;
   renderDashboardVerificationPosture(dashboard.portfolio_verification);
 
   const warning = byId('custody-warning');
@@ -390,17 +442,31 @@ function renderDashboard(dashboard) {
     warning.classList.add('hidden');
   }
 
+  var totalBal = Number(dashboard.summary.total_balance) || 0;
+  var walletCount = dashboard.summary.wallet_count || 0;
+  byId('custody-sub').textContent = totalBal > 0
+    ? `Where your stack lives today · ${denomFormat(totalBal)} across ${walletCount} wallets`
+    : 'Where your stack lives today.';
+
+  byId('custody-gauge').innerHTML = dashboard.custody_breakdown.length
+    ? dashboard.custody_breakdown.map((row) => {
+        var cls = (row.custody || 'unknown').toLowerCase().replace(/[^a-z]/g, '');
+        var pct = Math.max(row.percentage, 0.5);
+        return `<div class="cg-seg ${cls}" style="width:${pct}%" title="${escapeHtml(row.custody)} ${row.percentage.toFixed(1)}%"></div>`;
+      }).join('')
+    : '';
+
   byId('custody-list').innerHTML = dashboard.custody_breakdown.length
-    ? dashboard.custody_breakdown.map((row) => `
-        <div class="custody-row">
-          <div>
-            <strong>${escapeHtml(row.custody)}</strong>
-            <div class="list-item-meta">${row.percentage.toFixed(1)}% of stack</div>
-          </div>
-          <div class="wallet-balance">${Number(row.balance).toFixed(8)} BTC</div>
-        </div>
-      `).join('')
-    : '<div class="custody-row"><div class="list-item-meta">No custody data yet.</div></div>';
+    ? dashboard.custody_breakdown.map((row) => {
+        var cls = (row.custody || 'unknown').toLowerCase().replace(/[^a-z]/g, '');
+        return `<div class="custody-row">
+          <div class="custody-dot ${cls}"></div>
+          <div>${escapeHtml(row.custody)}</div>
+          <div class="wallet-balance" style="font-weight:600; font-variant-numeric:tabular-nums">${denomFormat(row.balance)}</div>
+          <div class="custody-pct">${row.percentage.toFixed(1)}%</div>
+        </div>`;
+      }).join('')
+    : '<div class="custody-row" style="grid-template-columns:1fr"><div class="list-item-meta">No custody data yet.</div></div>';
 
   byId('wallet-list').innerHTML = dashboard.wallets.length
     ? dashboard.wallets.map((wallet) => `
@@ -416,7 +482,7 @@ function renderDashboard(dashboard) {
             </div>
           </div>
           <div class="wallet-balance-wrap">
-            <div class="wallet-balance">${Number(wallet.balance).toFixed(8)} BTC</div>
+            <div class="wallet-balance">${denomFormat(wallet.balance)}</div>
             <div class="list-item-meta">${wallet.percentage.toFixed(1)}% of stack</div>
           </div>
         </a>
@@ -448,7 +514,7 @@ function renderDashboardVerificationPosture(posture) {
   if (posture.status === 'verified') {
     card.classList.add('summary-card-verified');
     label.textContent = '🔰 Verified';
-    meta.textContent = `${posture.verified_wallet_count}/${posture.eligible_wallet_count} eligible wallets verified within ${posture.recency_window_days} days.`;
+    meta.textContent = `Wallets verified within ${posture.recency_window_days} days.`;
     return;
   }
 
@@ -460,7 +526,7 @@ function renderDashboardVerificationPosture(posture) {
 
   const problemCount = posture.failed_wallet_count + posture.drift_wallet_count + posture.partial_wallet_count + posture.stale_wallet_count;
   label.textContent = '🔰 Not Fully Verified';
-  meta.textContent = `${posture.verified_wallet_count}/${posture.eligible_wallet_count} eligible wallets verified. ${problemCount} need attention.`;
+  meta.textContent = `${problemCount} wallet${problemCount !== 1 ? 's' : ''} need attention.`;
 }
 
 function renderWalletVerificationBadge(wallet) {
@@ -509,8 +575,8 @@ function renderTransactionRows(transactions) {
   }
   return transactions.map((tx) => {
     const direction = tx.buy_currency === 'BTC'
-      ? `${Number(tx.buy_amount || 0).toFixed(8)} BTC`
-      : `${Number(tx.sell_amount || 0).toFixed(8)} BTC`;
+      ? denomFormat(tx.buy_amount || 0)
+      : denomFormat(tx.sell_amount || 0);
     return `
       <div class="tx-row">
         <div class="tx-main">
@@ -641,7 +707,7 @@ function renderWalletVerificationSummary(latest, walletBalance) {
     captionEl.textContent = 'No verification has been run for this wallet yet.';
     coverageEl.textContent = '-';
     scanEl.textContent = 'No scan metadata yet.';
-    balanceEl.textContent = `${Number(walletBalance || 0).toFixed(8)} BTC ledger`;
+    balanceEl.textContent = `${denomFormat(walletBalance || 0)} ledger`;
     driftEl.textContent = 'Paste a descriptor and run the first verification.';
     messageEl.textContent = 'Paste a wallet descriptor to run the first verification.';
     messageEl.style.color = 'var(--muted)';
@@ -666,8 +732,8 @@ function renderWalletVerificationSummary(latest, walletBalance) {
     driftEl.textContent = latest.warning_text || latest.error_text || 'No verified balance recorded.';
   } else {
     const drift = Number(latest.drift_btc || 0);
-    balanceEl.textContent = `${Number(latest.verified_balance).toFixed(8)} BTC`;
-    driftEl.textContent = `Ledger ${Number(latest.ledger_balance || 0).toFixed(8)} BTC · Drift ${drift >= 0 ? '+' : ''}${drift.toFixed(8)} BTC`;
+    balanceEl.textContent = denomFormat(latest.verified_balance);
+    driftEl.textContent = `Ledger ${denomFormat(latest.ledger_balance || 0)} · Drift ${drift >= 0 ? '+' : ''}${denomFormat(Math.abs(drift))}`;
   }
 
   messageEl.textContent = latest.error_text || latest.warning_text || `${label} as of ${formatVerificationTime(latest.verified_at)}.`;
@@ -701,7 +767,7 @@ function renderWalletVerificationHistory(data) {
           ${run.highest_scanned_index != null ? `<span>through #${escapeHtml(String(run.highest_scanned_index))}</span>` : ''}
         </div>
         <div class="list-item-meta">
-          ${run.verified_balance == null ? escapeHtml(run.warning_text || run.error_text || 'No verified balance recorded.') : `${Number(run.verified_balance).toFixed(8)} BTC vs ledger ${Number(run.ledger_balance || 0).toFixed(8)} BTC`}
+          ${run.verified_balance == null ? escapeHtml(run.warning_text || run.error_text || 'No verified balance recorded.') : `${denomFormat(run.verified_balance)} vs ledger ${denomFormat(run.ledger_balance || 0)}`}
         </div>
       </div>
     </div>
@@ -728,7 +794,7 @@ async function loadWalletDetail(walletId) {
     byId('wallet-view-title').textContent = w.wallet_id;
     byId('wallet-view-custody').textContent = w.custody;
     byId('wallet-view-desc').textContent = w.description || '';
-    byId('wallet-view-balance').textContent = `${Number(w.balance).toFixed(8)} BTC`;
+    byId('wallet-view-balance').textContent = denomFormat(w.balance);
     byId('wallet-view-pct').textContent = `${w.percentage.toFixed(1)}% of stack`;
     byId('wallet-view-type').textContent = w.wallet_type;
     byId('wallet-view-status').textContent = w.active ? 'Active' : 'Inactive';
@@ -778,30 +844,55 @@ async function loadLedger() {
 
 function renderLedger(data) {
   const s = data.summary;
-  const unit = s.coin || 'BTC';
-  byId('ledger-balance').textContent = `${Number(s.balance).toFixed(8)} ${unit}`;
-  byId('ledger-credits').textContent = `${Number(s.credits).toFixed(8)} ${unit}`;
-  byId('ledger-debits').textContent = `${Number(s.debits).toFixed(8)} ${unit}`;
-  byId('ledger-fees').textContent = `${Number(s.fees).toFixed(8)} ${unit}`;
+  byId('ledger-balance').textContent = denomFormat(s.balance);
+  byId('ledger-credits').textContent = denomFormat(s.credits);
+  byId('ledger-debits').textContent = denomFormat(s.debits);
+  byId('ledger-fees').textContent = denomFormat(s.fees);
   byId('ledger-count').textContent = `Showing ${data.transactions.length} of ${data.total} transactions (page ${data.page})`;
 
   if (!data.transactions.length) {
     byId('ledger-table').innerHTML = '<tr><td colspan="7" class="empty-row">No transactions match the current filters.</td></tr>';
+    byId('ledger-cards').innerHTML = '';
   } else {
     byId('ledger-table').innerHTML = data.transactions.map((tx) => `
       <tr class="ledger-row${tx.deleted ? ' ledger-row-deleted' : ''}" data-tx-id="${tx.transaction_id}">
         <td>${escapeHtml(tx.created_at)}</td>
         <td>${escapeHtml(tx.transaction_type || '')}</td>
-        <td>${tx.buy_amount != null ? `${Number(tx.buy_amount).toFixed(8)} ${escapeHtml(tx.buy_currency || '')}` : ''}</td>
-        <td>${tx.sell_amount != null ? `${Number(tx.sell_amount).toFixed(8)} ${escapeHtml(tx.sell_currency || '')}` : ''}</td>
-        <td>${tx.fee_amount != null ? `${Number(tx.fee_amount).toFixed(8)} ${escapeHtml(tx.fee_currency || '')}` : ''}</td>
+        <td>${tx.buy_amount != null ? ((tx.buy_currency || 'BTC') === 'BTC' ? denomFormat(tx.buy_amount) : formatAmount(tx.buy_amount, tx.buy_currency)) : ''}</td>
+        <td>${tx.sell_amount != null ? ((tx.sell_currency || 'BTC') === 'BTC' ? denomFormat(tx.sell_amount) : formatAmount(tx.sell_amount, tx.sell_currency)) : ''}</td>
+        <td>${tx.fee_amount != null ? ((tx.fee_currency || 'BTC') === 'BTC' ? denomFormat(tx.fee_amount) : formatAmount(tx.fee_amount, tx.fee_currency)) : ''}</td>
         <td>${escapeHtml(tx.wallet_id || '')}</td>
         <td>${escapeHtml(tx.comment || '')}</td>
       </tr>
     `).join('');
 
+    byId('ledger-cards').innerHTML = data.transactions.map((tx) => {
+      const type = (tx.transaction_type || 'tx').toLowerCase();
+      const typeClass = type === 'buy' || type === 'deposit' ? 'deposit'
+        : type === 'sell' || type === 'withdrawal' ? 'withdraw'
+        : type === 'trade' ? 'trade' : '';
+      const glyph = type.charAt(0).toUpperCase();
+      const amount = tx.buy_amount != null ? denomFormat(tx.buy_amount)
+        : tx.sell_amount != null ? denomFormat(tx.sell_amount) : '';
+      const datePart = (tx.created_at || '').replace('T', ' ').slice(0, 16);
+      const wallet = tx.wallet_id || '';
+      const comment = tx.comment || '';
+      const sub = [datePart, wallet, comment].filter(Boolean).join(' · ');
+      return `<div class="ledger-card ${typeClass}" data-tx-id="${tx.transaction_id}">
+        <div class="lc-glyph">${glyph}</div>
+        <div>
+          <div class="lc-type-label">${escapeHtml(tx.transaction_type || 'Tx')}</div>
+          <div class="lc-sub">${escapeHtml(sub)}</div>
+        </div>
+        <div style="text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600;">${amount}</div>
+      </div>`;
+    }).join('');
+
     for (const row of byId('ledger-table').querySelectorAll('[data-tx-id]')) {
       row.addEventListener('click', () => openTransactionDetail(Number(row.dataset.txId)));
+    }
+    for (const card of byId('ledger-cards').querySelectorAll('[data-tx-id]')) {
+      card.addEventListener('click', () => openTransactionDetail(Number(card.dataset.txId)));
     }
   }
 
@@ -909,7 +1000,7 @@ async function loadGains() {
       ? report.worksheet.map((row) => `
           <tr>
             <td>${escapeHtml(row.sale_date)}</td>
-            <td>${Number(row.lot_quantity).toFixed(8)}</td>
+            <td>${denomFormat(row.lot_quantity)}</td>
             <td>${escapeHtml(row.acquire_date)}</td>
             <td>${escapeHtml(row.term)}</td>
             <td>${currency(row.gain_loss_usd)}</td>
@@ -943,17 +1034,17 @@ async function loadForecast() {
 
   try {
     const forecast = await api(`api/tax/forecast?${params.toString()}`);
-    byId('forecast-balance').textContent = `${Number(forecast.current_balance).toFixed(8)} ${forecast.summary.coin}`;
+    byId('forecast-balance').textContent = denomFormat(forecast.current_balance);
     byId('forecast-proceeds').textContent = currency(forecast.summary.total_proceeds_usd);
     byId('forecast-cost').textContent = currency(forecast.summary.total_cost_basis_usd);
-    byId('forecast-missing').textContent = Number(forecast.summary.missing_basis_quantity).toFixed(8);
+    byId('forecast-missing').textContent = denomFormat(forecast.summary.missing_basis_quantity);
     renderWarnings('forecast-warnings', forecast.warnings);
 
     const rows = forecast.lots.length
       ? forecast.lots.map((lot) => `
           <tr>
             <td>${escapeHtml(lot.acquire_date || 'UNKNOWN')}</td>
-            <td>${Number(lot.quantity).toFixed(8)}</td>
+            <td>${denomFormat(lot.quantity)}</td>
             <td>${currency(lot.unit_cost_usd)}</td>
             <td>${escapeHtml(lot.term)}</td>
             <td>${currency(lot.cost_basis_usd)}</td>
@@ -1882,9 +1973,9 @@ function renderImportPreview(data) {
     return;
   }
   tbody.innerHTML = txs.map((tx, i) => {
-    const buy = tx.buy ? `${Number(tx.buy).toFixed(8)} ${escapeHtml(tx.buy_curr || '')}` : '';
-    const sell = tx.sell ? `${Number(tx.sell).toFixed(8)} ${escapeHtml(tx.sell_curr || '')}` : '';
-    const fee = tx.fee ? `${Number(tx.fee).toFixed(8)} ${escapeHtml(tx.fee_curr || '')}` : '';
+    const buy = tx.buy ? ((tx.buy_curr || 'BTC') === 'BTC' ? denomFormat(tx.buy) : formatAmount(tx.buy, tx.buy_curr)) : '';
+    const sell = tx.sell ? ((tx.sell_curr || 'BTC') === 'BTC' ? denomFormat(tx.sell) : formatAmount(tx.sell, tx.sell_curr)) : '';
+    const fee = tx.fee ? ((tx.fee_curr || 'BTC') === 'BTC' ? denomFormat(tx.fee) : formatAmount(tx.fee, tx.fee_curr)) : '';
     return `<tr data-idx="${i}">
       <td><input type="checkbox" class="import-row-check" data-idx="${i}" checked></td>
       <td>${escapeHtml(tx.trans_type || '')}</td>
@@ -2060,18 +2151,50 @@ function renderTrades(data) {
 
   if (!data.trades.length) {
     byId('trades-table').innerHTML = '<tr><td colspan="7" class="empty-row">No trades match the current filters.</td></tr>';
+    byId('trades-cards').innerHTML = '';
   } else {
     byId('trades-table').innerHTML = data.trades.map((t) => `
       <tr>
         <td>${escapeHtml(t.date)}</td>
         <td>${escapeHtml(t.trade_type)}</td>
-        <td>${Number(t.quantity).toFixed(8)}</td>
+        <td>${denomFormat(t.quantity)}</td>
         <td>${escapeHtml(t.trade_currency)}</td>
         <td>${t.unit_cost_usd != null ? currency(t.unit_cost_usd) : '-'}</td>
         <td>${t.total_cost_usd != null ? currency(t.total_cost_usd) : '-'}</td>
         <td>${escapeHtml(t.exchange || '')}</td>
       </tr>
     `).join('');
+
+    byId('trades-cards').innerHTML = data.trades.map((t) => {
+      var ex = t.exchange || '?';
+      var glyph = ex.length <= 2 ? ex.toUpperCase() : ex.charAt(0).toUpperCase();
+      var typeClass = (t.trade_type || '').toLowerCase() === 'sell' ? 'sell' : '';
+      var tag = escapeHtml((t.trade_type || '').toUpperCase());
+      var unitCost = t.unit_cost_usd != null ? `@ ${currency(t.unit_cost_usd)}/${denomUnit()}` : '';
+      var datePart = (t.date || '').slice(0, 10);
+      var sub = [datePart, unitCost].filter(Boolean).join(' · ');
+      var isSats = window.BtcDenom && BtcDenom.getPreference() === 'sats';
+      var qty = isSats
+        ? Math.round(Number(t.quantity) * 100000000).toLocaleString('en-US')
+        : Number(t.quantity).toFixed(8);
+      var unit = denomUnit();
+      var total = t.total_cost_usd != null ? currency(t.total_cost_usd) : '';
+      return `<div class="trade-card">
+        <div class="tc-glyph">${escapeHtml(glyph)}</div>
+        <div class="tc-main">
+          <div class="tc-title">
+            <span>${escapeHtml(ex)}</span>
+            <span class="tc-tag ${typeClass}">${tag}</span>
+          </div>
+          <div class="tc-sub">${escapeHtml(sub)}</div>
+        </div>
+        <div class="tc-amount">
+          <span class="tc-qty">${qty}</span>
+          <span class="tc-unit">${escapeHtml(unit)}</span>
+          ${total ? `<span class="tc-cost">${total}</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
   }
 
   // Pagination
@@ -2114,8 +2237,8 @@ function renderLiquidity(data) {
     byId('liquidity-table').innerHTML = exchanges.map((e) => `
       <tr>
         <td>${escapeHtml(e.exchange)}</td>
-        <td>${Number(e.total_purchased).toFixed(8)}</td>
-        <td>${Number(e.current_balance).toFixed(8)}</td>
+        <td>${denomFormat(e.total_purchased)}</td>
+        <td>${denomFormat(e.current_balance)}</td>
         <td>${e.avg_cost_usd != null ? currency(e.avg_cost_usd) : '-'}</td>
       </tr>
     `).join('');
@@ -2123,12 +2246,12 @@ function renderLiquidity(data) {
 
   // Summary cards
   const s = data.summary;
-  byId('liq-total-purchased').textContent = `${Number(s.total_purchased).toFixed(8)} BTC`;
+  byId('liq-total-purchased').textContent = denomFormat(s.total_purchased);
   byId('liq-total-usd').textContent = currency(s.total_usd_spent);
-  byId('liq-avg-cost').textContent = s.avg_cost_basis_usd != null ? `${currency(s.avg_cost_basis_usd)} / BTC` : '-';
-  byId('liq-at-exchanges').textContent = `${Number(s.still_at_exchanges).toFixed(8)} BTC`;
-  byId('liq-cold-storage').textContent = `${Number(s.in_cold_storage).toFixed(8)} BTC`;
-  byId('liq-total-holdings').textContent = `${Number(s.total_holdings).toFixed(8)} BTC`;
+  byId('liq-avg-cost').textContent = s.avg_cost_basis_usd != null ? `${currency(s.avg_cost_basis_usd)} / ${denomUnit()}` : '-';
+  byId('liq-at-exchanges').textContent = denomFormat(s.still_at_exchanges);
+  byId('liq-cold-storage').textContent = denomFormat(s.in_cold_storage);
+  byId('liq-total-holdings').textContent = denomFormat(s.total_holdings);
 
 }
 
@@ -2164,3 +2287,14 @@ state.currentPage = currentRouteFromLocation();
 bindEvents();
 renderPageState();
 refreshSession();
+
+window.addEventListener('btc:denom-change', function () {
+  var page = state.currentPage;
+  if (page === 'dashboard' && state.dashboard) renderDashboard(state.dashboard);
+  if (page === 'ledger') loadLedger();
+  if (page === 'wallet' && state.currentWalletId) loadWalletDetail(state.currentWalletId);
+  if (page === 'wallets') renderWalletsList(state.walletsList);
+  if (page === 'trades') loadTradesPage();
+  if (page === 'tax') { loadGains(); loadForecast(); }
+  if (page === 'settings') initSettingsPage();
+});

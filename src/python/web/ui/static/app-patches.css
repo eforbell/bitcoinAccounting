@@ -1,0 +1,26 @@
+/* ════════════════════════════════════════════════════════════════════════
+   Bitcoin Accounting — app patches
+   Tiny file. Three rules. Load AFTER app.css so it wins specificity ties.
+
+   You can fold these directly into app.css if you prefer one fewer file.
+   They're isolated here so the diff stays small and reviewable.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* 1. Stop forcing dark color-scheme on the html element.
+      The chassis + tokens.css handle light/dark via [data-theme].          */
+html {
+  color-scheme: light dark;
+}
+
+/* 2. Header colors picked up the .eyebrow color (--warn). Reset to neutral.
+      Eyebrows now resolve through the skin's .eyebrow rule using --dim.    */
+.hero-card .eyebrow,
+.page-header .eyebrow {
+  color: var(--dim);
+}
+
+/* 3. Empty-row text was inheriting --muted; ensure it stays neutral in light.
+      Cosmetic — fixes a thin contrast issue on cream surfaces.             */
+.empty-row {
+  color: var(--muted);
+}

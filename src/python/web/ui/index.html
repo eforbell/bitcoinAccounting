@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="static/sovereign-chassis.css">
   <link rel="stylesheet" href="static/tokens.css">
   <link rel="stylesheet" href="static/app.css">
+  <link rel="stylesheet" href="static/app-patches.css">
   <link rel="stylesheet" href="static/accounting-skin.css">
 </head>
 <body>
@@ -53,6 +54,10 @@
         <span class="nav-icon">↑</span>
         <span class="nav-label">Import</span>
       </a>
+      <a class="nav-item" href="settings" data-route="settings">
+        <span class="nav-icon">⚙</span>
+        <span class="nav-label">Settings</span>
+      </a>
     </div>
   </nav>
 
@@ -82,26 +87,20 @@
       </section>
 
       <section id="dashboard-view" class="view-stack hidden">
-        <section class="hero-card">
-          <div class="hero-card-brand">
-            <img class="hero-logo" src="static/brand/bitcoin-shield-logo.png" alt="">
-            <div>
-              <p class="eyebrow">Private Sovereignty Treasury</p>
-              <h1>Dashboard</h1>
-              <p class="hero-copy">Your daily bitcoin position, custody posture, and fast path into tax planning.</p>
+        <div class="page-header">
+          <div class="ph-seal">₿</div>
+          <div class="ph-main">
+            <div class="ph-row">
+              <span class="ph-eyebrow">Private Sovereignty Treasury</span>
+              <span style="color: var(--dim); font-size: 11px;">·</span>
+              <span id="hero-wallet-count" class="ph-meta-inline">0 wallets</span>
             </div>
+            <h1 class="ph-title">Dashboard</h1>
           </div>
-          <div class="hero-meta">
-            <div class="hero-stat">
-              <span class="hero-label">Wallets</span>
-              <strong id="hero-wallet-count">0</strong>
-            </div>
-            <div class="hero-stat">
-              <span class="hero-label">Operator</span>
-              <strong id="operator-chip">operator</strong>
-            </div>
+          <div class="ph-actions">
+            <a href="record" data-route="record" class="button">Record purchase</a>
           </div>
-        </section>
+        </div>
 
         <section class="summary-grid summary-grid-dashboard">
           <article class="summary-card summary-card-featured">
@@ -112,18 +111,14 @@
             <span class="summary-label">Cost Basis per BTC</span>
             <strong id="dashboard-basis">$0.00</strong>
           </article>
-          <article class="summary-card">
-            <span class="summary-label">Active Wallets</span>
-            <strong id="dashboard-active-wallets">0</strong>
-          </article>
-          <article class="summary-card">
-            <span class="summary-label">Recent Activity</span>
-            <strong id="dashboard-recent-count">0 tx</strong>
-          </article>
           <article id="dashboard-verification-card" class="summary-card">
             <span class="summary-label">Bitcoin Verification</span>
             <strong id="dashboard-verification">🔰 Unverified</strong>
             <p id="dashboard-verification-meta" class="muted">No eligible wallet posture yet.</p>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">Recent Activity</span>
+            <strong id="dashboard-recent-count">0 tx</strong>
           </article>
         </section>
 
@@ -163,30 +158,30 @@
           <div id="chain-status-warning" class="chain-status-warning hidden"></div>
         </section>
 
-        <section class="dashboard-grid">
-          <section class="panel subpanel">
-            <div class="panel-heading">
-              <div>
-                <h3>Custody Breakdown</h3>
-                <p>Where your stack lives today.</p>
-              </div>
+        <section class="panel subpanel">
+          <div class="panel-heading">
+            <div>
+              <h3>Custody breakdown</h3>
+              <p id="custody-sub">Where your stack lives today.</p>
             </div>
-            <div id="custody-list" class="stack"></div>
-          </section>
+            <a href="wallets" data-route="wallets" class="button button-ghost button-inline">Manage</a>
+          </div>
+          <div id="custody-gauge" class="custody-gauge"></div>
+          <div id="custody-list" class="stack"></div>
+        </section>
 
-          <section class="panel subpanel">
-            <div class="panel-heading">
-              <div>
-                <h3>Wallet Balances</h3>
-                <p>Daily position by wallet.</p>
-              </div>
-              <label class="toggle-label">
-                <input id="inactive-toggle" type="checkbox">
-                <span>Include inactive</span>
-              </label>
+        <section class="panel subpanel">
+          <div class="panel-heading">
+            <div>
+              <h3>Wallet balances</h3>
+              <p>Daily position by wallet · sorted by stack share</p>
             </div>
-            <div id="wallet-list" class="list-shell"></div>
-          </section>
+            <label class="toggle-label">
+              <input id="inactive-toggle" type="checkbox">
+              <span>Include inactive</span>
+            </label>
+          </div>
+          <div id="wallet-list" class="list-shell"></div>
         </section>
 
         <section class="panel subpanel">
@@ -409,7 +404,7 @@
 
           <div id="ledger-count" class="list-item-meta" style="margin-top: 0.4rem;"></div>
 
-          <div class="table-shell">
+          <div class="table-shell ledger">
             <table>
               <thead>
                 <tr>
@@ -427,6 +422,7 @@
               </tbody>
             </table>
           </div>
+          <div id="ledger-cards" class="ledger-cards"></div>
 
           <div id="ledger-pagination" class="ledger-pagination"></div>
         </section>
@@ -533,7 +529,7 @@
 
             <div id="trades-count" class="list-item-meta" style="margin-top: 0.4rem;"></div>
 
-            <div class="table-shell">
+            <div class="table-shell trades">
               <table>
                 <thead>
                   <tr>
@@ -551,6 +547,7 @@
                 </tbody>
               </table>
             </div>
+            <div id="trades-cards" class="trades-cards"></div>
 
             <div id="trades-pagination" class="ledger-pagination"></div>
           </div>
@@ -1169,6 +1166,66 @@
           </div>
         </section>
       </section>
+      <section id="settings-view" class="view-stack hidden">
+        <div class="page-header">
+          <div class="ph-seal">⚙</div>
+          <div class="ph-main">
+            <div class="ph-row">
+              <span class="ph-eyebrow">Preferences</span>
+            </div>
+            <h1 class="ph-title">Settings</h1>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="settings-group">
+            <div class="settings-group-title">Appearance</div>
+            <div class="list-group">
+              <div class="settings-row">
+                <div>
+                  <div class="sr-label">Theme</div>
+                  <div class="sr-desc">Switch between dark and light mode</div>
+                </div>
+                <div id="settings-theme-toggle" class="seg">
+                  <button type="button" data-value="dark">Dark</button>
+                  <button type="button" data-value="system">System</button>
+                  <button type="button" data-value="light">Light</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="settings-group-title">Display</div>
+            <div class="list-group">
+              <div class="settings-row">
+                <div>
+                  <div class="sr-label">Denomination</div>
+                  <div class="sr-desc">Choose how Bitcoin values are displayed</div>
+                </div>
+                <div id="settings-denom-toggle" class="seg">
+                  <button type="button" data-value="btc">BTC</button>
+                  <button type="button" data-value="sats">sats</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="settings-group-title">Privacy</div>
+            <div class="list-group">
+              <div class="settings-row disabled">
+                <div>
+                  <div class="sr-label">Privacy Mode</div>
+                  <div class="sr-desc">Redact balances and sensitive values on screen</div>
+                </div>
+                <span class="sr-badge">Coming soon</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -1185,9 +1242,9 @@
       <span class="nav-icon">+</span>
       <span class="nav-label">Record</span>
     </a>
-    <a class="nav-item" href="wallets" data-route="wallets">
-      <span class="nav-icon">⌂</span>
-      <span class="nav-label">Wallets</span>
+    <a class="nav-item" href="trades" data-route="trades">
+      <span class="nav-icon">⇄</span>
+      <span class="nav-label">Trades</span>
     </a>
     <button id="more-menu-toggle" class="nav-item nav-brand-mobile" type="button" aria-label="More pages">
       <span class="nav-icon">⋯</span>
@@ -1202,12 +1259,12 @@
         <img src="static/brand/bitcoin-shield-logo.png" alt="" width="22" height="22">
         <strong>Bitcoin Accounting</strong>
       </span>
-      <span class="more-menu-subtitle">Trades, tax, import, settings</span>
+      <span class="more-menu-subtitle">Wallets, tax, import, settings</span>
     </div>
     <hr class="more-menu-divider">
-    <a class="more-menu-item" href="trades" data-route="trades">
-      <span class="more-menu-icon">⇄</span>
-      <span>Trades</span>
+    <a class="more-menu-item" href="wallets" data-route="wallets">
+      <span class="more-menu-icon">⌂</span>
+      <span>Wallets</span>
     </a>
     <a class="more-menu-item" href="tax" data-route="tax">
       <span class="more-menu-icon">₿</span>
@@ -1217,12 +1274,19 @@
       <span class="more-menu-icon">↑</span>
       <span>Import</span>
     </a>
+    <a class="more-menu-item" href="settings" data-route="settings">
+      <span class="more-menu-icon">⚙</span>
+      <span>Settings</span>
+    </a>
+    <hr class="more-menu-divider">
     <button id="mobile-session-action" class="more-menu-item more-menu-signout" type="button">
       <span class="more-menu-icon">⏻</span>
       <span>Sign Out</span>
     </button>
   </div>
 
+  <script src="static/theme.js"></script>
+  <script src="static/denom.js"></script>
   <script src="static/app.js"></script>
 </body>
 </html>
