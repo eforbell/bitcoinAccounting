@@ -1214,12 +1214,15 @@
           <div class="settings-group">
             <div class="settings-group-title">Privacy</div>
             <div class="list-group">
-              <div class="settings-row disabled">
+              <div class="settings-row">
                 <div>
                   <div class="sr-label">Privacy Mode</div>
                   <div class="sr-desc">Redact balances and sensitive values on screen</div>
                 </div>
-                <span class="sr-badge">Coming soon</span>
+                <div id="settings-privacy-toggle" class="seg">
+                  <button type="button" data-value="off">Off</button>
+                  <button type="button" data-value="on">On</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1287,6 +1290,7 @@
 
   <script src="static/theme.js"></script>
   <script src="static/denom.js"></script>
+  <script src="static/privacy.js"></script>
   <script src="static/app.js"></script>
 </body>
 </html>

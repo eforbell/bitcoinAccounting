@@ -1,4 +1,6 @@
+var REDACTED = '•••••';
 function denomFormat(btcAmount) {
+  if (window.BtcPrivacy && BtcPrivacy.isEnabled()) return REDACTED;
   return window.BtcDenom ? BtcDenom.format(btcAmount) : Number(btcAmount).toFixed(8) + ' BTC';
 }
 function denomUnit() {
@@ -6,6 +8,7 @@ function denomUnit() {
 }
 var FIAT_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'USDC', 'USDT', 'GUSD', 'BUSD', 'DAI', 'PYUSD'];
 function formatAmount(amount, curr) {
+  if (window.BtcPrivacy && BtcPrivacy.isEnabled()) return REDACTED;
   var n = Number(amount);
   if (isNaN(n)) return '';
   var c = (curr || '').toUpperCase();
@@ -38,6 +41,7 @@ function byId(id) {
 }
 
 function currency(value) {
+  if (window.BtcPrivacy && BtcPrivacy.isEnabled()) return REDACTED;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -132,6 +136,10 @@ function navigateTo(page, replace = false) {
   if (page === 'wallets') {
     loadWalletsList();
   }
+  if (page === 'tax') {
+    loadGains();
+    loadForecast();
+  }
   if (page === 'record') {
     initRecordDates();
   }
@@ -172,6 +180,18 @@ function initSettingsPage() {
         for (const b of denomToggle.querySelectorAll('button')) b.classList.remove('active');
         btn.classList.add('active');
         if (window.BtcDenom) BtcDenom.setPreference(btn.dataset.value);
+      };
+    }
+  }
+  const privacyToggle = byId('settings-privacy-toggle');
+  if (privacyToggle) {
+    const pref = window.BtcPrivacy ? BtcPrivacy.getPreference() : 'off';
+    for (const btn of privacyToggle.querySelectorAll('button')) {
+      btn.classList.toggle('active', btn.dataset.value === pref);
+      btn.onclick = function () {
+        for (const b of privacyToggle.querySelectorAll('button')) b.classList.remove('active');
+        btn.classList.add('active');
+        if (window.BtcPrivacy) BtcPrivacy.setPreference(btn.dataset.value);
       };
     }
   }
@@ -2173,11 +2193,7 @@ function renderTrades(data) {
       var unitCost = t.unit_cost_usd != null ? `@ ${currency(t.unit_cost_usd)}/${denomUnit()}` : '';
       var datePart = (t.date || '').slice(0, 10);
       var sub = [datePart, unitCost].filter(Boolean).join(' · ');
-      var isSats = window.BtcDenom && BtcDenom.getPreference() === 'sats';
-      var qty = isSats
-        ? Math.round(Number(t.quantity) * 100000000).toLocaleString('en-US')
-        : Number(t.quantity).toFixed(8);
-      var unit = denomUnit();
+      var qty = denomFormat(t.quantity);
       var total = t.total_cost_usd != null ? currency(t.total_cost_usd) : '';
       return `<div class="trade-card">
         <div class="tc-glyph">${escapeHtml(glyph)}</div>
@@ -2190,7 +2206,6 @@ function renderTrades(data) {
         </div>
         <div class="tc-amount">
           <span class="tc-qty">${qty}</span>
-          <span class="tc-unit">${escapeHtml(unit)}</span>
           ${total ? `<span class="tc-cost">${total}</span>` : ''}
         </div>
       </div>`;
@@ -2289,6 +2304,17 @@ renderPageState();
 refreshSession();
 
 window.addEventListener('btc:denom-change', function () {
+  var page = state.currentPage;
+  if (page === 'dashboard' && state.dashboard) renderDashboard(state.dashboard);
+  if (page === 'ledger') loadLedger();
+  if (page === 'wallet' && state.currentWalletId) loadWalletDetail(state.currentWalletId);
+  if (page === 'wallets') renderWalletsList(state.walletsList);
+  if (page === 'trades') loadTradesPage();
+  if (page === 'tax') { loadGains(); loadForecast(); }
+  if (page === 'settings') initSettingsPage();
+});
+
+window.addEventListener('btc:privacy-change', function () {
   var page = state.currentPage;
   if (page === 'dashboard' && state.dashboard) renderDashboard(state.dashboard);
   if (page === 'ledger') loadLedger();
