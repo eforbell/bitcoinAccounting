@@ -2320,12 +2320,12 @@ window.addEventListener('btc:denom-change', function () {
 });
 
 window.addEventListener('btc:privacy-change', function () {
-  var page = state.currentPage;
-  if (page === 'dashboard' && state.dashboard) renderDashboard(state.dashboard);
-  if (page === 'ledger') loadLedger();
-  if (page === 'wallet' && state.currentWalletId) loadWalletDetail(state.currentWalletId);
-  if (page === 'wallets') renderWalletsList(state.walletsList);
-  if (page === 'trades') loadTradesPage();
-  if (page === 'tax') { loadGains(); loadForecast(); }
-  if (page === 'settings') initSettingsPage();
+  if (state.dashboard) renderDashboard(state.dashboard);
+  loadLedger();
+  if (state.currentWalletId) loadWalletDetail(state.currentWalletId);
+  if (state.walletsList.length) renderWalletsList(state.walletsList);
+  loadTradesPage();
+  loadGains();
+  loadForecast();
+  initSettingsPage();
 });
