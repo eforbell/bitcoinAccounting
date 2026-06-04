@@ -1018,7 +1018,11 @@ td.num {
   white-space: nowrap;
 }
 
-/* Privacy mode — redact values not covered by JS formatters */
+/* Privacy mode — CSS-level redaction as instant fallback while JS re-renders */
+html[data-privacy="on"] .summary-card strong,
+html[data-privacy="on"] .table-shell td,
+html[data-privacy="on"] .trade-card .tc-amount,
+html[data-privacy="on"] .wallet-balance,
 html[data-privacy="on"] #wallet-view-pct,
 html[data-privacy="on"] #wallet-view-pct-card,
 html[data-privacy="on"] #wallet-verification-drift {
