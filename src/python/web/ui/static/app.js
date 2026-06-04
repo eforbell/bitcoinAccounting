@@ -2193,11 +2193,7 @@ function renderTrades(data) {
       var unitCost = t.unit_cost_usd != null ? `@ ${currency(t.unit_cost_usd)}/${denomUnit()}` : '';
       var datePart = (t.date || '').slice(0, 10);
       var sub = [datePart, unitCost].filter(Boolean).join(' · ');
-      var isSats = window.BtcDenom && BtcDenom.getPreference() === 'sats';
-      var qty = isSats
-        ? Math.round(Number(t.quantity) * 100000000).toLocaleString('en-US')
-        : Number(t.quantity).toFixed(8);
-      var unit = denomUnit();
+      var qty = denomFormat(t.quantity);
       var total = t.total_cost_usd != null ? currency(t.total_cost_usd) : '';
       return `<div class="trade-card">
         <div class="tc-glyph">${escapeHtml(glyph)}</div>
@@ -2210,7 +2206,6 @@ function renderTrades(data) {
         </div>
         <div class="tc-amount">
           <span class="tc-qty">${qty}</span>
-          <span class="tc-unit">${escapeHtml(unit)}</span>
           ${total ? `<span class="tc-cost">${total}</span>` : ''}
         </div>
       </div>`;
@@ -2320,12 +2315,12 @@ window.addEventListener('btc:denom-change', function () {
 });
 
 window.addEventListener('btc:privacy-change', function () {
-  if (state.dashboard) renderDashboard(state.dashboard);
-  loadLedger();
-  if (state.currentWalletId) loadWalletDetail(state.currentWalletId);
-  if (state.walletsList.length) renderWalletsList(state.walletsList);
-  loadTradesPage();
-  loadGains();
-  loadForecast();
-  initSettingsPage();
+  var page = state.currentPage;
+  if (page === 'dashboard' && state.dashboard) renderDashboard(state.dashboard);
+  if (page === 'ledger') loadLedger();
+  if (page === 'wallet' && state.currentWalletId) loadWalletDetail(state.currentWalletId);
+  if (page === 'wallets') renderWalletsList(state.walletsList);
+  if (page === 'trades') loadTradesPage();
+  if (page === 'tax') { loadGains(); loadForecast(); }
+  if (page === 'settings') initSettingsPage();
 });
