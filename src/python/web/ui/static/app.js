@@ -136,6 +136,10 @@ function navigateTo(page, replace = false) {
   if (page === 'wallets') {
     loadWalletsList();
   }
+  if (page === 'tax') {
+    loadGains();
+    loadForecast();
+  }
   if (page === 'record') {
     initRecordDates();
   }
