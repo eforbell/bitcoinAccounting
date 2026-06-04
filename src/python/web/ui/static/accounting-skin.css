@@ -1017,3 +1017,11 @@ td.num {
   font-weight: 700;
   white-space: nowrap;
 }
+
+/* Privacy mode — redact values not covered by JS formatters */
+html[data-privacy="on"] #wallet-view-pct,
+html[data-privacy="on"] #wallet-view-pct-card,
+html[data-privacy="on"] #wallet-verification-drift {
+  filter: blur(6px);
+  user-select: none;
+}
