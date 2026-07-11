@@ -153,7 +153,17 @@ class CustodyChart:
         # Get wallet custody information
         wallets = self._get_wallet_custody_map()
 
-        # Group transactions by day and wallet to smooth the data
+        # Running balance per custody type. Transactions before the window are
+        # folded into this opening balance so a narrow range (1Y/YTD) starts
+        # from real holdings on start_date rather than from zero.
+        custody_balances: dict[str, float] = {
+            "self-custodied": 0.0,
+            "custodial": 0.0,
+            "multisig": 0.0,
+            "unknown": 0.0,
+        }
+
+        # Group in-window transactions by day and custody type to smooth the data
         from collections import defaultdict
         daily_changes: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
 
@@ -164,32 +174,29 @@ class CustodyChart:
             if hasattr(date, 'tzinfo') and date.tzinfo is not None:
                 date = date.replace(tzinfo=None)
 
-            # Skip transactions outside date range
-            if date < start_date or date > end_date:
-                continue
-
-            # Get just the date (no time) for grouping
-            date_key = date.date().isoformat()
             exchange = txn["exchange"]
             btc_change = txn["btc_change"]
 
             # Determine custody type
             custody_type = wallets.get(exchange, "unknown")
 
+            if date < start_date:
+                # Pre-window: fold into the opening balance, no snapshot
+                custody_balances[custody_type] += btc_change
+                continue
+            if date > end_date:
+                # Post-window: ignore
+                continue
+
+            # Get just the date (no time) for grouping
+            date_key = date.date().isoformat()
+
             # Accumulate changes for this day and custody type
             daily_changes[date_key][custody_type] += btc_change
 
-        # Build daily balance snapshots
-        custody_balances: dict[str, float] = {
-            "self-custodied": 0.0,
-            "custodial": 0.0,
-            "multisig": 0.0,
-            "unknown": 0.0,
-        }
-
         balance_data = []
 
-        # Add starting point
+        # Add starting point at the opening balance
         balance_data.append({
             "date": start_date,
             **custody_balances.copy()
