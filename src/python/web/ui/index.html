@@ -42,6 +42,10 @@
         <span class="nav-icon">⇄</span>
         <span class="nav-label">Trades</span>
       </a>
+      <a class="nav-item" href="reports" data-route="reports">
+        <span class="nav-icon">◔</span>
+        <span class="nav-label">Reports</span>
+      </a>
       <a class="nav-item" href="record" data-route="record">
         <span class="nav-icon">+</span>
         <span class="nav-label">Record</span>
@@ -1229,6 +1233,50 @@
         </div>
       </section>
 
+      <section id="reports-view" class="view-stack hidden">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Private Sovereignty Treasury</p>
+              <h1>Reports</h1>
+              <p class="muted">Visual portfolio insights and a downloadable PDF report.</p>
+            </div>
+            <div class="reports-toolbar">
+              <div id="reports-range" class="seg" role="group" aria-label="Date range">
+                <button type="button" data-value="all">All</button>
+                <button type="button" data-value="5y">5Y</button>
+                <button type="button" data-value="1y">1Y</button>
+                <button type="button" data-value="ytd">YTD</button>
+              </div>
+              <a id="reports-pdf-link" class="button" href="#" rel="noopener">Download PDF</a>
+            </div>
+          </div>
+
+          <p id="reports-status" class="status-line"></p>
+
+          <div class="reports-charts">
+            <figure class="report-chart">
+              <figcaption>Orange Plot — Bitcoin Accumulation Strategy</figcaption>
+              <div class="report-chart-frame">
+                <img id="report-img-orange" alt="Orange plot: purchases and sales over BTC-USD price history">
+              </div>
+            </figure>
+            <figure class="report-chart">
+              <figcaption>Bitcoin Stack Growth Over Time</figcaption>
+              <div class="report-chart-frame">
+                <img id="report-img-balance" alt="Cumulative BTC balance over time">
+              </div>
+            </figure>
+            <figure class="report-chart">
+              <figcaption>Holdings by Custody Type</figcaption>
+              <div class="report-chart-frame">
+                <img id="report-img-custody" alt="BTC holdings by custody type over time">
+              </div>
+            </figure>
+          </div>
+        </section>
+      </section>
+
     </main>
   </div>
 
@@ -1262,9 +1310,13 @@
         <img src="static/brand/bitcoin-shield-logo.png" alt="" width="22" height="22">
         <strong>Bitcoin Accounting</strong>
       </span>
-      <span class="more-menu-subtitle">Wallets, tax, import, settings</span>
+      <span class="more-menu-subtitle">Reports, wallets, tax, import, settings</span>
     </div>
     <hr class="more-menu-divider">
+    <a class="more-menu-item" href="reports" data-route="reports">
+      <span class="more-menu-icon">◔</span>
+      <span>Reports</span>
+    </a>
     <a class="more-menu-item" href="wallets" data-route="wallets">
       <span class="more-menu-icon">⌂</span>
       <span>Wallets</span>
