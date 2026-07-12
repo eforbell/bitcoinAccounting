@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from web.config import WebConfig, load_web_config, normalized_base_path
-from web.routes import auth_router, chain_router, health_router, imports_router, ledger_router, portfolio_router, tax_router, trades_router, ui_router, verification_router, wallets_router
+from web.routes import auth_router, chain_router, health_router, imports_router, ledger_router, portfolio_router, reports_router, tax_router, trades_router, ui_router, verification_router, wallets_router
 from web.startup import validate_startup_config
 from pathlib import Path
 
@@ -38,10 +38,28 @@ def create_app(config: WebConfig | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(ledger_router)
     app.include_router(portfolio_router)
+    app.include_router(reports_router)
     app.include_router(tax_router)
     app.include_router(trades_router)
     app.include_router(verification_router)
     app.include_router(wallets_router)
     app.include_router(imports_router)
+
+    # Drop cached report bytes after any successful write that can change the
+    # charts (ledger transactions, imports, wallet custody). Substring matching
+    # tolerates a mounted base_path prefix on the request path.
+    _REPORT_MUTATION_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+    _REPORT_MUTATION_PREFIXES = ("/api/ledger", "/api/import", "/api/wallets")
+
+    @app.middleware("http")
+    async def _invalidate_reports_cache(request, call_next):  # type: ignore[no-untyped-def]
+        response = await call_next(request)
+        if request.method in _REPORT_MUTATION_METHODS and response.status_code < 400:
+            path = request.url.path
+            if any(prefix in path for prefix in _REPORT_MUTATION_PREFIXES):
+                from web.services.reports import clear_cache
+
+                clear_cache()
+        return response
 
     return app

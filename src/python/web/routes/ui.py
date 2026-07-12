@@ -74,6 +74,12 @@ def web_tax_shell(request: Request) -> HTMLResponse:
     return _shell_response(request)
 
 
+@router.get("/reports", include_in_schema=False)
+def web_reports_shell(request: Request) -> HTMLResponse:
+    """Serve the reports/visualization page within the shared web shell."""
+    return _shell_response(request)
+
+
 @router.get("/record", include_in_schema=False)
 def web_record_shell(request: Request) -> HTMLResponse:
     """Serve the transaction entry page within the shared web shell."""

@@ -146,17 +146,21 @@ class BalanceChart:
             key=lambda t: _parse_date_naive(t["date"]),
         )
 
-        # Add starting point at balance 0
-        balance_data.append({"date": start_date, "balance": 0.0})
+        # Seed the opening balance from every trade before the window so a
+        # narrow range (1Y/YTD) starts from the real holdings on start_date
+        # rather than from zero.
+        for trade in sorted_trades:
+            if _parse_date_naive(trade["date"]) < start_date:
+                cumulative_balance += trade["to_quantity"]
+
+        # Add starting point at the opening balance
+        balance_data.append({"date": start_date, "balance": cumulative_balance})
 
         for trade in sorted_trades:
-            date = trade["date"]
-            if isinstance(date, str):
-                date = datetime.fromisoformat(date.replace("Z", "+00:00"))
-            if hasattr(date, 'tzinfo') and date.tzinfo is not None:
-                date = date.replace(tzinfo=None)
+            date = _parse_date_naive(trade["date"])
 
-            # Skip trades outside date range
+            # Skip trades outside date range (pre-range already folded into the
+            # opening balance above)
             if date < start_date or date > end_date:
                 continue
 

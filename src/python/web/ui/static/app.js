@@ -34,6 +34,7 @@ const state = {
   selectedTx: null,
   importState: { parsers: [], preview: null, duplicateIndices: [], step: 1, wallets: [] },
   tradesFilters: { exchange: '', page: 1, perPage: 50, view: 'trades' },
+  reportsState: { range: 'all', wired: false },
 };
 
 function byId(id) {
@@ -82,6 +83,7 @@ function appPath(page) {
   if (page === 'tax') return `${base}tax`;
   if (page === 'ledger') return `${base}ledger`;
   if (page === 'trades') return `${base}trades`;
+  if (page === 'reports') return `${base}reports`;
   if (page === 'record') return `${base}record`;
   if (page === 'wallets') return `${base}wallets`;
   if (page === 'import') return `${base}import`;
@@ -93,6 +95,7 @@ function appPath(page) {
 function currentRouteFromLocation() {
   const path = window.location.pathname.replace(/\/+$/, '');
   if (path.endsWith('/tax')) return 'tax';
+  if (path.endsWith('/reports')) return 'reports';
   if (path.endsWith('/trades')) return 'trades';
   if (path.endsWith('/record')) return 'record';
   if (path.endsWith('/wallets')) return 'wallets';
@@ -129,6 +132,9 @@ function navigateTo(page, replace = false) {
   }
   if (page === 'trades') {
     loadTradesPage();
+  }
+  if (page === 'reports') {
+    loadReports();
   }
   if (page === 'import') {
     loadImportPage();
@@ -252,6 +258,7 @@ function showLoggedOut() {
   byId('wallet-view').classList.add('hidden');
   byId('ledger-view').classList.add('hidden');
   byId('trades-view').classList.add('hidden');
+  byId('reports-view').classList.add('hidden');
   byId('record-view').classList.add('hidden');
   byId('wallets-view').classList.add('hidden');
   byId('import-view').classList.add('hidden');
@@ -289,13 +296,14 @@ function scheduleChainStatusRefresh(delayMs) {
 function renderPageState() {
   document.body.classList.add('app-has-nav');
   const page = state.currentPage;
-  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet', wallets: 'Wallets', ledger: 'Ledger', trades: 'Trades', record: 'Record', import: 'Import', settings: 'Settings' };
+  const titles = { dashboard: 'Dashboard', tax: 'Tax', wallet: 'Wallet', wallets: 'Wallets', ledger: 'Ledger', trades: 'Trades', reports: 'Reports', record: 'Record', import: 'Import', settings: 'Settings' };
   document.title = `Bitcoin Accounting | ${titles[page] || 'Dashboard'}`;
   byId('dashboard-view').classList.toggle('hidden', !state.session || page !== 'dashboard');
   byId('tax-view').classList.toggle('hidden', !state.session || page !== 'tax');
   byId('wallet-view').classList.toggle('hidden', !state.session || page !== 'wallet');
   byId('ledger-view').classList.toggle('hidden', !state.session || page !== 'ledger');
   byId('trades-view').classList.toggle('hidden', !state.session || page !== 'trades');
+  byId('reports-view').classList.toggle('hidden', !state.session || page !== 'reports');
   byId('record-view').classList.toggle('hidden', !state.session || page !== 'record');
   byId('wallets-view').classList.toggle('hidden', !state.session || page !== 'wallets');
   byId('import-view').classList.toggle('hidden', !state.session || page !== 'import');
@@ -308,7 +316,7 @@ function renderPageState() {
   // Highlight "More" button when a page inside the sheet is active
   const moreBtn = document.getElementById('more-menu-toggle');
   if (moreBtn) {
-    moreBtn.classList.toggle('active', ['tax', 'wallets', 'import', 'settings'].includes(navRoute));
+    moreBtn.classList.toggle('active', ['reports', 'tax', 'wallets', 'import', 'settings'].includes(navRoute));
   }
 
   if (state.session && page === 'settings') {
@@ -1266,24 +1274,34 @@ function openWalletMerge(sourceId, txCount) {
   byId('wallet-merge-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+// Load the data for whichever page is currently active. Centralized so every
+// entry point (nav click, session restore, login, browser back/forward) loads
+// the same way and no page is forgotten.
+function loadPageData(page) {
+  switch (page) {
+    case 'wallet':
+      return state.currentWalletId ? loadWalletDetail(state.currentWalletId) : Promise.resolve();
+    case 'ledger':
+      return loadLedger();
+    case 'trades':
+      return loadTradesPage();
+    case 'wallets':
+      return loadWalletsList();
+    case 'reports':
+      loadReports();
+      return Promise.resolve();
+    default:
+      return Promise.resolve();
+  }
+}
+
 async function refreshSession() {
   try {
     const session = await api('api/auth/me');
     state.session = session;
     showLoggedIn(session.username);
     const loaders = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast(), populateLedgerWalletDropdown()];
-    if (state.currentPage === 'wallet' && state.currentWalletId) {
-      loaders.push(loadWalletDetail(state.currentWalletId));
-    }
-    if (state.currentPage === 'ledger') {
-      loaders.push(loadLedger());
-    }
-    if (state.currentPage === 'trades') {
-      loaders.push(loadTradesPage());
-    }
-    if (state.currentPage === 'wallets') {
-      loaders.push(loadWalletsList());
-    }
+    loaders.push(loadPageData(state.currentPage));
     await Promise.all(loaders);
   } catch (_) {
     state.session = null;
@@ -1304,12 +1322,17 @@ function bindNavigation() {
 
   window.addEventListener('popstate', () => {
     const previousWalletId = state.currentWalletId;
-      state.currentPage = currentRouteFromLocation();
+    state.currentPage = currentRouteFromLocation();
     renderPageState();
-    if (state.currentPage === 'wallet' && state.currentWalletId && state.currentWalletId !== previousWalletId) {
-      loadWalletDetail(state.currentWalletId);
-    } else if (state.currentPage === 'dashboard' && state.session) {
+    if (!state.session) return;
+    if (state.currentPage === 'wallet') {
+      if (state.currentWalletId && state.currentWalletId !== previousWalletId) {
+        loadWalletDetail(state.currentWalletId);
+      }
+    } else if (state.currentPage === 'dashboard') {
       loadDashboard();
+    } else {
+      loadPageData(state.currentPage);
     }
   });
 }
@@ -1328,18 +1351,7 @@ function bindEvents() {
       setAuthStatus('Authenticated.');
       showLoggedIn(session.username);
       const postLogin = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast(), populateLedgerWalletDropdown()];
-      if (state.currentPage === 'wallet' && state.currentWalletId) {
-        postLogin.push(loadWalletDetail(state.currentWalletId));
-      }
-      if (state.currentPage === 'ledger') {
-        postLogin.push(loadLedger());
-      }
-      if (state.currentPage === 'trades') {
-        postLogin.push(loadTradesPage());
-      }
-      if (state.currentPage === 'wallets') {
-        postLogin.push(loadWalletsList());
-      }
+      postLogin.push(loadPageData(state.currentPage));
       await Promise.all(postLogin);
     } catch (error) {
       setAuthStatus(error.message, true);
@@ -2115,6 +2127,103 @@ function bindImportEvents() {
   byId('import-commit-btn').addEventListener('click', handleImportCommit);
   byId('import-back-btn').addEventListener('click', () => showImportStep(1));
   byId('import-another-btn').addEventListener('click', resetImportForm);
+}
+
+// ── Reports & Visualizations ──
+
+function reportsUrl(path, range, bust) {
+  const params = new URLSearchParams({ range });
+  if (bust) {
+    // Bypass both the browser cache (unique URL) and the service-side byte
+    // cache (refresh flag) so a hard refresh re-renders from live data.
+    params.set('refresh', 'true');
+    params.set('t', String(Date.now()));
+  }
+  const rel = `api/reports/${path}?${params.toString()}`;
+  return new URL(rel, new URL(appBase(), window.location.origin)).href;
+}
+
+function setReportImage(imgId, chart, range, bust, settle) {
+  const img = byId(imgId);
+  if (!img) {
+    settle(false);
+    return;
+  }
+  const frame = img.closest('.report-chart-frame');
+  if (frame) frame.classList.remove('is-error', 'is-loaded');
+  if (frame) frame.classList.add('is-loading');
+  img.onload = () => {
+    if (frame) {
+      frame.classList.remove('is-loading', 'is-error');
+      frame.classList.add('is-loaded');
+    }
+    settle(true);
+  };
+  img.onerror = () => {
+    if (frame) {
+      frame.classList.remove('is-loading', 'is-loaded');
+      frame.classList.add('is-error');
+    }
+    settle(false);
+  };
+  img.src = reportsUrl(`chart/${chart}.png`, range, bust);
+}
+
+function loadReports(bust = false) {
+  const rangeSeg = byId('reports-range');
+  const range = state.reportsState.range || 'all';
+
+  // Wire the range selector once.
+  if (!state.reportsState.wired) {
+    state.reportsState.wired = true;
+    if (rangeSeg) {
+      for (const btn of rangeSeg.querySelectorAll('button')) {
+        btn.addEventListener('click', () => {
+          if (state.reportsState.range === btn.dataset.value) return;
+          state.reportsState.range = btn.dataset.value;
+          loadReports(true);
+        });
+      }
+    }
+  }
+
+  // Reflect active range in the selector.
+  if (rangeSeg) {
+    for (const btn of rangeSeg.querySelectorAll('button')) {
+      btn.classList.toggle('active', btn.dataset.value === range);
+    }
+  }
+
+  // Point the PDF download link at the current range.
+  const pdfLink = byId('reports-pdf-link');
+  if (pdfLink) {
+    pdfLink.href = reportsUrl('report.pdf', range, bust);
+    pdfLink.setAttribute('download', `btc_report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
+  const status = byId('reports-status');
+  if (status) status.textContent = 'Rendering charts…';
+
+  const charts = [
+    ['report-img-orange', 'orange'],
+    ['report-img-balance', 'balance'],
+    ['report-img-custody', 'custody'],
+  ];
+  let pending = charts.length;
+  let anyError = false;
+  const settle = (ok) => {
+    pending -= 1;
+    if (!ok) anyError = true;
+    if (pending === 0 && byId('reports-status')) {
+      byId('reports-status').textContent = anyError
+        ? 'Some charts could not be rendered for this range (no data or price feed unavailable).'
+        : '';
+    }
+  };
+
+  for (const [imgId, chart] of charts) {
+    setReportImage(imgId, chart, range, bust, settle);
+  }
 }
 
 // ── Trades & Liquidity ──
