@@ -28,9 +28,10 @@ router = APIRouter(
     dependencies=[Depends(require_authenticated_principal)],
 )
 
-# Short cache header so browsers reuse images within a page load without
-# pinning stale data. Matches the service-side TTL intent.
-_PNG_CACHE_CONTROL = "private, max-age=120"
+# Short private cache header so a browser reuses report bytes within a page
+# load without pinning stale data across sessions. Applied to both the PNG and
+# PDF responses for consistent caching semantics.
+_CACHE_CONTROL = "private, max-age=120"
 
 
 @router.get("/chart/{chart_type}.png")
@@ -56,7 +57,7 @@ def chart_png(
     return Response(
         content=png,
         media_type="image/png",
-        headers={"Cache-Control": _PNG_CACHE_CONTROL},
+        headers={"Cache-Control": _CACHE_CONTROL},
     )
 
 
@@ -79,5 +80,8 @@ def report_pdf(
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": _CACHE_CONTROL,
+        },
     )

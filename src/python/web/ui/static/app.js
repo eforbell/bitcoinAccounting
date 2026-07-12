@@ -1274,24 +1274,34 @@ function openWalletMerge(sourceId, txCount) {
   byId('wallet-merge-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+// Load the data for whichever page is currently active. Centralized so every
+// entry point (nav click, session restore, login, browser back/forward) loads
+// the same way and no page is forgotten.
+function loadPageData(page) {
+  switch (page) {
+    case 'wallet':
+      return state.currentWalletId ? loadWalletDetail(state.currentWalletId) : Promise.resolve();
+    case 'ledger':
+      return loadLedger();
+    case 'trades':
+      return loadTradesPage();
+    case 'wallets':
+      return loadWalletsList();
+    case 'reports':
+      loadReports();
+      return Promise.resolve();
+    default:
+      return Promise.resolve();
+  }
+}
+
 async function refreshSession() {
   try {
     const session = await api('api/auth/me');
     state.session = session;
     showLoggedIn(session.username);
     const loaders = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast(), populateLedgerWalletDropdown()];
-    if (state.currentPage === 'wallet' && state.currentWalletId) {
-      loaders.push(loadWalletDetail(state.currentWalletId));
-    }
-    if (state.currentPage === 'ledger') {
-      loaders.push(loadLedger());
-    }
-    if (state.currentPage === 'trades') {
-      loaders.push(loadTradesPage());
-    }
-    if (state.currentPage === 'wallets') {
-      loaders.push(loadWalletsList());
-    }
+    loaders.push(loadPageData(state.currentPage));
     await Promise.all(loaders);
   } catch (_) {
     state.session = null;
@@ -1312,12 +1322,17 @@ function bindNavigation() {
 
   window.addEventListener('popstate', () => {
     const previousWalletId = state.currentWalletId;
-      state.currentPage = currentRouteFromLocation();
+    state.currentPage = currentRouteFromLocation();
     renderPageState();
-    if (state.currentPage === 'wallet' && state.currentWalletId && state.currentWalletId !== previousWalletId) {
-      loadWalletDetail(state.currentWalletId);
-    } else if (state.currentPage === 'dashboard' && state.session) {
+    if (!state.session) return;
+    if (state.currentPage === 'wallet') {
+      if (state.currentWalletId && state.currentWalletId !== previousWalletId) {
+        loadWalletDetail(state.currentWalletId);
+      }
+    } else if (state.currentPage === 'dashboard') {
       loadDashboard();
+    } else {
+      loadPageData(state.currentPage);
     }
   });
 }
@@ -1336,18 +1351,7 @@ function bindEvents() {
       setAuthStatus('Authenticated.');
       showLoggedIn(session.username);
       const postLogin = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast(), populateLedgerWalletDropdown()];
-      if (state.currentPage === 'wallet' && state.currentWalletId) {
-        postLogin.push(loadWalletDetail(state.currentWalletId));
-      }
-      if (state.currentPage === 'ledger') {
-        postLogin.push(loadLedger());
-      }
-      if (state.currentPage === 'trades') {
-        postLogin.push(loadTradesPage());
-      }
-      if (state.currentPage === 'wallets') {
-        postLogin.push(loadWalletsList());
-      }
+      postLogin.push(loadPageData(state.currentPage));
       await Promise.all(postLogin);
     } catch (error) {
       setAuthStatus(error.message, true);
@@ -2129,7 +2133,12 @@ function bindImportEvents() {
 
 function reportsUrl(path, range, bust) {
   const params = new URLSearchParams({ range });
-  if (bust) params.set('t', String(Date.now()));
+  if (bust) {
+    // Bypass both the browser cache (unique URL) and the service-side byte
+    // cache (refresh flag) so a hard refresh re-renders from live data.
+    params.set('refresh', 'true');
+    params.set('t', String(Date.now()));
+  }
   const rel = `api/reports/${path}?${params.toString()}`;
   return new URL(rel, new URL(appBase(), window.location.origin)).href;
 }
