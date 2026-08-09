@@ -1,74 +1,75 @@
 # Security Policy
 
-## Credential Management
+## Scope and data classification
 
-**CRITICAL: NEVER commit credentials to version control**
+Bitcoin Accounting stores private financial records: transaction history, balances, wallet and exchange metadata, cost basis, tax reports, imports, audit records, integrity findings, and attestations. Treat its databases, exports, logs, uploads, backups, MCP output, and generated reports as sensitive financial data.
 
-### Required Practices
+The application is bookkeeping software. It must never hold or request seed phrases, wallet backup words, private keys, signing keys, hardware-wallet PINs, or passphrases. In particular, the `wallets.seed_info` field is for non-secret descriptive metadata only.
 
-1. **Use Environment Variables**
-   - All database credentials MUST be provided via environment variables
-   - Never use hardcoded defaults for sensitive values (passwords, hosts, usernames)
-   - Store credentials in `.env` file locally (this file is in `.gitignore`)
+## Secrets
 
-2. **Template File**
-   - Use `.env.example` as a template
-   - Copy `.env.example` to `.env` and fill in your actual values
-   - The `.env` file is automatically ignored by git
+Never commit or log:
 
-3. **Required Environment Variables**
-   ```bash
-   # For PostgreSQL backend
-   PGHOST=your-database-host
-   PGUSER=your-database-user
-   PGPASSWORD=your-secure-password
-   PGDATABASE=your-database-name
-   PGPORT=5432  # optional
-   PGSSLMODE=require  # optional
-   ```
+- `.env` files or database URLs/passwords;
+- web passphrases, session secrets, or session cookies;
+- Bitcoin Core RPC cookies, RPC usernames, or RPC passwords;
+- real exchange/wallet exports, database dumps, tax reports, or attestation bundles.
 
-4. **Code Review Checklist**
-   - [ ] No hardcoded IPs, hostnames, or server addresses
-   - [ ] No hardcoded usernames or database names as defaults
-   - [ ] No hardcoded passwords (EVER)
-   - [ ] All sensitive config uses `os.getenv()` WITHOUT default values
-   - [ ] Missing required environment variables raise clear errors
+Use `.env.example` only as a template. Prefer Bitcoin Core cookie-file authentication over an explicit RPC username/password, keep the cookie readable only by the service account, and never expose Bitcoin RPC outside trusted local interfaces.
 
-### What to Do If Credentials Are Exposed
+If a credential appears in a commit, issue, PR, chat, screenshot, log, or report, rotate/revoke it first. Removing it from a file or rewriting git history does not invalidate it.
 
-If credentials are accidentally committed and pushed to GitHub:
+## Deployment and authentication
 
-1. **Immediately rotate the exposed credentials**
-   ```sql
-   -- In PostgreSQL
-   ALTER USER username WITH PASSWORD 'new-secure-password';
-   ```
+1. Enable `BITCOIN_ACCOUNTING_AUTH_ENABLED=1` for any deployment reachable beyond localhost.
+2. Set strong, unique values for `BITCOIN_ACCOUNTING_AUTH_PASSPHRASE` and `BITCOIN_ACCOUNTING_SESSION_SECRET`.
+3. Terminate HTTPS at the reverse proxy or trusted tunnel and use secure cookies in HTTPS deployments.
+4. Bind the app and database to the narrowest interface needed; prefer localhost plus Tailscale/nginx over public exposure.
+5. Use a dedicated, least-privilege database account and restrict SQLite/database/backups to the service account.
+6. Treat interactive API documentation and health details as internal in production.
 
-2. **Update your local `.env` file** with new credentials
+Disabling application auth is a local-development convenience, not a safe production posture.
 
-3. **Remove the credentials from the code** (make a new commit)
+## Imports, exports, and MCP
 
-4. **Consider removing from git history** (advanced)
-   - Use `git filter-branch` or BFG Repo-Cleaner
-   - Force push to rewrite history (CAUTION: affects all collaborators)
-   - See: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository
+- Validate import type and size, handle parser failures safely, and remove temporary files.
+- Never commit fixtures derived from real financial exports unless they are irreversibly anonymized.
+- Generated CSV, PDF, JSON, tax, and attestation artifacts remain sensitive after download; store and share them accordingly.
+- The MCP server is read-only, but its treasury, transaction, cost-basis, and tax output is highly sensitive. Prefer local stdio access and authorize every connected AI/tool client.
+- Do not copy secrets or unnecessary financial detail into AI prompts, tickets, or support bundles.
 
-### Incident Log
+## Logging, backups, and retention
 
-#### 2026-01-28: PostgreSQL Credentials Exposed
-- **Commit:** 34803d8 (feat: SQL-001 - Database abstraction layer foundation)
-- **File:** src/python/db/postgres.py
-- **Exposed:** Database host (192.0.2.10), username (bitcoin_accounting), password
-- **Action Taken:**
-  - Code updated to require environment variables
-  - Added clear error messages for missing credentials
-  - Created .env.example template
-  - Documented in SECURITY.md
-- **Required Action:** Change PostgreSQL password for user 'bitcoin_accounting'
+Logs and error responses must redact connection strings, passphrases, session tokens, RPC credentials, and imported row contents. Do not return stack traces or raw provider/database errors to remote clients.
 
-## Reporting Security Issues
+Back up the database and any generated artifacts that are part of the accounting record. Encrypt off-host backups, restrict their permissions, test restoration periodically, and delete obsolete debug exports or local copies when no longer needed.
 
-If you discover a security vulnerability, please:
-1. Do NOT open a public issue
-2. Email the repository owner directly
-3. Include details about the vulnerability and steps to reproduce
+## Security-sensitive review checklist
+
+- [ ] No real secrets, wallet exports, financial reports, or database dumps are committed.
+- [ ] No seed phrase, private key, signing material, or hardware-wallet PIN is stored.
+- [ ] Web auth remains enabled for non-local deployments.
+- [ ] RPC stays local and credential material is redacted.
+- [ ] MCP access remains local/authorized and read-only.
+- [ ] Imports validate input and clean up temporary files.
+- [ ] Before enabling PostgreSQL-backed tests, verify every `PG*` variable points to an isolated disposable test database; the current test suite does not enforce this guard automatically.
+- [ ] Logs and API responses contain no financial records or credentials beyond what the caller explicitly requested.
+
+## Incident response
+
+1. Remove unintended public/network access.
+2. Rotate affected database, web-session, or Bitcoin RPC credentials.
+3. Invalidate active sessions and restart affected services.
+4. Identify exposed reports, exports, backups, logs, and downstream copies.
+5. Remove the secret from configuration/code and, if needed, clean git history after rotation.
+6. Record the incident without repeating the secret or private financial content.
+
+### Known incident tracking
+
+A PostgreSQL credential was committed on 2026-01-28. The current-tree incident summary is being redacted by this change, but credential rotation and git-history/downstream-copy cleanup still require independent verification. That follow-up is tracked as Bug Base ticket `#143`. Do not copy the historical value into tickets, commits, or logs.
+
+## Reporting a vulnerability
+
+Do not open a public issue containing vulnerabilities, credentials, wallet details, or financial data. Report privately through a GitHub Security Advisory when available, or contact the repository owner privately. Include the affected path, reproduction steps, impact, and a redacted proof of concept.
+
+There is no bug bounty program or guaranteed response SLA.

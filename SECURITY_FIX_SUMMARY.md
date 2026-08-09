@@ -5,9 +5,9 @@
 **CRITICAL SECURITY BREACH**: PostgreSQL credentials were hardcoded in `src/python/db/postgres.py` and pushed to GitHub in commit `34803d8`.
 
 ### Exposed Information
-- Database host: `192.0.2.10`
-- Database user: `bitcoin_accounting`
-- Database password: `REDACTED-ROTATED` (now changed ✓)
+- Database host: `[REDACTED]`
+- Database user: `[REDACTED]`
+- Database password: `[REDACTED]` (rotation reported historically; independent verification pending under Bug Base #143)
 - Database name: `postgres`
 
 ## Root Causes
@@ -25,9 +25,9 @@
 **Before**:
 ```python
 params: dict[str, Any] = {
-    'host': os.getenv('PGHOST', '192.0.2.10'),  # ❌ Hardcoded
-    'user': os.getenv('PGUSER', 'bitcoin_accounting'),  # ❌ Hardcoded
-    'password': os.getenv('PGPASSWORD', 'REDACTED-ROTATED'),  # ❌ EXPOSED
+    'host': os.getenv('PGHOST', '[REDACTED]'),  # ❌ Hardcoded
+    'user': os.getenv('PGUSER', '[REDACTED]'),  # ❌ Hardcoded
+    'password': os.getenv('PGPASSWORD', '[REDACTED]'),  # ❌ EXPOSED
     'database': os.getenv('PGDATABASE', 'postgres'),  # ❌ Hardcoded
 }
 ```
@@ -104,7 +104,7 @@ Expected output:
 ## Action Items for Users
 
 ### Required (If Using PostgreSQL):
-1. ✓ **Change database password** (already done)
+1. ⚠ **Verify database password rotation** (historically reported complete; independent verification pending under Bug Base #143)
 2. **Install updated dependencies**:
    ```bash
    python3 -m pip install -r requirements.txt
