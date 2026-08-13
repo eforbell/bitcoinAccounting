@@ -170,6 +170,58 @@ def test_record_buy_with_fee(client: TestClient, seeded_accounts: BitcoinAccount
     assert rows[0]["Fee Cur."] == "USD"
 
 
+@pytest.mark.parametrize(
+    ("endpoint", "payload"),
+    [
+        ("/api/ledger/buy", {"trade_date": "2024-06-15T10:30:00", "buy": 0.5, "sell": 25000.0, "exchange": "Unknown"}),
+        ("/api/ledger/sell", {"trade_date": "2024-06-15T10:30:00", "sell": 0.5, "buy": 25000.0, "exchange": "Unknown"}),
+        ("/api/ledger/transfer", {"transfer_date": "2024-06-15T10:30:00", "amount": 0.5, "from_wallet": "Strike", "to_wallet": "Unknown"}),
+        ("/api/ledger/interest", {"interest_date": "2024-06-15T10:30:00", "amount": 0.001, "exchange": "Unknown"}),
+    ],
+)
+def test_record_rejects_unknown_wallet(
+    client: TestClient, endpoint: str, payload: dict[str, object]
+) -> None:
+    response = client.post(endpoint, json=payload)
+
+    assert response.status_code == 422
+    assert "existing active wallet" in response.json()["detail"]
+
+
+def test_record_rejects_inactive_wallet(
+    client: TestClient, seeded_accounts: BitcoinAccounts
+) -> None:
+    seeded_accounts.wallet_query.update_wallet("Strike", active=False)
+
+    response = client.post(
+        "/api/ledger/buy",
+        json={
+            "trade_date": "2024-06-15T10:30:00",
+            "buy": 0.5,
+            "sell": 25000.0,
+            "exchange": "Strike",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "existing active wallet" in response.json()["detail"]
+
+
+def test_record_transfer_rejects_same_wallet(client: TestClient) -> None:
+    response = client.post(
+        "/api/ledger/transfer",
+        json={
+            "transfer_date": "2024-06-15T10:30:00",
+            "amount": 0.5,
+            "from_wallet": "Strike",
+            "to_wallet": "Strike",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "must be different" in response.json()["detail"]
+
+
 def test_record_requires_auth() -> None:
     app = create_app(
         WebConfig(
@@ -256,3 +308,12 @@ def test_record_ui_shell_is_served() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "Bitcoin Accounting" in response.text
+    for select_id in (
+        "buy-wallet",
+        "sell-wallet",
+        "transfer-from",
+        "transfer-to",
+        "interest-wallet",
+        "tx-edit-wallet",
+    ):
+        assert f'<select id="{select_id}"' in response.text

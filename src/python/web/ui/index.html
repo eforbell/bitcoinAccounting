@@ -479,7 +479,9 @@
                 </div>
                 <div class="filter-field">
                   <label for="tx-edit-wallet">Wallet</label>
-                  <input id="tx-edit-wallet" type="text">
+                  <select id="tx-edit-wallet">
+                    <option value="">Select an active wallet</option>
+                  </select>
                 </div>
                 <div class="filter-field">
                   <label for="tx-edit-group">Group</label>
@@ -641,8 +643,10 @@
               <input id="buy-cost" type="number" step="any" min="0" required>
             </label>
             <label class="field">
-              <span>Wallet</span>
-              <input id="buy-wallet" type="text" required>
+                <span>Wallet</span>
+              <select id="buy-wallet" required>
+                <option value="">Select an active wallet</option>
+              </select>
             </label>
             <label class="field">
               <span>Fee</span>
@@ -675,8 +679,10 @@
               <input id="sell-proceeds" type="number" step="any" min="0" required>
             </label>
             <label class="field">
-              <span>Wallet</span>
-              <input id="sell-wallet" type="text" required>
+                <span>Wallet</span>
+              <select id="sell-wallet" required>
+                <option value="">Select an active wallet</option>
+              </select>
             </label>
             <label class="field">
               <span>Fee</span>
@@ -705,12 +711,16 @@
               <input id="transfer-amount" type="number" step="any" min="0" required>
             </label>
             <label class="field">
-              <span>From Wallet</span>
-              <input id="transfer-from" type="text" required>
+                <span>From Wallet</span>
+              <select id="transfer-from" required>
+                <option value="">Select an active wallet</option>
+              </select>
             </label>
             <label class="field">
-              <span>To Wallet</span>
-              <input id="transfer-to" type="text" required>
+                <span>To Wallet</span>
+              <select id="transfer-to" required>
+                <option value="">Select an active wallet</option>
+              </select>
             </label>
             <label class="field">
               <span>Fee</span>
@@ -743,8 +753,10 @@
               <input id="interest-currency" type="text" value="BTC">
             </label>
             <label class="field">
-              <span>Wallet</span>
-              <input id="interest-wallet" type="text" required>
+                <span>Wallet</span>
+              <select id="interest-wallet" required>
+                <option value="">Select an active wallet</option>
+              </select>
             </label>
             <label class="field">
               <span>Comment</span>

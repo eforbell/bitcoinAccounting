@@ -260,6 +260,31 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             playwright.expect(page.locator("#wallets-table")).to_contain_text("Vault")
             assert "/wallets" in page.url
 
+            # Record flows only allow existing active wallets; no free-text
+            # wallet input may create an accidental ledger category.
+            page.locator('.app-sidebar .nav-item[data-route="record"]').click()
+            playwright.expect(page.get_by_role("heading", name="Record Transaction")).to_be_visible()
+            for select_id in (
+                "buy-wallet",
+                "sell-wallet",
+                "transfer-from",
+                "transfer-to",
+                "interest-wallet",
+            ):
+                wallet_select = page.locator(f"#{select_id}")
+                playwright.expect(wallet_select).to_be_attached()
+                playwright.expect(wallet_select.locator('option[value="Strike"]')).to_be_attached()
+                playwright.expect(wallet_select.locator('option[value="Vault"]')).to_be_attached()
+            page.get_by_role("button", name="Transfer").click()
+            page.locator("#transfer-from").select_option("Strike")
+            page.locator("#transfer-to").select_option("Vault")
+
+            # Reloading the direct route must restore the constrained options.
+            page.goto(base_url + "record", wait_until="networkidle")
+            playwright.expect(page.get_by_role("heading", name="Record Transaction")).to_be_visible()
+            playwright.expect(page.locator('#buy-wallet option[value="Strike"]')).to_be_attached()
+            playwright.expect(page.locator('#buy-wallet option[value="Vault"]')).to_be_attached()
+
             # Verify the disclosed ledger filter exposes wallet options.
             page.locator('.app-sidebar .nav-item[data-route="ledger"]').click()
             page.locator("#ledger-filter-toggle").click()

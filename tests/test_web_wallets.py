@@ -104,6 +104,18 @@ def test_list_wallets_active_only(
     assert "OldWallet" not in ids
 
 
+def test_list_wallets_active_only_excludes_all_inactive(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    for wallet_id in ("Coldcard", "River", "OldWallet"):
+        seeded_accounts.wallet_query.update_wallet(wallet_id, active=False)
+
+    response = client.get("/api/wallets", params={"active_only": "true"})
+
+    assert response.status_code == 200
+    assert response.json()["wallets"] == []
+
+
 def test_list_wallets_requires_auth() -> None:
     app = create_app(
         WebConfig(

@@ -251,6 +251,15 @@ def test_transaction_edit_numeric_fields(client: TestClient) -> None:
     assert response.json()["fee_currency"] == "BTC"
 
 
+def test_transaction_edit_rejects_unknown_wallet(client: TestClient) -> None:
+    tx_id = _first_tx_id(client)
+
+    response = client.patch(f"/api/ledger/{tx_id}", json={"wallet_id": "Unknown"})
+
+    assert response.status_code == 422
+    assert "existing active wallet" in response.json()["detail"]
+
+
 def test_transaction_edit_not_found(client: TestClient) -> None:
     response = client.patch("/api/ledger/999999", json={"comment": "nope"})
 
