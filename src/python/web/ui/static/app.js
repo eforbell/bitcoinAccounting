@@ -59,6 +59,28 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+function renderDataCards(containerId, cards, emptyMessage) {
+  const container = byId(containerId);
+  container.innerHTML = cards.length
+    ? cards.join('')
+    : `<div class="data-card data-card-empty">${escapeHtml(emptyMessage)}</div>`;
+}
+
+function dataCard(title, detail, values, actions = '') {
+  return `<article class="data-card">
+    <div class="data-card-heading">
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        ${detail ? `<div class="data-card-detail">${escapeHtml(detail)}</div>` : ''}
+      </div>
+    </div>
+    <div class="data-card-values">${values.map(([label, value]) => `
+      <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
+    `).join('')}</div>
+    ${actions ? `<div class="data-card-actions">${actions}</div>` : ''}
+  </article>`;
+}
+
 function appBase() {
   const base = document.querySelector('base');
   if (base) return new URL(base.getAttribute('href'), window.location.origin).pathname;
@@ -1036,6 +1058,15 @@ async function loadGains() {
         `).join('')
       : '<tr><td colspan="5" class="empty-row">No gains found for the selected filters.</td></tr>';
     byId('gains-table').innerHTML = rows;
+    renderDataCards('gains-cards', report.worksheet.map((row) => dataCard(
+      row.sale_date,
+      `${row.term} term`,
+      [
+        ['Lot quantity', denomFormat(row.lot_quantity)],
+        ['Acquired', row.acquire_date],
+        ['Gain/loss', currency(row.gain_loss_usd)],
+      ],
+    )), 'No gains found for the selected filters.');
 
     const showPolicy = report.warnings.some((warning) => warning.code === 'wallet_required_2025');
     const banner = byId('policy-warning');
@@ -1047,6 +1078,7 @@ async function loadGains() {
     }
   } catch (error) {
     byId('gains-table').innerHTML = `<tr><td colspan="5" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
+    renderDataCards('gains-cards', [], error.message);
   }
 }
 
@@ -1080,8 +1112,18 @@ async function loadForecast() {
         `).join('')
       : '<tr><td colspan="5" class="empty-row">No forecast lots available.</td></tr>';
     byId('forecast-table').innerHTML = rows;
+    renderDataCards('forecast-cards', forecast.lots.map((lot) => dataCard(
+      lot.acquire_date || 'Unknown acquisition date',
+      `${lot.term} term`,
+      [
+        ['Quantity', denomFormat(lot.quantity)],
+        ['Unit cost', currency(lot.unit_cost_usd)],
+        ['Basis', currency(lot.cost_basis_usd)],
+      ],
+    )), 'No forecast lots available.');
   } catch (error) {
     byId('forecast-table').innerHTML = `<tr><td colspan="5" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
+    renderDataCards('forecast-cards', [], error.message);
   }
 }
 
@@ -1177,12 +1219,41 @@ async function loadWalletsList() {
     renderWalletsList(data.wallets);
   } catch (error) {
     byId('wallets-table').innerHTML = `<tr><td colspan="6" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
+    renderDataCards('wallets-cards', [], error.message);
+  }
+}
+
+function walletActionsMarkup(w) {
+  const walletId = escapeHtml(w.wallet_id);
+  return `<button class="button button-ghost button-inline" data-wallet-open="${walletId}">Open</button>
+    <button class="button button-ghost button-inline" data-wallet-edit="${walletId}">Edit</button>
+    <button class="button button-ghost button-inline" data-wallet-toggle="${walletId}" data-active="${w.active}">${w.active ? 'Deactivate' : 'Activate'}</button>
+    <button class="button button-ghost button-inline" data-wallet-rename="${walletId}" data-tx-count="${w.transaction_count}">Rename</button>
+    <button class="button button-ghost button-inline" data-wallet-merge="${walletId}" data-tx-count="${w.transaction_count}">Merge</button>`;
+}
+
+function bindWalletActions(container) {
+  for (const btn of container.querySelectorAll('[data-wallet-open]')) {
+    btn.addEventListener('click', () => navigateToWallet(btn.dataset.walletOpen));
+  }
+  for (const btn of container.querySelectorAll('[data-wallet-edit]')) {
+    btn.addEventListener('click', () => openWalletEdit(btn.dataset.walletEdit));
+  }
+  for (const btn of container.querySelectorAll('[data-wallet-toggle]')) {
+    btn.addEventListener('click', () => toggleWalletActive(btn.dataset.walletToggle, btn.dataset.active === 'true'));
+  }
+  for (const btn of container.querySelectorAll('[data-wallet-rename]')) {
+    btn.addEventListener('click', () => openWalletRename(btn.dataset.walletRename, Number(btn.dataset.txCount)));
+  }
+  for (const btn of container.querySelectorAll('[data-wallet-merge]')) {
+    btn.addEventListener('click', () => openWalletMerge(btn.dataset.walletMerge, Number(btn.dataset.txCount)));
   }
 }
 
 function renderWalletsList(wallets) {
   if (!wallets.length) {
     byId('wallets-table').innerHTML = '<tr><td colspan="6" class="empty-row">No wallets found.</td></tr>';
+    renderDataCards('wallets-cards', [], 'No wallets found.');
     return;
   }
   byId('wallets-table').innerHTML = wallets.map((w) => `
@@ -1192,31 +1263,22 @@ function renderWalletsList(wallets) {
       <td>${escapeHtml(w.custody)}</td>
       <td>${w.active ? 'Active' : 'Inactive'}</td>
       <td>${w.transaction_count}</td>
-      <td class="actions-cell">
-        <button class="button button-ghost button-inline" data-wallet-open="${escapeHtml(w.wallet_id)}">Open</button>
-        <button class="button button-ghost button-inline" data-wallet-edit="${escapeHtml(w.wallet_id)}">Edit</button>
-        <button class="button button-ghost button-inline" data-wallet-toggle="${escapeHtml(w.wallet_id)}" data-active="${w.active}">${w.active ? 'Deactivate' : 'Activate'}</button>
-        <button class="button button-ghost button-inline" data-wallet-rename="${escapeHtml(w.wallet_id)}" data-tx-count="${w.transaction_count}">Rename</button>
-        <button class="button button-ghost button-inline" data-wallet-merge="${escapeHtml(w.wallet_id)}" data-tx-count="${w.transaction_count}">Merge</button>
-      </td>
+      <td class="actions-cell">${walletActionsMarkup(w)}</td>
     </tr>
   `).join('');
-
-  for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-open]')) {
-    btn.addEventListener('click', () => navigateToWallet(btn.dataset.walletOpen));
-  }
-  for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-edit]')) {
-    btn.addEventListener('click', () => openWalletEdit(btn.dataset.walletEdit));
-  }
-  for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-toggle]')) {
-    btn.addEventListener('click', () => toggleWalletActive(btn.dataset.walletToggle, btn.dataset.active === 'true'));
-  }
-  for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-rename]')) {
-    btn.addEventListener('click', () => openWalletRename(btn.dataset.walletRename, Number(btn.dataset.txCount)));
-  }
-  for (const btn of byId('wallets-table').querySelectorAll('[data-wallet-merge]')) {
-    btn.addEventListener('click', () => openWalletMerge(btn.dataset.walletMerge, Number(btn.dataset.txCount)));
-  }
+  renderDataCards('wallets-cards', wallets.map((w) => dataCard(
+    w.wallet_id,
+    w.description || `${w.wallet_type} · ${w.custody}`,
+    [
+      ['Type', w.wallet_type],
+      ['Custody', w.custody],
+      ['Status', w.active ? 'Active' : 'Inactive'],
+      ['Transactions', String(w.transaction_count)],
+    ],
+    walletActionsMarkup(w),
+  )), 'No wallets found.');
+  bindWalletActions(byId('wallets-table'));
+  bindWalletActions(byId('wallets-cards'));
 }
 
 function openWalletEdit(walletId) {
@@ -2348,6 +2410,7 @@ async function loadLiquidity() {
     renderLiquidity(data);
   } catch (error) {
     byId('liquidity-table').innerHTML = `<tr><td colspan="4" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
+    renderDataCards('liquidity-cards', [], error.message);
   }
 }
 
@@ -2367,6 +2430,15 @@ function renderLiquidity(data) {
       </tr>
     `).join('');
   }
+  renderDataCards('liquidity-cards', exchanges.map((e) => dataCard(
+    e.exchange,
+    'Exchange liquidity',
+    [
+      ['Purchased', denomFormat(e.total_purchased)],
+      ['Current balance', denomFormat(e.current_balance)],
+      ['Average cost', e.avg_cost_usd != null ? currency(e.avg_cost_usd) : '-'],
+    ],
+  )), 'No exchange liquidity data found.');
 
   // Summary cards
   const s = data.summary;
