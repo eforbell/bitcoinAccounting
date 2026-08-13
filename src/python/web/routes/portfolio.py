@@ -20,7 +20,6 @@ router = APIRouter(
 @router.get("/dashboard", response_model=PortfolioDashboardResponse)
 def dashboard(
     coin: str = Query("BTC", min_length=1),
-    include_inactive: bool = Query(False),
     recent_limit: int = Query(5, ge=1, le=20),
     accounts: BitcoinAccounts = Depends(get_request_accounts),
 ) -> PortfolioDashboardResponse:
@@ -28,7 +27,6 @@ def dashboard(
     return build_portfolio_dashboard(
         accounts,
         coin=coin,
-        include_inactive=include_inactive,
         recent_limit=recent_limit,
     )
 

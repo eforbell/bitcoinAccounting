@@ -59,20 +59,18 @@ def _build_transaction_resource(row: dict[str, Any]) -> TransactionResource:
 def build_portfolio_dashboard(
     accounts: BitcoinAccounts,
     coin: str = "BTC",
-    include_inactive: bool = False,
     recent_limit: int = 5,
 ) -> PortfolioDashboardResponse:
-    """Build the mobile-first portfolio dashboard payload."""
+    """Build the mobile-first portfolio dashboard payload.
+
+    Wallet balance cards intentionally include only active wallets with nonzero
+    balances; inactive dust wallets remain available through wallet management.
+    """
     balance = float(accounts.get_balance(coin))
     basis = accounts.get_basis(coin)
 
     all_wallets = accounts.get_wallets(active_only=False)
     active_wallets = accounts.get_wallets(active_only=True)
-    visible_wallets = (
-        all_wallets
-        if include_inactive
-        else [wallet for wallet in all_wallets if wallet.get("active", True)]
-    )
     wallet_balances = accounts.get_wallet_balance(coin, None)
     total_balance = sum(float(value) for value in wallet_balances.values())
 
@@ -86,12 +84,15 @@ def build_portfolio_dashboard(
     wallet_rows: list[WalletBalanceResource] = []
     eligible_wallet_ids: list[str] = []
 
-    for wallet in visible_wallets:
+    for wallet in all_wallets:
         wallet_id = str(wallet.get("wallet_id", ""))
         wallet_balance = float(wallet_balances.get(wallet_id, 0.0))
+        active = bool(wallet.get("active", True))
+        if not active or wallet_balance == 0:
+            continue
+
         custody = _normalize_custody(wallet.get("custody"))
         percentage = (wallet_balance / total_balance * 100) if total_balance > 0 else 0.0
-        active = bool(wallet.get("active", True))
         eligibility = get_wallet_verification_eligibility(accounts, wallet_id)
         latest_verification = get_latest_wallet_verification(accounts.backend, wallet_id)
 

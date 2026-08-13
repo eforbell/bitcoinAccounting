@@ -27,7 +27,6 @@ const state = {
   walletsList: [],
   currentPage: 'dashboard',
   currentWalletId: null,
-  includeInactive: false,
   gainsFilters: { taxYear: 2024, coin: 'BTC', wallet: '' },
   forecastFilters: { coin: 'BTC', wallet: '', quantity: 0.1, salePriceUsd: 100000 },
   ledgerFilters: { coin: 'BTC', wallet: '', startDate: '', endDate: '', includeDeleted: false, page: 1, perPage: 50 },
@@ -648,7 +647,6 @@ function renderWalletVerificationBadge(wallet) {
 async function loadDashboard() {
   const params = new URLSearchParams({
     coin: 'BTC',
-    include_inactive: state.includeInactive ? 'true' : 'false',
     recent_limit: '5',
   });
   const [dashboardResult, chainResult] = await Promise.allSettled([
@@ -1815,11 +1813,6 @@ function bindEvents() {
     byId('ledger-deleted-toggle').checked = false;
     state.ledgerFilters = { coin: 'BTC', wallet: '', startDate: '', endDate: '', includeDeleted: false, page: 1, perPage: 50 };
     await loadLedger();
-  });
-
-  byId('inactive-toggle').addEventListener('change', async (event) => {
-    state.includeInactive = event.target.checked;
-    await loadDashboard();
   });
 
   byId('gains-form').addEventListener('submit', async (event) => {
