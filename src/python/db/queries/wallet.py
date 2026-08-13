@@ -102,8 +102,10 @@ class WalletQuery:
                         'description': row['description'], 'notes': row['notes'], 'active': row['active']}
                        for row in rows]
 
-            # If table exists but is empty, fall back to ledger
-            if wallets:
+            # If the table is populated, it is authoritative. In particular, an
+            # all-inactive wallet list must not fall back to ledger rows and make
+            # inactive wallets appear selectable again.
+            if wallets or self.backend.execute_scalar("SELECT COUNT(*) FROM wallets") > 0:
                 return wallets
             # Fall through to ledger fallback below
 

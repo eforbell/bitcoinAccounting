@@ -170,6 +170,7 @@ function navigateTo(page, replace = false) {
   }
   if (page === 'record') {
     initRecordDates();
+    loadRecordWalletOptions();
   }
   if (page === 'settings') {
     initSettingsPage();
@@ -183,6 +184,53 @@ function initRecordDates() {
   for (const id of ['buy-date', 'sell-date', 'transfer-date', 'interest-date']) {
     const el = byId(id);
     if (el && !el.value) el.value = local;
+  }
+}
+
+const recordWalletSelectIds = [
+  'buy-wallet',
+  'sell-wallet',
+  'transfer-from',
+  'transfer-to',
+  'interest-wallet',
+];
+
+function setActiveWalletOptions(select, walletIds, currentValue = select.value) {
+  select.replaceChildren();
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Select an active wallet';
+  select.appendChild(placeholder);
+
+  for (const walletId of walletIds) {
+    const option = document.createElement('option');
+    option.value = walletId;
+    option.textContent = walletId;
+    select.appendChild(option);
+  }
+
+  if (currentValue && !walletIds.includes(currentValue)) {
+    const inactiveOption = document.createElement('option');
+    inactiveOption.value = currentValue;
+    inactiveOption.textContent = `${currentValue} (inactive)`;
+    inactiveOption.disabled = true;
+    select.appendChild(inactiveOption);
+  }
+  select.value = currentValue;
+}
+
+async function loadRecordWalletOptions(editWalletId = null) {
+  try {
+    const data = await api('api/wallets?active_only=true');
+    const walletIds = (data.wallets || []).map((wallet) => wallet.wallet_id);
+    for (const selectId of recordWalletSelectIds) {
+      setActiveWalletOptions(byId(selectId), walletIds);
+    }
+    if (editWalletId !== null) {
+      setActiveWalletOptions(byId('tx-edit-wallet'), walletIds, editWalletId);
+    }
+  } catch (_) {
+    // The server remains the authority; leave existing choices untouched if loading fails.
   }
 }
 
@@ -968,6 +1016,7 @@ function renderLedger(data) {
 async function openTransactionDetail(txId) {
   try {
     const tx = await api(`api/ledger/${txId}`);
+    await loadRecordWalletOptions(tx.wallet_id || '');
     state.selectedTx = tx;
     byId('tx-detail-title').textContent = `${tx.transaction_type || 'Transaction'} Detail`;
     byId('tx-detail-id').textContent = `#${tx.transaction_id}`;
@@ -979,7 +1028,6 @@ async function openTransactionDetail(txId) {
     byId('tx-edit-sell-curr').value = tx.sell_currency || '';
     byId('tx-edit-fee').value = tx.fee_amount != null ? tx.fee_amount : '';
     byId('tx-edit-fee-curr').value = tx.fee_currency || '';
-    byId('tx-edit-wallet').value = tx.wallet_id || '';
     byId('tx-edit-group').value = tx.group || '';
     byId('tx-edit-comment').value = tx.comment || '';
 
@@ -1352,6 +1400,9 @@ function loadPageData(page) {
     case 'reports':
       loadReports();
       return Promise.resolve();
+    case 'record':
+      initRecordDates();
+      return loadRecordWalletOptions();
     default:
       return Promise.resolve();
   }
@@ -1494,7 +1545,7 @@ function bindEvents() {
           trade_date: byId('buy-date').value,
           buy: Number(byId('buy-amount').value),
           sell: Number(byId('buy-cost').value),
-          exchange: byId('buy-wallet').value.trim(),
+          exchange: byId('buy-wallet').value,
           fee: Number(byId('buy-fee').value) || 0,
           fee_curr: byId('buy-fee-curr').value.trim() || 'USD',
           comment: byId('buy-comment').value.trim(),
@@ -1517,7 +1568,7 @@ function bindEvents() {
           trade_date: byId('sell-date').value,
           sell: Number(byId('sell-amount').value),
           buy: Number(byId('sell-proceeds').value),
-          exchange: byId('sell-wallet').value.trim(),
+          exchange: byId('sell-wallet').value,
           fee: Number(byId('sell-fee').value) || 0,
           fee_curr: byId('sell-fee-curr').value.trim() || 'USD',
           comment: byId('sell-comment').value.trim(),
@@ -1539,8 +1590,8 @@ function bindEvents() {
         body: JSON.stringify({
           transfer_date: byId('transfer-date').value,
           amount: Number(byId('transfer-amount').value),
-          from_wallet: byId('transfer-from').value.trim(),
-          to_wallet: byId('transfer-to').value.trim(),
+          from_wallet: byId('transfer-from').value,
+          to_wallet: byId('transfer-to').value,
           fee: Number(byId('transfer-fee').value) || 0,
           fee_coin: byId('transfer-fee-curr').value.trim() || 'BTC',
           comment: byId('transfer-comment').value.trim(),
@@ -1563,7 +1614,7 @@ function bindEvents() {
           interest_date: byId('interest-date').value,
           amount: Number(byId('interest-amount').value),
           currency: byId('interest-currency').value.trim() || 'BTC',
-          exchange: byId('interest-wallet').value.trim(),
+          exchange: byId('interest-wallet').value,
           comment: byId('interest-comment').value.trim(),
         }),
       });

@@ -65,12 +65,30 @@ def _parse_date(value: str) -> "datetime":
         raise HTTPException(status_code=422, detail=f"Invalid date format: {value!r}")
 
 
+def _require_active_wallets(accounts: BitcoinAccounts, *wallet_ids: str) -> None:
+    """Reject ledger writes that reference missing or inactive wallets."""
+    active_wallet_ids = {
+        str(wallet["wallet_id"]).strip()
+        for wallet in accounts.wallet_query.get_wallets(active_only=True)
+    }
+    invalid_wallet_ids = sorted(
+        {wallet_id.strip() for wallet_id in wallet_ids if wallet_id.strip() not in active_wallet_ids}
+    )
+    if invalid_wallet_ids:
+        names = ", ".join(f"'{wallet_id}'" for wallet_id in invalid_wallet_ids)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Wallet selection must be an existing active wallet: {names}",
+        )
+
+
 @router.post("/buy", response_model=dict)
 def record_buy(
     body: BuyRequest,
     accounts: BitcoinAccounts = Depends(get_request_accounts),
 ) -> dict:
     """Record a BTC purchase."""
+    _require_active_wallets(accounts, body.exchange)
     accounts.execute_trade(
         trade_date=_parse_date(body.trade_date),
         buy=body.buy,
@@ -91,6 +109,7 @@ def record_sell(
     accounts: BitcoinAccounts = Depends(get_request_accounts),
 ) -> dict:
     """Record a BTC sale."""
+    _require_active_wallets(accounts, body.exchange)
     accounts.execute_trade(
         trade_date=_parse_date(body.trade_date),
         buy=body.buy,
@@ -111,6 +130,9 @@ def record_transfer(
     accounts: BitcoinAccounts = Depends(get_request_accounts),
 ) -> dict:
     """Record a wallet-to-wallet transfer."""
+    if body.from_wallet.strip() == body.to_wallet.strip():
+        raise HTTPException(status_code=422, detail="From and to wallets must be different")
+    _require_active_wallets(accounts, body.from_wallet, body.to_wallet)
     dt = _parse_date(body.transfer_date)
     accounts.transfer_funds(
         withdraw_date=dt,
@@ -132,6 +154,7 @@ def record_interest(
     accounts: BitcoinAccounts = Depends(get_request_accounts),
 ) -> dict:
     """Record earned interest or rewards."""
+    _require_active_wallets(accounts, body.exchange)
     accounts.interest(
         interest_date=_parse_date(body.interest_date),
         buy=body.amount,
@@ -161,6 +184,8 @@ def transaction_update(
     accounts: BitcoinAccounts = Depends(get_request_accounts),
 ) -> TransactionResource:
     """Edit fields on a transaction."""
+    if body.wallet_id is not None:
+        _require_active_wallets(accounts, body.wallet_id)
     result = update_transaction(accounts, tx_id, body)
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
