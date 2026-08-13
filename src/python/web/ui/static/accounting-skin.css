@@ -688,8 +688,9 @@ td.num {
 .tx-type.trade    .dot { background: var(--accent); }
 .tx-type.transfer .dot { background: var(--info); }
 
-/* Mobile: hide the table, show the cards version */
-.ledger-cards {
+/* Mobile: hide dense tables, show the card version */
+.ledger-cards,
+.data-cards {
   display: none;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -704,8 +705,15 @@ td.num {
   overflow: hidden;
 }
 @media (max-width: 720px) {
-  .table-shell.ledger, .table-shell.trades { display: none; }
-  .ledger-cards, .trades-cards { display: grid; gap: 1px; background: var(--border-soft); }
+  .table-shell.ledger,
+  .table-shell.trades,
+  .table-shell.liquidity,
+  .table-shell.wallets,
+  .table-shell.gains,
+  .table-shell.forecast { display: none; }
+  .ledger-cards,
+  .trades-cards,
+  .data-cards { display: grid; gap: 1px; background: var(--border-soft); }
 }
 
 .ledger-card {
@@ -817,6 +825,66 @@ td.num {
   font-weight: 500;
   display: block;
   margin-top: 1px;
+}
+
+/* Compact mobile summaries for data that needs the desktop table's detail. */
+.data-card {
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--surface);
+}
+.data-card-empty {
+  color: var(--muted);
+  text-align: center;
+}
+.data-card-heading {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.data-card-heading strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 13.5px;
+}
+.data-card-detail {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.data-card-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+.data-card-values > div { min-width: 0; }
+.data-card-values span {
+  display: block;
+  color: var(--dim);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.data-card-values strong {
+  display: block;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.data-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.data-card-actions .button {
+  flex: 1 1 7.5rem;
 }
 
 

@@ -22,6 +22,12 @@ from web.config import WebConfig
 from web.routes.chain import get_chain_status_service
 
 
+MOBILE_IMPORT_CSV = (
+    "trans_type,buy,buy_curr,sell,sell_curr,fee,fee_curr,exchange,group,comment,created_date\n"
+    "Trade,0.5,BTC,25000,USD,10,USD,Strike,,Mobile preview,2024-06-15 10:30:00\n"
+)
+
+
 def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -256,6 +262,7 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
 
             # Verify ledger wallet filter is a dropdown with wallet options
             page.locator('.app-sidebar .nav-item[data-route="ledger"]').click()
+            page.get_by_role("button", name="Filters").click()
             playwright.expect(page.locator("#ledger-wallet")).to_be_visible()
             playwright.expect(page.locator('#ledger-wallet option[value="Strike"]')).to_be_attached()
             playwright.expect(page.locator('#ledger-wallet option[value="Vault"]')).to_be_attached()
@@ -298,6 +305,93 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
                 page.get_by_role("button", name="Sign In").click()
             playwright.expect(page.get_by_role("heading", name="Trades")).to_be_visible()
             playwright.expect(page.locator("#trades-table")).not_to_contain_text("No trades loaded yet.")
+        finally:
+            if browser is not None:
+                browser.close()
+            if manager is not None:
+                manager.stop()
+
+
+def test_mobile_data_views_stay_within_the_viewport(tmp_path: Path) -> None:
+    """Dense mobile views use cards (or contained table scrolling), never page overflow."""
+    playwright = pytest.importorskip("playwright.sync_api")
+    db_path = str(tmp_path / "mobile-smoke.sqlite3")
+    _seed_smoke_database(db_path)
+
+    with _run_smoke_server(db_path) as base_url:
+        manager = None
+        browser = None
+        try:
+            manager = playwright.sync_playwright().start()
+            browser = manager.chromium.launch(headless=True)
+        except Exception as exc:  # pragma: no cover - environment dependent
+            if manager is not None:
+                manager.stop()
+            pytest.skip(f"Playwright Chromium unavailable: {exc}")
+
+        try:
+            page = browser.new_page(viewport={"width": 375, "height": 812})
+
+            def assert_viewport_contained() -> None:
+                dimensions = page.evaluate(
+                    "({ viewport: window.innerWidth, document: document.documentElement.scrollWidth })"
+                )
+                assert dimensions["document"] <= dimensions["viewport"], dimensions
+
+            page.goto(base_url, wait_until="networkidle")
+            page.get_by_label("Passphrase").fill("orange-hodl")
+            page.get_by_role("button", name="Sign In").click()
+            playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
+            assert_viewport_contained()
+
+            page.goto(base_url + "wallet/Vault", wait_until="networkidle")
+            playwright.expect(page.locator("#wallet-view")).to_be_visible()
+            assert_viewport_contained()
+
+            page.goto(base_url + "record", wait_until="networkidle")
+            playwright.expect(page.locator("#record-view")).to_be_visible()
+            assert_viewport_contained()
+
+            page.goto(base_url + "reports", wait_until="networkidle")
+            playwright.expect(page.locator("#reports-view")).to_be_visible()
+            assert_viewport_contained()
+
+            page.goto(base_url + "settings", wait_until="networkidle")
+            playwright.expect(page.locator("#settings-view")).to_be_visible()
+            assert_viewport_contained()
+
+            page.goto(base_url + "ledger", wait_until="networkidle")
+            playwright.expect(page.locator("#ledger-cards")).to_be_visible()
+            assert_viewport_contained()
+
+            page.goto(base_url + "trades", wait_until="networkidle")
+            playwright.expect(page.locator("#trades-cards")).to_be_visible()
+            assert_viewport_contained()
+            page.locator("#trades-tab-liquidity").click()
+            playwright.expect(page.locator("#liquidity-cards")).to_be_visible()
+            playwright.expect(page.locator("#liquidity-cards")).to_contain_text("Strike")
+            assert_viewport_contained()
+
+            page.goto(base_url + "wallets", wait_until="networkidle")
+            playwright.expect(page.locator("#wallets-cards")).to_be_visible()
+            playwright.expect(page.locator("#wallets-cards")).to_contain_text("Strike")
+            assert_viewport_contained()
+
+            page.goto(base_url + "tax", wait_until="networkidle")
+            playwright.expect(page.locator("#gains-cards")).to_be_visible()
+            playwright.expect(page.locator("#forecast-cards")).to_be_visible()
+            assert_viewport_contained()
+
+            page.goto(base_url + "import", wait_until="networkidle")
+            page.locator("#import-file").set_input_files({
+                "name": "mobile-preview.csv",
+                "mimeType": "text/csv",
+                "buffer": MOBILE_IMPORT_CSV.encode(),
+            })
+            page.get_by_role("button", name="Upload & Preview").click()
+            playwright.expect(page.locator("#import-step-2")).to_be_visible()
+            playwright.expect(page.locator("#import-preview-table")).to_contain_text("Mobile preview")
+            assert_viewport_contained()
         finally:
             if browser is not None:
                 browser.close()
