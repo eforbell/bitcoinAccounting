@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from web.models import (
     CustodyBreakdownResource,
     ForecastSummaryResource,
@@ -18,6 +20,7 @@ from web.models import (
     WalletBalanceResource,
     WalletResource,
 )
+from web.models_verification import PortfolioVerificationPostureResource
 
 
 def test_wallet_resource_serializes_expected_fields() -> None:
@@ -126,6 +129,17 @@ def test_portfolio_dashboard_payload_dumps_cleanly() -> None:
                 percentage=80.0,
             )
         ],
+        portfolio_verification=PortfolioVerificationPostureResource(
+            status="verified",
+            recency_window_days=30,
+            eligible_wallet_count=2,
+            verified_wallet_count=2,
+            partial_wallet_count=0,
+            stale_wallet_count=0,
+            failed_wallet_count=0,
+            drift_wallet_count=0,
+            refreshed_at=datetime(2026, 3, 24, tzinfo=timezone.utc),
+        ),
         recent_transactions=[
             TransactionResource(
                 transaction_id=42,
@@ -150,6 +164,7 @@ def test_portfolio_dashboard_payload_dumps_cleanly() -> None:
     assert dumped["summary"]["wallet_count"] == 3
     assert dumped["custody_breakdown"][0]["custody"] == "self-custodied"
     assert dumped["wallets"][0]["wallet_id"] == "Coldcard"
+    assert dumped["portfolio_verification"]["status"] == "verified"
 
 
 def test_tax_report_and_forecast_payloads_dump_cleanly() -> None:

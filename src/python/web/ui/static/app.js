@@ -75,7 +75,7 @@ function dataCard(title, detail, values, actions = '') {
       </div>
     </div>
     <div class="data-card-values">${values.map(([label, value]) => `
-      <div><span>${escapeHtml(label)}</span><strong>${value}</strong></div>
+      <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
     `).join('')}</div>
     ${actions ? `<div class="data-card-actions">${actions}</div>` : ''}
   </article>`;
@@ -1063,7 +1063,7 @@ async function loadGains() {
       `${row.term} term`,
       [
         ['Lot quantity', denomFormat(row.lot_quantity)],
-        ['Acquired', escapeHtml(row.acquire_date)],
+        ['Acquired', row.acquire_date],
         ['Gain/loss', currency(row.gain_loss_usd)],
       ],
     )), 'No gains found for the selected filters.');
@@ -1270,8 +1270,8 @@ function renderWalletsList(wallets) {
     w.wallet_id,
     w.description || `${w.wallet_type} · ${w.custody}`,
     [
-      ['Type', escapeHtml(w.wallet_type)],
-      ['Custody', escapeHtml(w.custody)],
+      ['Type', w.wallet_type],
+      ['Custody', w.custody],
       ['Status', w.active ? 'Active' : 'Inactive'],
       ['Transactions', String(w.transaction_count)],
     ],

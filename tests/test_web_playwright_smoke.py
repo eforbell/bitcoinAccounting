@@ -260,9 +260,10 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             playwright.expect(page.locator("#wallets-table")).to_contain_text("Vault")
             assert "/wallets" in page.url
 
-            # Verify ledger wallet filter is a dropdown with wallet options
+            # Verify the disclosed ledger filter exposes wallet options.
             page.locator('.app-sidebar .nav-item[data-route="ledger"]').click()
-            page.get_by_role("button", name="Filters").click()
+            page.locator("#ledger-filter-toggle").click()
+            playwright.expect(page.locator("#ledger-filter-toggle")).to_have_attribute("aria-expanded", "true")
             playwright.expect(page.locator("#ledger-wallet")).to_be_visible()
             playwright.expect(page.locator('#ledger-wallet option[value="Strike"]')).to_be_attached()
             playwright.expect(page.locator('#ledger-wallet option[value="Vault"]')).to_be_attached()
@@ -380,6 +381,12 @@ def test_mobile_data_views_stay_within_the_viewport(tmp_path: Path) -> None:
             page.goto(base_url + "tax", wait_until="networkidle")
             playwright.expect(page.locator("#gains-cards")).to_be_visible()
             playwright.expect(page.locator("#forecast-cards")).to_be_visible()
+            page.get_by_role("button", name="Load Gains").click()
+            playwright.expect(page.locator("#gains-cards")).to_contain_text("12/01/2024")
+            page.locator("#forecast-wallet").fill("Vault")
+            page.locator("#forecast-quantity").fill("0.2")
+            page.get_by_role("button", name="Forecast Sale").click()
+            playwright.expect(page.locator("#forecast-cards")).to_contain_text("2025-12-01")
             assert_viewport_contained()
 
             page.goto(base_url + "import", wait_until="networkidle")
