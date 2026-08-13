@@ -180,16 +180,36 @@ def test_dashboard_reports_verified_posture_when_all_private_wallets_are_verifie
     assert river["verification_eligible"] is False
 
 
-def test_dashboard_can_include_inactive_wallets(client: TestClient) -> None:
+def test_dashboard_shows_only_active_wallets_with_nonzero_balance(
+    client: TestClient,
+    seeded_accounts: BitcoinAccounts,
+) -> None:
+    seeded_accounts.wallet_query.add_wallet(
+        wallet_id="EmptyActive",
+        wallet_type="hardware",
+        custody="self-custodied",
+    )
+    seeded_accounts.wallet_query.add_wallet(
+        wallet_id="DustArchive",
+        wallet_type="hardware",
+        custody="self-custodied",
+    )
+    seeded_accounts.wallet_query.update_wallet("DustArchive", active=False)
+    seeded_accounts.deposit(
+        exchange="DustArchive",
+        deposit_date=datetime(2024, 8, 1),
+        buy=0.00000001,
+        buy_curr="BTC",
+    )
+
     response = client.get(
         "/api/portfolio/dashboard",
         params={"coin": "BTC", "include_inactive": "true"},
     )
 
     assert response.status_code == 200
-    wallets = response.json()["wallets"]
-    wallet_ids = [wallet["wallet_id"] for wallet in wallets]
-    assert "OldVault" in wallet_ids
+    wallet_ids = [wallet["wallet_id"] for wallet in response.json()["wallets"]]
+    assert set(wallet_ids) == {"Coldcard", "River", "Casa"}
 
 
 def test_wallet_detail_returns_balance_and_transactions(client: TestClient) -> None:

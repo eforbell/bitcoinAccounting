@@ -29,6 +29,8 @@ def test_static_assets_are_served_from_relative_paths() -> None:
     assert "api/tax/gains" in js_response.text
     assert "api/auth/login" in js_response.text
     assert "api/chain/status" in js_response.text
+    assert "include_inactive" not in js_response.text
+    assert "inactive-toggle" not in js_response.text
 
     assert logo_response.status_code == 200
     assert logo_response.headers["content-type"] == "image/png"
@@ -56,6 +58,7 @@ def test_ui_shell_references_relative_asset_paths() -> None:
     assert 'rel="icon" type="image/png" sizes="32x32" href="static/brand/favicon-32x32.png"' in response.text
     assert 'rel="icon" type="image/png" sizes="16x16" href="static/brand/favicon-16x16.png"' in response.text
     assert 'src="static/app.js"' in response.text
+    assert "inactive-toggle" not in response.text
 
 
 def test_sovereign_fonts_css_route_uses_env_source_selection(monkeypatch) -> None:
