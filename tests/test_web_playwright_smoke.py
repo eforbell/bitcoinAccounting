@@ -254,8 +254,10 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             playwright.expect(page.locator("#wallets-table")).to_contain_text("Vault")
             assert "/wallets" in page.url
 
-            # Verify ledger wallet filter is a dropdown with wallet options
+            # Verify the disclosed ledger filter exposes wallet options.
             page.locator('.app-sidebar .nav-item[data-route="ledger"]').click()
+            page.locator("#ledger-filter-toggle").click()
+            playwright.expect(page.locator("#ledger-filter-toggle")).to_have_attribute("aria-expanded", "true")
             playwright.expect(page.locator("#ledger-wallet")).to_be_visible()
             playwright.expect(page.locator('#ledger-wallet option[value="Strike"]')).to_be_attached()
             playwright.expect(page.locator('#ledger-wallet option[value="Vault"]')).to_be_attached()

@@ -151,7 +151,7 @@ def test_dashboard_reports_verified_posture_when_all_private_wallets_are_verifie
     client: TestClient,
     seeded_accounts: BitcoinAccounts,
 ) -> None:
-    verified_at = datetime(2026, 3, 25, tzinfo=timezone.utc)
+    verified_at = datetime.now(timezone.utc)
     for wallet_id, balance in [("Coldcard", 1.1), ("Casa", 0.25)]:
         record_wallet_verification_run(
             seeded_accounts.backend,
