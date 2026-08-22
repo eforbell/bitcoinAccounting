@@ -310,15 +310,26 @@
             <section class="panel verification-subpanel">
               <div class="panel-heading">
                 <div>
-                  <h3>Recent Runs</h3>
-                  <p>Latest verification attempts for this wallet.</p>
+                  <h3>Proof of Spend</h3>
+                  <p>Test a finalized, signed transaction against your Bitcoin Core mempool policy.</p>
                 </div>
+                <div id="wallet-proof-chip" class="chain-status-chip">untested</div>
               </div>
-              <div id="wallet-verification-history" class="stack">
-                <div class="list-item">
-                  <div class="list-item-meta">No verification history yet.</div>
+              <div id="wallet-proof-latest" class="proof-latest">
+                <strong>No proof of spend recorded</strong>
+                <p class="muted">A successful result demonstrates that Bitcoin Core accepts the signed transaction at test time.</p>
+              </div>
+              <form id="wallet-proof-form" class="stack">
+                <label class="field">
+                  <span>Finalized Transaction Hex</span>
+                  <textarea id="wallet-proof-transaction" rows="6" spellcheck="false" autocomplete="off" placeholder="Paste signed raw transaction hex"></textarea>
+                </label>
+                <p id="wallet-proof-eligibility" class="muted">The transaction is tested locally and is never broadcast or stored by Bitcoin Accounting.</p>
+                <div class="actions-row">
+                  <button id="wallet-proof-submit" class="button" type="submit">Test Transaction</button>
                 </div>
-              </div>
+                <div id="wallet-proof-message" class="status-line">Test only — no transaction will be broadcast.</div>
+              </form>
             </section>
           </div>
         </section>

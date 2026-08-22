@@ -29,6 +29,7 @@ def test_static_assets_are_served_from_relative_paths() -> None:
     assert "api/tax/gains" in js_response.text
     assert "api/auth/login" in js_response.text
     assert "api/chain/status" in js_response.text
+    assert "api/verification/proof-of-spend/run" in js_response.text
     assert "include_inactive" not in js_response.text
     assert "inactive-toggle" not in js_response.text
 
@@ -38,7 +39,10 @@ def test_static_assets_are_served_from_relative_paths() -> None:
         assert response.status_code == 200
         assert response.headers["content-type"] == "image/png"
     assert favicon_response.status_code == 200
-    assert favicon_response.headers["content-type"] == "image/x-icon"
+    assert favicon_response.headers["content-type"] in {
+        "image/x-icon",
+        "image/vnd.microsoft.icon",
+    }
 
 
 def test_ui_shell_references_relative_asset_paths() -> None:
@@ -59,6 +63,9 @@ def test_ui_shell_references_relative_asset_paths() -> None:
     assert 'rel="icon" type="image/png" sizes="16x16" href="static/brand/favicon-16x16.png"' in response.text
     assert 'src="static/app.js"' in response.text
     assert "inactive-toggle" not in response.text
+    assert 'id="wallet-proof-form"' in response.text
+    assert 'id="wallet-proof-latest"' in response.text
+    assert 'id="wallet-verification-history"' not in response.text
 
 
 def test_sovereign_fonts_css_route_uses_env_source_selection(monkeypatch) -> None:

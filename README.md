@@ -442,7 +442,8 @@ This integration is intentionally optional:
 
 - If disabled, the panel does not appear.
 - If enabled but RPC is unavailable, the rest of the dashboard still loads.
-- The first pass uses `bitcoind` JSON-RPC only. Electrum-compatible verification work is planned separately.
+- Descriptor-based wallet balance verification uses Bitcoin Core for descriptor handling and an Electrum-compatible server for chain balances.
+- Wallet detail also offers **Proof of Spend**: paste a finalized, signed transaction and Bitcoin Accounting calls Bitcoin Core's `testmempoolaccept` without broadcasting it.
 
 Recommended environment variables:
 
@@ -454,6 +455,8 @@ BITCOIN_RPC_TIMEOUT_SECONDS=3
 ```
 
 Cookie auth is preferred over storing explicit RPC usernames and passwords. If you do not use a cookie file, set both `BITCOIN_RPC_USER` and `BITCOIN_RPC_PASSWORD` instead.
+
+The RPC URL and authentication are required for Proof of Spend even when the optional dashboard presence panel is disabled. Bitcoin Accounting never calls `sendrawtransaction` from this workflow and does not persist finalized transaction hex. It retains only the wallet association, acceptance verdict, transaction identifiers, fee/size metadata, rejection reason, and test time. A successful result proves that the submitted signed transaction satisfied the connected node's chain and mempool policy at that moment; it does not broadcast the transaction.
 
 Refresh behavior:
 

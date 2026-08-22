@@ -223,18 +223,18 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             page.locator('.app-sidebar .nav-item[data-route="dashboard"]').click()
             playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
 
-            page.locator('[data-wallet-id="Strike"]').click()
-            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Strike")
+            page.locator('[data-wallet-id="Vault"]').click()
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
             playwright.expect(page.locator("#wallet-view-balance")).to_contain_text("BTC")
             playwright.expect(page.locator("#wallet-tx-list")).not_to_contain_text("Not Found")
-            assert "/wallet/Strike" in page.url
+            assert "/wallet/Vault" in page.url
 
             # Verify direct-load of wallet URL works (API resolves from subpath)
-            page.goto(base_url + "wallet/Vault", wait_until="networkidle")
+            page.goto(base_url + "wallet/Strike", wait_until="networkidle")
             if page.locator("#login-panel").is_visible():
                 page.get_by_label("Passphrase").fill("orange-hodl")
                 page.get_by_role("button", name="Sign In").click()
-            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Strike")
             playwright.expect(page.locator("#wallet-view-balance")).to_contain_text("BTC")
             playwright.expect(page.locator("#wallet-tx-list")).not_to_contain_text("Not Found")
 
@@ -307,7 +307,10 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             playwright.expect(page.locator("#wallet-verification-status")).to_have_text("Unverified")
             playwright.expect(page.locator("#wallet-verification-chip")).to_have_text("unverified")
             playwright.expect(page.locator("#wallet-verification-submit")).to_be_enabled()
-            playwright.expect(page.locator("#wallet-verification-history")).to_contain_text("No verification history yet.")
+            playwright.expect(page.locator("#wallet-proof-chip")).to_have_text("untested")
+            playwright.expect(page.locator("#wallet-proof-submit")).to_be_enabled()
+            playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text("No proof of spend recorded")
+            assert page.locator("#wallet-verification-history").count() == 0
 
             # Navigate to trades via sidebar
             page.locator('.app-sidebar .nav-item[data-route="trades"]').click()

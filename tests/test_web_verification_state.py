@@ -5,6 +5,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from db import SqliteBackend
+from web.services.proof_of_spend import (
+    get_latest_proof_of_spend,
+    record_proof_of_spend_result,
+)
 from web.services.wallet_verification import (
     build_portfolio_verification_posture,
     ensure_wallet_verification_tables,
@@ -110,3 +114,37 @@ def test_portfolio_verification_posture_marks_missing_wallets_stale() -> None:
     assert posture.status == "stale"
     assert posture.stale_wallet_count == 1
 
+
+def test_latest_proof_of_spend_keeps_history_but_returns_newest_result() -> None:
+    backend = SqliteBackend(":memory:", auto_create_tables=True)
+    older = datetime.now(timezone.utc) - timedelta(days=1)
+    newer = older + timedelta(hours=2)
+    record_proof_of_spend_result(
+        backend,
+        wallet_id="Coldcard",
+        accepted=False,
+        txid="a" * 64,
+        reject_reason="missing-inputs",
+        tested_at=older,
+    )
+    accepted = record_proof_of_spend_result(
+        backend,
+        wallet_id="Coldcard",
+        accepted=True,
+        txid="b" * 64,
+        virtual_size=141,
+        base_fee_btc=0.0000141,
+        tested_at=newer,
+    )
+
+    latest = get_latest_proof_of_spend(backend, "Coldcard")
+    count = backend.execute_scalar(
+        "SELECT COUNT(*) FROM web_wallet_proof_of_spend_runs WHERE wallet_id = :wallet_id",
+        {"wallet_id": "Coldcard"},
+    )
+
+    assert count == 2
+    assert latest is not None
+    assert latest.proof_id == accepted.proof_id
+    assert latest.accepted is True
+    assert latest.txid == "b" * 64

@@ -122,6 +122,11 @@ def test_verification_routes_require_auth() -> None:
 
     assert client.get("/api/verification/wallets/Coldcard").status_code == 401
     assert client.post("/api/verification/run", json={"wallet_id": "Coldcard"}).status_code == 401
+    assert client.get("/api/verification/proof-of-spend/wallets/Coldcard").status_code == 401
+    assert client.post(
+        "/api/verification/proof-of-spend/run",
+        json={"wallet_id": "Coldcard", "raw_transaction_hex": "00"},
+    ).status_code == 401
 
 
 def test_verification_history_empty(client: TestClient) -> None:
@@ -265,3 +270,120 @@ def test_verification_run_rejects_excessive_scan_ceiling(client: TestClient) -> 
     )
 
     assert response.status_code == 422
+
+
+def test_proof_of_spend_acceptance_is_persisted_without_raw_transaction(
+    client: TestClient,
+    seeded_accounts: BitcoinAccounts,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _AcceptingCore:
+        def test_mempool_accept(self, raw_transaction_hex: str) -> dict[str, object]:
+            assert raw_transaction_hex == "deadbeef"
+            return {
+                "txid": "a" * 64,
+                "wtxid": "b" * 64,
+                "allowed": True,
+                "vsize": 141,
+                "fees": {"base": 0.00001410},
+            }
+
+    monkeypatch.setattr(
+        "web.services.proof_of_spend.ProofOfSpendRPCClient",
+        lambda config: _AcceptingCore(),
+    )
+
+    response = client.post(
+        "/api/verification/proof-of-spend/run",
+        json={"wallet_id": "Coldcard", "raw_transaction_hex": "DEADBEEF"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["broadcast"] is False
+    assert body["result"]["accepted"] is True
+    assert body["result"]["status"] == "accepted"
+    assert body["result"]["txid"] == "a" * 64
+    assert body["result"]["virtual_size"] == 141
+    assert "raw_transaction_hex" not in body["result"]
+
+    latest = client.get("/api/verification/proof-of-spend/wallets/Coldcard")
+    assert latest.status_code == 200
+    assert latest.json()["latest"]["proof_id"] == body["result"]["proof_id"]
+
+    columns = seeded_accounts.backend.execute(
+        "PRAGMA table_info(web_wallet_proof_of_spend_runs)"
+    )
+    assert "raw_transaction_hex" not in {row["name"] for row in columns}
+
+
+def test_proof_of_spend_rejection_records_core_reason(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _RejectingCore:
+        def test_mempool_accept(self, raw_transaction_hex: str) -> dict[str, object]:
+            return {
+                "txid": "c" * 64,
+                "wtxid": "d" * 64,
+                "allowed": False,
+                "reject-reason": "missing-inputs",
+            }
+
+    monkeypatch.setattr(
+        "web.services.proof_of_spend.ProofOfSpendRPCClient",
+        lambda config: _RejectingCore(),
+    )
+
+    response = client.post(
+        "/api/verification/proof-of-spend/run",
+        json={"wallet_id": "Coldcard", "raw_transaction_hex": "00"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["result"]["accepted"] is False
+    assert response.json()["result"]["status"] == "rejected"
+    assert response.json()["result"]["reject_reason"] == "missing-inputs"
+
+
+def test_proof_of_spend_rejects_invalid_hex(client: TestClient) -> None:
+    response = client.post(
+        "/api/verification/proof-of-spend/run",
+        json={"wallet_id": "Coldcard", "raw_transaction_hex": "not-hex"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_proof_of_spend_rejects_custodial_wallet(client: TestClient) -> None:
+    response = client.post(
+        "/api/verification/proof-of-spend/run",
+        json={"wallet_id": "River", "raw_transaction_hex": "00"},
+    )
+
+    assert response.status_code == 400
+    assert "self-custodied or multisig" in response.json()["detail"]
+
+
+def test_proof_of_spend_returns_502_when_core_is_unavailable(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from web.services.proof_of_spend import ProofOfSpendRPCError
+
+    class _UnavailableCore:
+        def test_mempool_accept(self, raw_transaction_hex: str) -> dict[str, object]:
+            raise ProofOfSpendRPCError("connection refused")
+
+    monkeypatch.setattr(
+        "web.services.proof_of_spend.ProofOfSpendRPCClient",
+        lambda config: _UnavailableCore(),
+    )
+
+    response = client.post(
+        "/api/verification/proof-of-spend/run",
+        json={"wallet_id": "Coldcard", "raw_transaction_hex": "00"},
+    )
+
+    assert response.status_code == 502
+    assert "proof-of-spend check unavailable" in response.json()["detail"]
