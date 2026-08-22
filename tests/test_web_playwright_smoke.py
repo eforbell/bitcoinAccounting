@@ -223,18 +223,18 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             page.locator('.app-sidebar .nav-item[data-route="dashboard"]').click()
             playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
 
-            page.locator('[data-wallet-id="Strike"]').click()
-            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Strike")
+            page.locator('[data-wallet-id="Vault"]').click()
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
             playwright.expect(page.locator("#wallet-view-balance")).to_contain_text("BTC")
             playwright.expect(page.locator("#wallet-tx-list")).not_to_contain_text("Not Found")
-            assert "/wallet/Strike" in page.url
+            assert "/wallet/Vault" in page.url
 
             # Verify direct-load of wallet URL works (API resolves from subpath)
-            page.goto(base_url + "wallet/Vault", wait_until="networkidle")
+            page.goto(base_url + "wallet/Strike", wait_until="networkidle")
             if page.locator("#login-panel").is_visible():
                 page.get_by_label("Passphrase").fill("orange-hodl")
                 page.get_by_role("button", name="Sign In").click()
-            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Strike")
             playwright.expect(page.locator("#wallet-view-balance")).to_contain_text("BTC")
             playwright.expect(page.locator("#wallet-tx-list")).not_to_contain_text("Not Found")
 
@@ -307,7 +307,10 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             playwright.expect(page.locator("#wallet-verification-status")).to_have_text("Unverified")
             playwright.expect(page.locator("#wallet-verification-chip")).to_have_text("unverified")
             playwright.expect(page.locator("#wallet-verification-submit")).to_be_enabled()
-            playwright.expect(page.locator("#wallet-verification-history")).to_contain_text("No verification history yet.")
+            playwright.expect(page.locator("#wallet-proof-chip")).to_have_text("untested")
+            playwright.expect(page.locator("#wallet-proof-submit")).to_be_enabled()
+            playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text("No proof of spend recorded")
+            assert page.locator("#wallet-verification-history").count() == 0
 
             # Navigate to trades via sidebar
             page.locator('.app-sidebar .nav-item[data-route="trades"]').click()
@@ -331,6 +334,136 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
                 page.get_by_role("button", name="Sign In").click()
             playwright.expect(page.get_by_role("heading", name="Trades")).to_be_visible()
             playwright.expect(page.locator("#trades-table")).not_to_contain_text("No trades loaded yet.")
+        finally:
+            if browser is not None:
+                browser.close()
+            if manager is not None:
+                manager.stop()
+
+
+def test_proof_of_spend_state_is_wallet_scoped_and_privacy_aware(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    playwright = pytest.importorskip("playwright.sync_api")
+    db_path = str(tmp_path / "proof-smoke.sqlite3")
+    _seed_smoke_database(db_path)
+
+    class _DelayedAcceptingCore:
+        def test_mempool_accept(self, raw_transaction_hex: str) -> dict[str, object]:
+            time.sleep(0.4)
+            return {
+                "txid": "a" * 64,
+                "wtxid": "b" * 64,
+                "allowed": True,
+                "vsize": 141,
+                "fees": {"base": 0.0000141},
+            }
+
+    monkeypatch.setattr(
+        "web.services.proof_of_spend.ProofOfSpendRPCClient",
+        lambda config: _DelayedAcceptingCore(),
+    )
+
+    with _run_smoke_server(db_path) as base_url:
+        manager = None
+        browser = None
+        try:
+            manager = playwright.sync_playwright().start()
+            browser = manager.chromium.launch(headless=True)
+        except Exception as exc:  # pragma: no cover - environment dependent
+            if manager is not None:
+                manager.stop()
+            pytest.skip(f"Playwright Chromium unavailable: {exc}")
+
+        try:
+            page = browser.new_page()
+            page.goto(base_url, wait_until="networkidle")
+            page.get_by_label("Passphrase").fill("orange-hodl")
+            page.get_by_role("button", name="Sign In").click()
+            playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
+
+            page.evaluate("navigateToWallet('Vault')")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            playwright.expect(page.locator("#wallet-proof-submit")).to_be_enabled()
+            page.locator("#wallet-proof-transaction").fill("deadbeef")
+
+            page.evaluate("navigateTo('dashboard')")
+            playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+            page.evaluate("navigateToWallet('Vault')")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            page.locator("#wallet-proof-transaction").fill("cafebabe")
+
+            page.evaluate("navigateToWallet('Strike')")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Strike")
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+
+            page.evaluate("navigateToWallet('Vault')")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            page.locator("#wallet-proof-transaction").fill("00")
+            page.locator("#wallet-proof-submit").click()
+            page.evaluate("navigateToWallet('Strike')")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Strike")
+            page.wait_for_timeout(800)
+            playwright.expect(page.locator("#wallet-proof-chip")).to_have_text("untested")
+            playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text(
+                "No proof of spend recorded"
+            )
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+
+            page.evaluate("navigateToWallet('Vault')")
+            playwright.expect(page.locator("#wallet-proof-chip")).to_have_text("accepted")
+            playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text(
+                "Wallet association: operator-attested."
+            )
+            page.locator("#wallet-proof-transaction").fill("deadbeef")
+            page.evaluate("BtcPrivacy.setPreference('on')")
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_be_disabled()
+            playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text(
+                "Transaction •••••"
+            )
+            playwright.expect(page.locator("#wallet-proof-latest")).not_to_contain_text(
+                "aaaaaaaaaaaa"
+            )
+            playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text(
+                "••••• fee"
+            )
+
+            # A same-wallet status refresh must not supersede an active proof
+            # submission or re-enable its controls before the POST completes.
+            page.evaluate("BtcPrivacy.setPreference('off')")
+            playwright.expect(page.locator("#wallet-proof-submit")).to_be_enabled()
+            page.locator("#wallet-proof-transaction").fill("00")
+            page.locator("#wallet-proof-submit").click()
+            page.evaluate("window.dispatchEvent(new CustomEvent('btc:denom-change'))")
+            page.wait_for_timeout(100)
+            playwright.expect(page.locator("#wallet-proof-submit")).to_have_text("Testing...")
+            playwright.expect(page.locator("#wallet-proof-submit")).to_be_disabled()
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("00")
+            playwright.expect(page.locator("#wallet-proof-message")).to_contain_text(
+                "Proof accepted"
+            )
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+            playwright.expect(page.locator("#wallet-proof-submit")).to_be_enabled()
+
+            # Explicit logout and a later authentication failure both dispose
+            # of pasted bearer data before another operator can sign in.
+            page.locator("#wallet-proof-transaction").fill("deadbeef")
+            page.locator("#session-action").click()
+            playwright.expect(page.locator("#login-panel")).to_be_visible()
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+            page.get_by_label("Passphrase").fill("orange-hodl")
+            page.get_by_role("button", name="Sign In").click()
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+
+            page.locator("#wallet-proof-transaction").fill("cafebabe")
+            page.context.clear_cookies()
+            page.evaluate("refreshSession()")
+            playwright.expect(page.locator("#login-panel")).to_be_visible()
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
         finally:
             if browser is not None:
                 browser.close()

@@ -245,13 +245,41 @@ def get_latest_wallet_verification(
     backend: DatabaseBackend,
     wallet_id: str,
 ) -> WalletVerificationResource | None:
-    """Return the latest persisted verification state for one wallet."""
+    """Return the newest verification, falling back to append-only history.
+
+    The latest-state table is a read optimization. Existing deployments can
+    have retained run history without a corresponding state row, so history
+    remains the source of truth when state is missing or older.
+    """
     ensure_wallet_verification_tables(backend)
-    row = backend.execute_one(
+    state_row = backend.execute_one(
         f"SELECT * FROM {_STATE_TABLE} WHERE wallet_id = :wallet_id",
         {"wallet_id": wallet_id},
     )
-    return _row_to_resource(row) if row is not None else None
+    run_row = backend.execute_one(
+        f"""
+        SELECT *
+        FROM {_RUNS_TABLE}
+        WHERE wallet_id = :wallet_id
+        ORDER BY verified_at DESC
+        LIMIT 1
+        """,
+        {"wallet_id": wallet_id},
+    )
+    if state_row is None:
+        return _row_to_resource(run_row) if run_row is not None else None
+    if run_row is None:
+        return _row_to_resource(state_row)
+
+    state_resource = _row_to_resource(state_row)
+    run_resource = _row_to_resource(run_row)
+    state_time = state_resource.verified_at
+    run_time = run_resource.verified_at
+    if state_time.tzinfo is None:
+        state_time = state_time.replace(tzinfo=timezone.utc)
+    if run_time.tzinfo is None:
+        run_time = run_time.replace(tzinfo=timezone.utc)
+    return run_resource if run_time > state_time else state_resource
 
 
 def list_wallet_verification_runs(

@@ -12,6 +12,13 @@ if TYPE_CHECKING:
     from ..backend import DatabaseBackend
 
 
+_WALLET_HISTORY_TABLES = (
+    "web_wallet_verification_runs",
+    "web_wallet_proof_of_spend_runs",
+)
+_WALLET_LATEST_STATE_TABLE = "web_wallet_verification_state"
+
+
 class WalletQuery:
     """Query wallet information and balances.
 
@@ -30,7 +37,119 @@ class WalletQuery:
     def _wallet_exists(self, wallet_id: str) -> bool:
         """Return True if a wallet record exists."""
         query = "SELECT COUNT(*) FROM wallets WHERE wallet_id = :wallet_id"
-        return self.backend.execute_scalar(query, {"wallet_id": wallet_id}) > 0
+        return bool(self.backend.execute_scalar(query, {"wallet_id": wallet_id}) > 0)
+
+    def _table_exists(self, table_name: str) -> bool:
+        """Return whether an optional wallet-associated table exists."""
+        from ..sqlite import SqliteBackend
+
+        if isinstance(self.backend, SqliteBackend):
+            query = """
+                SELECT COUNT(*) FROM sqlite_master
+                WHERE type = 'table' AND name = :table_name
+            """
+        else:
+            query = """
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = :table_name
+            """
+        return bool(self.backend.execute_scalar(query, {"table_name": table_name}) > 0)
+
+    def _wallet_has_optional_records(self, wallet_id: str) -> bool:
+        """Return whether retained history already claims a wallet identity."""
+        for table_name in (*_WALLET_HISTORY_TABLES, _WALLET_LATEST_STATE_TABLE):
+            if self._table_exists(table_name) and self.backend.execute_scalar(
+                f"SELECT COUNT(*) FROM {table_name} WHERE wallet_id = :wallet_id",
+                {"wallet_id": wallet_id},
+            ) > 0:
+                return True
+        return False
+
+    def _lock_wallets_for_lifecycle(self, *wallet_ids: str) -> None:
+        """Lock PostgreSQL wallet rows before moving their associated records.
+
+        SQLite lifecycle writes already serialize at the database level. On
+        PostgreSQL, deterministic row locks ensure a concurrent proof insert
+        either commits before history is moved or observes the wallet deletion.
+        """
+        from ..sqlite import SqliteBackend
+
+        if isinstance(self.backend, SqliteBackend):
+            return
+        ordered_ids = sorted(set(wallet_ids))
+        placeholders = ", ".join(
+            f":wallet_id_{index}" for index in range(len(ordered_ids))
+        )
+        params = {
+            f"wallet_id_{index}": wallet_id
+            for index, wallet_id in enumerate(ordered_ids)
+        }
+        rows = self.backend.execute(
+            f"""
+            SELECT wallet_id
+            FROM wallets
+            WHERE wallet_id IN ({placeholders})
+            ORDER BY wallet_id
+            FOR UPDATE
+            """,
+            params,
+        )
+        if len(rows) != len(ordered_ids):
+            raise ValueError("Wallet identity changed during the lifecycle operation")
+
+    def _rename_optional_wallet_records(self, old_id: str, new_id: str) -> None:
+        """Move optional web-owned history/state records during a rename."""
+        for table_name in (*_WALLET_HISTORY_TABLES, _WALLET_LATEST_STATE_TABLE):
+            if self._table_exists(table_name):
+                self.backend.execute(
+                    f"UPDATE {table_name} SET wallet_id = :new_id WHERE wallet_id = :old_id",
+                    {"old_id": old_id, "new_id": new_id},
+                )
+
+    def _merge_optional_wallet_records(self, source_id: str, target_id: str) -> None:
+        """Retarget append-only history and preserve the newest latest-state row."""
+        params = {"source_id": source_id, "target_id": target_id}
+        for table_name in _WALLET_HISTORY_TABLES:
+            if self._table_exists(table_name):
+                self.backend.execute(
+                    f"UPDATE {table_name} SET wallet_id = :target_id WHERE wallet_id = :source_id",
+                    params,
+                )
+
+        if not self._table_exists(_WALLET_LATEST_STATE_TABLE):
+            return
+
+        self.backend.execute(
+            f"""
+            DELETE FROM {_WALLET_LATEST_STATE_TABLE}
+            WHERE wallet_id = :target_id
+            AND EXISTS (
+                SELECT 1 FROM {_WALLET_LATEST_STATE_TABLE} AS source_state
+                WHERE source_state.wallet_id = :source_id
+                AND source_state.verified_at > {_WALLET_LATEST_STATE_TABLE}.verified_at
+            )
+            """,
+            params,
+        )
+        self.backend.execute(
+            f"""
+            DELETE FROM {_WALLET_LATEST_STATE_TABLE}
+            WHERE wallet_id = :source_id
+            AND EXISTS (
+                SELECT 1 FROM {_WALLET_LATEST_STATE_TABLE} AS target_state
+                WHERE target_state.wallet_id = :target_id
+            )
+            """,
+            params,
+        )
+        self.backend.execute(
+            f"""
+            UPDATE {_WALLET_LATEST_STATE_TABLE}
+            SET wallet_id = :target_id
+            WHERE wallet_id = :source_id
+            """,
+            params,
+        )
 
     def get_balance_by_account(self, coin: str = 'BTC', account: str = 'Vault') -> float:
         """Get balance for a specific account/wallet.
@@ -229,6 +348,10 @@ class WalletQuery:
             Exception: If wallet_id already exists (duplicate key violation)
         """
         wallet_id = wallet_id.strip()
+        if not self._wallet_exists(wallet_id) and self._wallet_has_optional_records(wallet_id):
+            raise ValueError(
+                f"Wallet '{wallet_id}' already exists in retained verification history"
+            )
         query = """
             INSERT INTO wallets (wallet_id, wallet_type, custody, description, notes)
             VALUES (:wallet_id, :wallet_type, :custody, :description, :notes)
@@ -297,6 +420,10 @@ class WalletQuery:
         # Check if new_id already exists
         if self._wallet_exists(new_id):
             raise ValueError(f"Wallet '{new_id}' already exists")
+        if self._wallet_has_optional_records(new_id):
+            raise ValueError(
+                f"Wallet '{new_id}' already exists in retained verification history"
+            )
 
         # Perform atomic rename in transaction
         # Note: backend.execute() handles transactions internally for multi-statement operations
@@ -305,8 +432,10 @@ class WalletQuery:
 
         # Execute both updates as a single transaction.
         try:
+            self._lock_wallets_for_lifecycle(old_id)
             self.backend.execute(update_wallets, {"old_id": old_id, "new_id": new_id})
             self.backend.execute(update_ledger, {"old_id": old_id, "new_id": new_id})
+            self._rename_optional_wallet_records(old_id, new_id)
             self.backend.commit()
         except Exception:
             try:
@@ -342,7 +471,9 @@ class WalletQuery:
         delete_wallet = "DELETE FROM wallets WHERE wallet_id = :source_id"
 
         try:
+            self._lock_wallets_for_lifecycle(source_id, target_id)
             self.backend.execute(update_ledger, {"source_id": source_id, "target_id": target_id})
+            self._merge_optional_wallet_records(source_id, target_id)
             # Delete source wallet record
             self.backend.execute(delete_wallet, {"source_id": source_id})
             self.backend.commit()

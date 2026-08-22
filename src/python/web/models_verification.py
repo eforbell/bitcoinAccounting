@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from web.model_base import APIModel
 
@@ -90,3 +91,62 @@ class WalletVerificationRunResponse(APIModel):
     result: WalletVerificationResource
     ledger_transaction_count: int
     meaningful_to_verify: bool
+
+
+class ProofOfSpendCreateRequest(APIModel):
+    """A finalized transaction to evaluate without broadcasting it."""
+
+    wallet_id: str = Field(min_length=1, max_length=255)
+    raw_transaction_hex: str = Field(min_length=2, max_length=2_000_000)
+
+    @field_validator("wallet_id")
+    @classmethod
+    def validate_wallet_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("wallet_id must not be blank.")
+        return normalized
+
+    @field_validator("raw_transaction_hex")
+    @classmethod
+    def validate_raw_transaction_hex(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) % 2:
+            raise ValueError("raw_transaction_hex must contain an even number of characters.")
+        try:
+            bytes.fromhex(normalized)
+        except ValueError as exc:
+            raise ValueError("raw_transaction_hex must be hexadecimal.") from exc
+        if any(character.isspace() for character in normalized):
+            raise ValueError("raw_transaction_hex must not contain whitespace.")
+        return normalized.lower()
+
+
+class ProofOfSpendResource(APIModel):
+    """Persisted result from an operator-attested mempool evaluation."""
+
+    proof_id: str
+    wallet_id: str
+    wallet_binding: Literal["operator_attested"] = "operator_attested"
+    status: str
+    accepted: bool
+    txid: str | None = None
+    wtxid: str | None = None
+    virtual_size: int | None = None
+    base_fee_btc: float | None = None
+    reject_reason: str | None = None
+    tested_at: datetime
+
+
+class ProofOfSpendLatestResponse(APIModel):
+    """Latest proof-of-spend result for one wallet."""
+
+    wallet_id: str
+    latest: ProofOfSpendResource | None = None
+
+
+class ProofOfSpendRunResponse(APIModel):
+    """Response from a non-broadcast proof-of-spend test."""
+
+    result: ProofOfSpendResource
+    broadcast: bool = False
