@@ -23,7 +23,10 @@ const state = {
   chainStatus: null,
   chainStatusRefreshHandle: null,
   walletDetail: null,
+  walletDetailRequestId: 0,
   walletProofOfSpend: null,
+  walletProofFormWalletId: null,
+  walletProofRequestId: 0,
   walletsList: [],
   currentPage: 'dashboard',
   currentWalletId: null,
@@ -137,7 +140,20 @@ function currentRouteFromLocation() {
   return 'dashboard';
 }
 
+function clearWalletProofInteraction() {
+  state.walletDetailRequestId += 1;
+  state.walletProofRequestId += 1;
+  state.walletProofFormWalletId = null;
+  byId('wallet-proof-transaction').value = '';
+  byId('wallet-proof-transaction').disabled = true;
+  byId('wallet-proof-submit').disabled = true;
+  byId('wallet-proof-submit').textContent = 'Test Transaction';
+}
+
 function navigateTo(page, replace = false) {
+  if (state.currentPage === 'wallet' && page !== 'wallet') {
+    clearWalletProofInteraction();
+  }
   state.currentPage = page;
   const target = appPath(page);
   if (window.location.pathname !== target) {
@@ -749,14 +765,15 @@ function renderWalletVerificationEligibility(eligibility) {
 
   const eligible = !eligibility || eligibility.eligible;
   const disabled = !eligible;
+  const privacyEnabled = window.BtcPrivacy && BtcPrivacy.isEnabled();
   modeEl.disabled = disabled;
   descriptorEl.disabled = disabled;
   externalEl.disabled = disabled;
   changeEl.disabled = disabled;
   ceilingEl.disabled = disabled;
   submitEl.disabled = disabled;
-  proofTransactionEl.disabled = disabled;
-  proofSubmitEl.disabled = disabled;
+  proofTransactionEl.disabled = disabled || privacyEnabled;
+  proofSubmitEl.disabled = disabled || privacyEnabled;
 
   if (!eligibility) {
     helperEl.textContent = 'Use a combined wallet descriptor when possible. First-run scan depth defaults to 50 addresses.';
@@ -768,9 +785,11 @@ function renderWalletVerificationEligibility(eligibility) {
   helperEl.textContent = eligibility.eligible
     ? 'Eligible for descriptor-based verification. Combined wallet descriptors are preferred, but receive/change descriptors are also supported.'
     : (eligibility.reason || 'This wallet is not eligible for descriptor-based verification.');
-  proofEligibilityEl.textContent = eligibility.eligible
-    ? 'The finalized transaction is tested locally and never broadcast or stored by Bitcoin Accounting.'
-    : (eligibility.reason || 'This wallet is not eligible for proof of spend.');
+  proofEligibilityEl.textContent = privacyEnabled
+    ? 'Turn Privacy Mode off before pasting signed transaction data.'
+    : eligibility.eligible
+      ? 'The finalized transaction is tested locally and never broadcast or stored by Bitcoin Accounting.'
+      : (eligibility.reason || 'This wallet is not eligible for proof of spend.');
 }
 
 function updateVerificationModeUI() {
@@ -860,35 +879,65 @@ function renderWalletProofOfSpend(data) {
     chip.classList.add('chip-down');
   }
 
-  const txLabel = latest.txid ? `Transaction ${latest.txid.slice(0, 12)}…` : 'Transaction result';
+  const privacyEnabled = window.BtcPrivacy && BtcPrivacy.isEnabled();
+  const txLabel = latest.txid
+    ? (privacyEnabled ? `Transaction ${REDACTED}` : `Transaction ${latest.txid.slice(0, 12)}…`)
+    : 'Transaction result';
   const detail = latest.accepted
     ? 'Accepted by Bitcoin Core mempool policy. The transaction was not broadcast.'
     : `Rejected: ${latest.reject_reason || 'Bitcoin Core did not provide a reason.'}`;
+  const bindingDetail = latest.wallet_binding === 'operator_attested'
+    ? 'Wallet association: operator-attested.'
+    : '';
   latestEl.innerHTML = `
     <strong>${escapeHtml(txLabel)}</strong>
     <p class="muted">${escapeHtml(detail)}</p>
+    ${bindingDetail ? `<p class="muted">${escapeHtml(bindingDetail)}</p>` : ''}
     <div class="tx-detail">
       <span>${escapeHtml(formatVerificationTime(latest.tested_at))}</span>
       ${latest.virtual_size != null ? `<span>${escapeHtml(String(latest.virtual_size))} vB</span>` : ''}
-      ${latest.base_fee_btc != null ? `<span>${escapeHtml(String(latest.base_fee_btc))} BTC fee</span>` : ''}
+      ${latest.base_fee_btc != null ? `<span>${escapeHtml(denomFormat(latest.base_fee_btc))} fee</span>` : ''}
     </div>
   `;
 }
 
+function resetWalletProofInteraction(walletId) {
+  if (state.walletProofFormWalletId === walletId) return;
+  state.walletProofFormWalletId = walletId;
+  state.walletProofRequestId += 1;
+  byId('wallet-proof-transaction').value = '';
+  byId('wallet-proof-transaction').disabled = true;
+  byId('wallet-proof-submit').disabled = true;
+  byId('wallet-proof-submit').textContent = 'Test Transaction';
+  const messageEl = byId('wallet-proof-message');
+  messageEl.textContent = 'Loading proof-of-spend status...';
+  messageEl.style.color = 'var(--muted)';
+  renderWalletProofOfSpend(null);
+}
+
 async function loadWalletProofOfSpend(walletId) {
+  const requestId = ++state.walletProofRequestId;
   try {
     const data = await api(`api/verification/proof-of-spend/wallets/${encodeURIComponent(walletId)}`);
+    if (requestId !== state.walletProofRequestId || state.currentWalletId !== walletId) return;
     renderWalletProofOfSpend(data);
+    const messageEl = byId('wallet-proof-message');
+    messageEl.textContent = 'Test only — no transaction will be broadcast.';
+    messageEl.style.color = 'var(--muted)';
   } catch (error) {
+    if (requestId !== state.walletProofRequestId || state.currentWalletId !== walletId) return;
     byId('wallet-proof-chip').textContent = 'unavailable';
     byId('wallet-proof-latest').innerHTML = `<strong>Proof status unavailable</strong><p class="muted">${escapeHtml(error.message)}</p>`;
   }
 }
 
 async function loadWalletDetail(walletId) {
+  resetWalletProofInteraction(walletId);
+  const requestId = ++state.walletDetailRequestId;
   try {
     const params = new URLSearchParams({ coin: 'BTC', recent_limit: '20' });
     const detail = await api(`api/portfolio/wallet/${encodeURIComponent(walletId)}?${params.toString()}`);
+    if (requestId !== state.walletDetailRequestId || state.currentWalletId !== walletId) return;
     state.walletDetail = detail;
 
     const w = detail.wallet;
@@ -907,6 +956,7 @@ async function loadWalletDetail(walletId) {
     renderWalletVerificationSummary(detail.latest_verification, w.balance);
     byId('wallet-tx-list').innerHTML = renderTransactionRows(detail.recent_transactions);
     await loadWalletProofOfSpend(walletId);
+    if (requestId !== state.walletDetailRequestId || state.currentWalletId !== walletId) return;
 
     const viewAllLink = byId('wallet-view-all-link');
     viewAllLink.href = `${appBase()}ledger?wallet=${encodeURIComponent(walletId)}`;
@@ -917,6 +967,7 @@ async function loadWalletDetail(walletId) {
       navigateTo('ledger');
     };
   } catch (error) {
+    if (requestId !== state.walletDetailRequestId || state.currentWalletId !== walletId) return;
     renderWalletVerificationEligibility({
       eligible: false,
       reason: 'Wallet verification is unavailable right now.',
@@ -1438,12 +1489,18 @@ function bindNavigation() {
   }
 
   window.addEventListener('popstate', () => {
+    const previousPage = state.currentPage;
     const previousWalletId = state.currentWalletId;
     state.currentPage = currentRouteFromLocation();
+    if (previousPage === 'wallet' && (
+      state.currentPage !== 'wallet' || state.currentWalletId !== previousWalletId
+    )) {
+      clearWalletProofInteraction();
+    }
     renderPageState();
     if (!state.session) return;
     if (state.currentPage === 'wallet') {
-      if (state.currentWalletId && state.currentWalletId !== previousWalletId) {
+      if (state.currentWalletId) {
         loadWalletDetail(state.currentWalletId);
       }
     } else if (state.currentPage === 'dashboard') {
@@ -1704,6 +1761,7 @@ function bindEvents() {
     event.preventDefault();
     if (!state.currentWalletId) return;
 
+    const submittedWalletId = state.currentWalletId;
     const rawTransactionHex = byId('wallet-proof-transaction').value.trim();
     const statusEl = byId('wallet-proof-message');
     const submitBtn = byId('wallet-proof-submit');
@@ -1713,6 +1771,7 @@ function bindEvents() {
       return;
     }
 
+    const requestId = ++state.walletProofRequestId;
     submitBtn.disabled = true;
     submitBtn.textContent = 'Testing...';
     statusEl.textContent = 'Asking Bitcoin Core to evaluate mempool acceptance...';
@@ -1722,12 +1781,13 @@ function bindEvents() {
       const response = await api('api/verification/proof-of-spend/run', {
         method: 'POST',
         body: JSON.stringify({
-          wallet_id: state.currentWalletId,
+          wallet_id: submittedWalletId,
           raw_transaction_hex: rawTransactionHex,
         }),
       });
+      if (requestId !== state.walletProofRequestId || state.currentWalletId !== submittedWalletId) return;
       renderWalletProofOfSpend({
-        wallet_id: state.currentWalletId,
+        wallet_id: submittedWalletId,
         latest: response.result,
       });
       statusEl.textContent = response.result.accepted
@@ -1736,11 +1796,14 @@ function bindEvents() {
       statusEl.style.color = response.result.accepted ? 'var(--ok)' : 'var(--bad)';
       byId('wallet-proof-transaction').value = '';
     } catch (error) {
+      if (requestId !== state.walletProofRequestId || state.currentWalletId !== submittedWalletId) return;
       statusEl.textContent = error.message;
       statusEl.style.color = 'var(--bad)';
     } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Test Transaction';
+      if (requestId === state.walletProofRequestId && state.currentWalletId === submittedWalletId) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Test Transaction';
+      }
     }
   });
 
@@ -2593,7 +2656,13 @@ window.addEventListener('btc:privacy-change', function () {
   var page = state.currentPage;
   if (page === 'dashboard' && state.dashboard) renderDashboard(state.dashboard);
   if (page === 'ledger') loadLedger();
-  if (page === 'wallet' && state.currentWalletId) loadWalletDetail(state.currentWalletId);
+  if (page === 'wallet' && state.currentWalletId) {
+    if (window.BtcPrivacy && BtcPrivacy.isEnabled()) {
+      state.walletProofRequestId += 1;
+      byId('wallet-proof-transaction').value = '';
+    }
+    loadWalletDetail(state.currentWalletId);
+  }
   if (page === 'wallets') renderWalletsList(state.walletsList);
   if (page === 'trades') loadTradesPage();
   if (page === 'tax') { loadGains(); loadForecast(); }

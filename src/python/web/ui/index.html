@@ -319,6 +319,10 @@
                 <strong>No proof of spend recorded</strong>
                 <p class="muted">A successful result demonstrates that Bitcoin Core accepts the signed transaction at test time.</p>
               </div>
+              <div class="warning-item proof-safety-note">
+                <strong>Signed transaction hex is a broadcastable bearer artifact.</strong>
+                <p>Use only this trusted private app and a trusted local or TLS-protected Bitcoin Core RPC. The wallet association is operator-attested; Bitcoin Accounting does not independently prove that the inputs belong to this accounting wallet. After testing, intentionally broadcast the transaction or invalidate it by spending its inputs another way.</p>
+              </div>
               <form id="wallet-proof-form" class="stack">
                 <label class="field">
                   <span>Finalized Transaction Hex</span>

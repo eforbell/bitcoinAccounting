@@ -341,6 +341,102 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
                 manager.stop()
 
 
+def test_proof_of_spend_state_is_wallet_scoped_and_privacy_aware(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    playwright = pytest.importorskip("playwright.sync_api")
+    db_path = str(tmp_path / "proof-smoke.sqlite3")
+    _seed_smoke_database(db_path)
+
+    class _DelayedAcceptingCore:
+        def test_mempool_accept(self, raw_transaction_hex: str) -> dict[str, object]:
+            time.sleep(0.4)
+            return {
+                "txid": "a" * 64,
+                "wtxid": "b" * 64,
+                "allowed": True,
+                "vsize": 141,
+                "fees": {"base": 0.0000141},
+            }
+
+    monkeypatch.setattr(
+        "web.services.proof_of_spend.ProofOfSpendRPCClient",
+        lambda config: _DelayedAcceptingCore(),
+    )
+
+    with _run_smoke_server(db_path) as base_url:
+        manager = None
+        browser = None
+        try:
+            manager = playwright.sync_playwright().start()
+            browser = manager.chromium.launch(headless=True)
+        except Exception as exc:  # pragma: no cover - environment dependent
+            if manager is not None:
+                manager.stop()
+            pytest.skip(f"Playwright Chromium unavailable: {exc}")
+
+        try:
+            page = browser.new_page()
+            page.goto(base_url, wait_until="networkidle")
+            page.get_by_label("Passphrase").fill("orange-hodl")
+            page.get_by_role("button", name="Sign In").click()
+            playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
+
+            page.evaluate("navigateToWallet('Vault')")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            playwright.expect(page.locator("#wallet-proof-submit")).to_be_enabled()
+            page.locator("#wallet-proof-transaction").fill("deadbeef")
+
+            page.evaluate("navigateTo('dashboard')")
+            playwright.expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+            page.evaluate("navigateToWallet('Vault')")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            page.locator("#wallet-proof-transaction").fill("cafebabe")
+
+            page.evaluate("navigateToWallet('Strike')")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Strike")
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+
+            page.evaluate("navigateToWallet('Vault')")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            page.locator("#wallet-proof-transaction").fill("00")
+            page.locator("#wallet-proof-submit").click()
+            page.evaluate("navigateToWallet('Strike')")
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Strike")
+            page.wait_for_timeout(800)
+            playwright.expect(page.locator("#wallet-proof-chip")).to_have_text("untested")
+            playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text(
+                "No proof of spend recorded"
+            )
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+
+            page.evaluate("navigateToWallet('Vault')")
+            playwright.expect(page.locator("#wallet-proof-chip")).to_have_text("accepted")
+            playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text(
+                "Wallet association: operator-attested."
+            )
+            page.locator("#wallet-proof-transaction").fill("deadbeef")
+            page.evaluate("BtcPrivacy.setPreference('on')")
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_be_disabled()
+            playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text(
+                "Transaction •••••"
+            )
+            playwright.expect(page.locator("#wallet-proof-latest")).not_to_contain_text(
+                "aaaaaaaaaaaa"
+            )
+            playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text(
+                "••••• fee"
+            )
+        finally:
+            if browser is not None:
+                browser.close()
+            if manager is not None:
+                manager.stop()
+
+
 def test_mobile_data_views_stay_within_the_viewport(tmp_path: Path) -> None:
     """Dense mobile views use cards (or contained table scrolling), never page overflow."""
     playwright = pytest.importorskip("playwright.sync_api")

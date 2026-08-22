@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from db import SqliteBackend
+from db.queries.wallet import WalletQuery
 from web.services.proof_of_spend import (
     get_latest_proof_of_spend,
     record_proof_of_spend_result,
@@ -148,3 +149,94 @@ def test_latest_proof_of_spend_keeps_history_but_returns_newest_result() -> None
     assert latest.proof_id == accepted.proof_id
     assert latest.accepted is True
     assert latest.txid == "b" * 64
+    assert latest.wallet_binding == "operator_attested"
+
+
+def test_wallet_rename_moves_proof_and_verification_records() -> None:
+    backend = SqliteBackend(":memory:", auto_create_tables=True)
+    wallets = WalletQuery(backend)
+    wallets.add_wallet("Old Vault", "hardware", "self-custodied")
+    proof = record_proof_of_spend_result(
+        backend,
+        wallet_id="Old Vault",
+        accepted=True,
+        txid="c" * 64,
+    )
+    verification = record_wallet_verification_run(
+        backend,
+        wallet_id="Old Vault",
+        status="verified",
+        coverage="full",
+    )
+
+    wallets.rename_wallet("Old Vault", "Vault")
+
+    renamed_proof = get_latest_proof_of_spend(backend, "Vault")
+    renamed_verification = get_latest_wallet_verification(backend, "Vault")
+    assert renamed_proof is not None
+    assert renamed_proof.proof_id == proof.proof_id
+    assert renamed_verification is not None
+    assert renamed_verification.verification_id == verification.verification_id
+    assert get_latest_proof_of_spend(backend, "Old Vault") is None
+    assert get_latest_wallet_verification(backend, "Old Vault") is None
+
+    wallets.add_wallet("Old Vault", "hardware", "self-custodied")
+    assert get_latest_proof_of_spend(backend, "Old Vault") is None
+    assert get_latest_wallet_verification(backend, "Old Vault") is None
+
+
+def test_wallet_merge_retargets_history_and_keeps_newest_verification_state() -> None:
+    backend = SqliteBackend(":memory:", auto_create_tables=True)
+    wallets = WalletQuery(backend)
+    wallets.add_wallet("Source", "hardware", "self-custodied")
+    wallets.add_wallet("Target", "hardware", "self-custodied")
+    older = datetime.now(timezone.utc) - timedelta(days=1)
+    newer = older + timedelta(hours=2)
+
+    record_proof_of_spend_result(
+        backend,
+        wallet_id="Target",
+        accepted=False,
+        txid="d" * 64,
+        tested_at=older,
+    )
+    newest_proof = record_proof_of_spend_result(
+        backend,
+        wallet_id="Source",
+        accepted=True,
+        txid="e" * 64,
+        tested_at=newer,
+    )
+    record_wallet_verification_run(
+        backend,
+        wallet_id="Target",
+        status="stale",
+        coverage="full",
+        verified_at=older,
+    )
+    newest_verification = record_wallet_verification_run(
+        backend,
+        wallet_id="Source",
+        status="verified",
+        coverage="full",
+        verified_at=newer,
+    )
+
+    wallets.merge_wallets("Source", "Target")
+
+    merged_proof = get_latest_proof_of_spend(backend, "Target")
+    merged_verification = get_latest_wallet_verification(backend, "Target")
+    assert merged_proof is not None
+    assert merged_proof.proof_id == newest_proof.proof_id
+    assert merged_verification is not None
+    assert merged_verification.verification_id == newest_verification.verification_id
+    assert backend.execute_scalar(
+        "SELECT COUNT(*) FROM web_wallet_proof_of_spend_runs WHERE wallet_id = :wallet_id",
+        {"wallet_id": "Target"},
+    ) == 2
+    assert backend.execute_scalar(
+        "SELECT COUNT(*) FROM web_wallet_verification_runs WHERE wallet_id = :wallet_id",
+        {"wallet_id": "Target"},
+    ) == 2
+    assert get_latest_proof_of_spend(backend, "Source") is None
+    assert get_latest_wallet_verification(backend, "Source") is None

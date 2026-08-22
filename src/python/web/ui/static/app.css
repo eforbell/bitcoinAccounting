@@ -691,6 +691,14 @@ textarea {
   background: var(--surface2);
 }
 
+.proof-safety-note {
+  margin-bottom: 0.9rem;
+}
+
+.proof-safety-note p {
+  margin-top: 0.35rem;
+}
+
 #wallet-proof-transaction {
   font-family: var(--font-mono);
   overflow-wrap: anywhere;

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
@@ -122,10 +123,11 @@ class ProofOfSpendCreateRequest(APIModel):
 
 
 class ProofOfSpendResource(APIModel):
-    """Persisted result from Bitcoin Core's non-broadcast mempool evaluation."""
+    """Persisted result from an operator-attested mempool evaluation."""
 
     proof_id: str
     wallet_id: str
+    wallet_binding: Literal["operator_attested"] = "operator_attested"
     status: str
     accepted: bool
     txid: str | None = None

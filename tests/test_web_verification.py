@@ -303,6 +303,7 @@ def test_proof_of_spend_acceptance_is_persisted_without_raw_transaction(
     assert body["broadcast"] is False
     assert body["result"]["accepted"] is True
     assert body["result"]["status"] == "accepted"
+    assert body["result"]["wallet_binding"] == "operator_attested"
     assert body["result"]["txid"] == "a" * 64
     assert body["result"]["virtual_size"] == 141
     assert "raw_transaction_hex" not in body["result"]

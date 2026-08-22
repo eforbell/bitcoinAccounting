@@ -1,4 +1,4 @@
-"""Non-broadcast proof-of-spend checks backed by Bitcoin Core."""
+"""Operator-attested, non-broadcast transaction checks backed by Bitcoin Core."""
 
 from __future__ import annotations
 
@@ -218,7 +218,11 @@ def run_proof_of_spend(
     config: WebConfig,
     payload: ProofOfSpendCreateRequest,
 ) -> ProofOfSpendRunResponse:
-    """Ask Bitcoin Core to test a signed transaction and persist the verdict."""
+    """Test an operator-associated signed transaction and persist the verdict.
+
+    Bitcoin Core evaluates chain and mempool policy. The operator, rather than
+    this service, attests that the transaction spends funds from ``wallet_id``.
+    """
     eligibility = get_wallet_verification_eligibility(accounts, payload.wallet_id)
     if not eligibility.eligible:
         raise ValueError(eligibility.reason or "Wallet is not eligible for proof of spend.")
