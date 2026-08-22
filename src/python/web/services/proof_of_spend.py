@@ -147,9 +147,32 @@ def record_proof_of_spend_result(
     base_fee_btc: float | None = None,
     reject_reason: str | None = None,
     tested_at: datetime | None = None,
+    require_existing_wallet: bool = False,
 ) -> ProofOfSpendResource:
     """Persist one result without retaining the finalized transaction hex."""
     ensure_proof_of_spend_table(backend)
+    if require_existing_wallet:
+        from db import SqliteBackend
+
+        if isinstance(backend, SqliteBackend):
+            # Serialize the existence check and insert with wallet rename/merge
+            # writes. ``SELECT`` alone does not open a SQLite write transaction.
+            backend.execute("BEGIN IMMEDIATE")
+            lock_suffix = ""
+        else:
+            # PostgreSQL holds the wallet row until the proof insert commits, so
+            # a concurrent rename waits and then retargets the new proof row.
+            lock_suffix = " FOR UPDATE"
+        wallet_row = backend.execute_one(
+            f"SELECT wallet_id FROM wallets WHERE wallet_id = :wallet_id{lock_suffix}",
+            {"wallet_id": wallet_id},
+        )
+        if wallet_row is None:
+            backend.rollback()
+            raise ValueError(
+                "Wallet changed while Bitcoin Core was evaluating the transaction; "
+                "no proof result was recorded."
+            )
     params = {
         "proof_id": str(uuid4()),
         "wallet_id": wallet_id,
@@ -258,5 +281,6 @@ def run_proof_of_spend(
         virtual_size=virtual_size,
         base_fee_btc=base_fee_btc,
         reject_reason=str(reject_reason_value) if reject_reason_value is not None else None,
+        require_existing_wallet=True,
     )
     return ProofOfSpendRunResponse(result=resource, broadcast=False)

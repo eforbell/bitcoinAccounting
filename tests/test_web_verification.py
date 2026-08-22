@@ -388,3 +388,37 @@ def test_proof_of_spend_returns_502_when_core_is_unavailable(
 
     assert response.status_code == 502
     assert "proof-of-spend check unavailable" in response.json()["detail"]
+
+
+def test_proof_of_spend_does_not_orphan_result_when_wallet_changes_during_rpc(
+    client: TestClient,
+    seeded_accounts: BitcoinAccounts,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _RenamingCore:
+        def test_mempool_accept(self, raw_transaction_hex: str) -> dict[str, object]:
+            seeded_accounts.wallet_query.rename_wallet("Coldcard", "Renamed Coldcard")
+            return {
+                "txid": "f" * 64,
+                "wtxid": "e" * 64,
+                "allowed": True,
+            }
+
+    monkeypatch.setattr(
+        "web.services.proof_of_spend.ProofOfSpendRPCClient",
+        lambda config: _RenamingCore(),
+    )
+
+    response = client.post(
+        "/api/verification/proof-of-spend/run",
+        json={"wallet_id": "Coldcard", "raw_transaction_hex": "00"},
+    )
+
+    assert response.status_code == 400
+    assert "Wallet changed" in response.json()["detail"]
+    assert client.get(
+        "/api/verification/proof-of-spend/wallets/Coldcard"
+    ).json()["latest"] is None
+    assert client.get(
+        "/api/verification/proof-of-spend/wallets/Renamed%20Coldcard"
+    ).json()["latest"] is None

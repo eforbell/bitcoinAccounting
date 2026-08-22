@@ -55,6 +55,16 @@ class WalletQuery:
             """
         return bool(self.backend.execute_scalar(query, {"table_name": table_name}) > 0)
 
+    def _wallet_has_optional_records(self, wallet_id: str) -> bool:
+        """Return whether retained history already claims a wallet identity."""
+        for table_name in (*_WALLET_HISTORY_TABLES, _WALLET_LATEST_STATE_TABLE):
+            if self._table_exists(table_name) and self.backend.execute_scalar(
+                f"SELECT COUNT(*) FROM {table_name} WHERE wallet_id = :wallet_id",
+                {"wallet_id": wallet_id},
+            ) > 0:
+                return True
+        return False
+
     def _rename_optional_wallet_records(self, old_id: str, new_id: str) -> None:
         """Move optional web-owned history/state records during a rename."""
         for table_name in (*_WALLET_HISTORY_TABLES, _WALLET_LATEST_STATE_TABLE):
@@ -306,6 +316,10 @@ class WalletQuery:
             Exception: If wallet_id already exists (duplicate key violation)
         """
         wallet_id = wallet_id.strip()
+        if not self._wallet_exists(wallet_id) and self._wallet_has_optional_records(wallet_id):
+            raise ValueError(
+                f"Wallet '{wallet_id}' already exists in retained verification history"
+            )
         query = """
             INSERT INTO wallets (wallet_id, wallet_type, custody, description, notes)
             VALUES (:wallet_id, :wallet_type, :custody, :description, :notes)
@@ -374,6 +388,10 @@ class WalletQuery:
         # Check if new_id already exists
         if self._wallet_exists(new_id):
             raise ValueError(f"Wallet '{new_id}' already exists")
+        if self._wallet_has_optional_records(new_id):
+            raise ValueError(
+                f"Wallet '{new_id}' already exists in retained verification history"
+            )
 
         # Perform atomic rename in transaction
         # Note: backend.execute() handles transactions internally for multi-statement operations

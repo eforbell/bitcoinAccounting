@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from db import SqliteBackend
 from db.queries.wallet import WalletQuery
 from web.services.proof_of_spend import (
@@ -240,3 +242,40 @@ def test_wallet_merge_retargets_history_and_keeps_newest_verification_state() ->
     ) == 2
     assert get_latest_proof_of_spend(backend, "Source") is None
     assert get_latest_wallet_verification(backend, "Source") is None
+
+
+def test_legacy_orphan_history_blocks_wallet_name_reuse() -> None:
+    backend = SqliteBackend(":memory:", auto_create_tables=True)
+    wallets = WalletQuery(backend)
+    wallets.add_wallet("Current", "hardware", "self-custodied")
+    current_state = record_wallet_verification_run(
+        backend,
+        wallet_id="Current",
+        status="verified",
+        coverage="full",
+    )
+    orphan_state = record_wallet_verification_run(
+        backend,
+        wallet_id="Legacy Name",
+        status="stale",
+        coverage="full",
+    )
+    record_proof_of_spend_result(
+        backend,
+        wallet_id="Legacy Name",
+        accepted=True,
+        txid="f" * 64,
+    )
+
+    with pytest.raises(ValueError, match="retained verification history"):
+        wallets.rename_wallet("Current", "Legacy Name")
+    with pytest.raises(ValueError, match="retained verification history"):
+        wallets.add_wallet("Legacy Name", "hardware", "self-custodied")
+
+    current = get_latest_wallet_verification(backend, "Current")
+    orphan = get_latest_wallet_verification(backend, "Legacy Name")
+    assert current is not None
+    assert current.verification_id == current_state.verification_id
+    assert orphan is not None
+    assert orphan.verification_id == orphan_state.verification_id
+    assert get_latest_proof_of_spend(backend, "Legacy Name") is not None
