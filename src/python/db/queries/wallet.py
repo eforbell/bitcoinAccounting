@@ -65,6 +65,38 @@ class WalletQuery:
                 return True
         return False
 
+    def _lock_wallets_for_lifecycle(self, *wallet_ids: str) -> None:
+        """Lock PostgreSQL wallet rows before moving their associated records.
+
+        SQLite lifecycle writes already serialize at the database level. On
+        PostgreSQL, deterministic row locks ensure a concurrent proof insert
+        either commits before history is moved or observes the wallet deletion.
+        """
+        from ..sqlite import SqliteBackend
+
+        if isinstance(self.backend, SqliteBackend):
+            return
+        ordered_ids = sorted(set(wallet_ids))
+        placeholders = ", ".join(
+            f":wallet_id_{index}" for index in range(len(ordered_ids))
+        )
+        params = {
+            f"wallet_id_{index}": wallet_id
+            for index, wallet_id in enumerate(ordered_ids)
+        }
+        rows = self.backend.execute(
+            f"""
+            SELECT wallet_id
+            FROM wallets
+            WHERE wallet_id IN ({placeholders})
+            ORDER BY wallet_id
+            FOR UPDATE
+            """,
+            params,
+        )
+        if len(rows) != len(ordered_ids):
+            raise ValueError("Wallet identity changed during the lifecycle operation")
+
     def _rename_optional_wallet_records(self, old_id: str, new_id: str) -> None:
         """Move optional web-owned history/state records during a rename."""
         for table_name in (*_WALLET_HISTORY_TABLES, _WALLET_LATEST_STATE_TABLE):
@@ -400,6 +432,7 @@ class WalletQuery:
 
         # Execute both updates as a single transaction.
         try:
+            self._lock_wallets_for_lifecycle(old_id)
             self.backend.execute(update_wallets, {"old_id": old_id, "new_id": new_id})
             self.backend.execute(update_ledger, {"old_id": old_id, "new_id": new_id})
             self._rename_optional_wallet_records(old_id, new_id)
@@ -438,6 +471,7 @@ class WalletQuery:
         delete_wallet = "DELETE FROM wallets WHERE wallet_id = :source_id"
 
         try:
+            self._lock_wallets_for_lifecycle(source_id, target_id)
             self.backend.execute(update_ledger, {"source_id": source_id, "target_id": target_id})
             self._merge_optional_wallet_records(source_id, target_id)
             # Delete source wallet record
