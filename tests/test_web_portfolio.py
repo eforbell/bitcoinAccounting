@@ -257,6 +257,93 @@ def test_wallet_detail_includes_latest_verification_state(
     assert body["latest_verification"]["gap_limit"] == 20
 
 
+def test_dashboard_and_wallet_detail_fall_back_to_retained_verification_history(
+    client: TestClient,
+    seeded_accounts: BitcoinAccounts,
+) -> None:
+    run = record_wallet_verification_run(
+        seeded_accounts.backend,
+        wallet_id="Coldcard",
+        status="verified",
+        coverage="full",
+        descriptor_source_type="session",
+        recency_window_days=30,
+        ledger_balance=1.1,
+        verified_balance=1.1,
+        drift_btc=0.0,
+        highest_scanned_index=22,
+        scan_ceiling=50,
+        gap_limit=20,
+        verified_at=datetime.now(timezone.utc),
+    )
+    seeded_accounts.backend.execute(
+        "DELETE FROM web_wallet_verification_state WHERE wallet_id = :wallet_id",
+        {"wallet_id": "Coldcard"},
+    )
+    seeded_accounts.backend.commit()
+
+    dashboard = client.get("/api/portfolio/dashboard", params={"coin": "BTC"})
+    detail = client.get("/api/portfolio/wallet/Coldcard", params={"coin": "BTC"})
+
+    assert dashboard.status_code == 200
+    dashboard_wallet = next(
+        wallet
+        for wallet in dashboard.json()["wallets"]
+        if wallet["wallet_id"] == "Coldcard"
+    )
+    assert dashboard_wallet["verification_status"] == "verified"
+    assert dashboard_wallet["verification_coverage"] == "full"
+    assert detail.status_code == 200
+    assert detail.json()["latest_verification"]["verification_id"] == run.verification_id
+
+
+def test_wallet_detail_prefers_newer_history_over_stale_latest_state(
+    client: TestClient,
+    seeded_accounts: BitcoinAccounts,
+) -> None:
+    older = datetime(2026, 3, 20, tzinfo=timezone.utc)
+    newer = datetime.now(timezone.utc)
+    old_run = record_wallet_verification_run(
+        seeded_accounts.backend,
+        wallet_id="Coldcard",
+        status="drift_detected",
+        coverage="full",
+        verified_at=older,
+    )
+    new_run = record_wallet_verification_run(
+        seeded_accounts.backend,
+        wallet_id="Coldcard",
+        status="verified",
+        coverage="full",
+        verified_at=newer,
+    )
+    seeded_accounts.backend.execute(
+        """
+        UPDATE web_wallet_verification_state
+        SET verification_id = :verification_id,
+            status = :status,
+            verified_at = :verified_at,
+            stale_after = :stale_after
+        WHERE wallet_id = :wallet_id
+        """,
+        {
+            "wallet_id": "Coldcard",
+            "verification_id": old_run.verification_id,
+            "status": old_run.status,
+            "verified_at": old_run.verified_at.isoformat(),
+            "stale_after": old_run.stale_after.isoformat(),
+        },
+    )
+    seeded_accounts.backend.commit()
+
+    response = client.get("/api/portfolio/wallet/Coldcard", params={"coin": "BTC"})
+
+    assert response.status_code == 200
+    latest = response.json()["latest_verification"]
+    assert latest["verification_id"] == new_run.verification_id
+    assert latest["status"] == "verified"
+
+
 def test_wallet_detail_marks_custodial_wallet_not_eligible_for_verification(
     client: TestClient,
 ) -> None:
