@@ -430,6 +430,40 @@ def test_proof_of_spend_state_is_wallet_scoped_and_privacy_aware(
             playwright.expect(page.locator("#wallet-proof-latest")).to_contain_text(
                 "••••• fee"
             )
+
+            # A same-wallet status refresh must not supersede an active proof
+            # submission or re-enable its controls before the POST completes.
+            page.evaluate("BtcPrivacy.setPreference('off')")
+            playwright.expect(page.locator("#wallet-proof-submit")).to_be_enabled()
+            page.locator("#wallet-proof-transaction").fill("00")
+            page.locator("#wallet-proof-submit").click()
+            page.evaluate("window.dispatchEvent(new CustomEvent('btc:denom-change'))")
+            page.wait_for_timeout(100)
+            playwright.expect(page.locator("#wallet-proof-submit")).to_have_text("Testing...")
+            playwright.expect(page.locator("#wallet-proof-submit")).to_be_disabled()
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("00")
+            playwright.expect(page.locator("#wallet-proof-message")).to_contain_text(
+                "Proof accepted"
+            )
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+            playwright.expect(page.locator("#wallet-proof-submit")).to_be_enabled()
+
+            # Explicit logout and a later authentication failure both dispose
+            # of pasted bearer data before another operator can sign in.
+            page.locator("#wallet-proof-transaction").fill("deadbeef")
+            page.locator("#session-action").click()
+            playwright.expect(page.locator("#login-panel")).to_be_visible()
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+            page.get_by_label("Passphrase").fill("orange-hodl")
+            page.get_by_role("button", name="Sign In").click()
+            playwright.expect(page.locator("#wallet-view-title")).to_have_text("Vault")
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
+
+            page.locator("#wallet-proof-transaction").fill("cafebabe")
+            page.context.clear_cookies()
+            page.evaluate("refreshSession()")
+            playwright.expect(page.locator("#login-panel")).to_be_visible()
+            playwright.expect(page.locator("#wallet-proof-transaction")).to_have_value("")
         finally:
             if browser is not None:
                 browser.close()

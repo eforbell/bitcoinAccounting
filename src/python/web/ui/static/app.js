@@ -26,7 +26,9 @@ const state = {
   walletDetailRequestId: 0,
   walletProofOfSpend: null,
   walletProofFormWalletId: null,
-  walletProofRequestId: 0,
+  walletProofStatusRequestId: 0,
+  walletProofSubmissionRequestId: 0,
+  walletProofSubmissionWalletId: null,
   walletsList: [],
   currentPage: 'dashboard',
   currentWalletId: null,
@@ -142,12 +144,19 @@ function currentRouteFromLocation() {
 
 function clearWalletProofInteraction() {
   state.walletDetailRequestId += 1;
-  state.walletProofRequestId += 1;
+  state.walletProofStatusRequestId += 1;
+  state.walletProofSubmissionRequestId += 1;
+  state.walletProofSubmissionWalletId = null;
   state.walletProofFormWalletId = null;
+  state.walletProofOfSpend = null;
   byId('wallet-proof-transaction').value = '';
   byId('wallet-proof-transaction').disabled = true;
   byId('wallet-proof-submit').disabled = true;
   byId('wallet-proof-submit').textContent = 'Test Transaction';
+  const messageEl = byId('wallet-proof-message');
+  messageEl.textContent = 'Test only — no transaction will be broadcast.';
+  messageEl.style.color = 'var(--muted)';
+  renderWalletProofOfSpend(null);
 }
 
 function navigateTo(page, replace = false) {
@@ -308,6 +317,10 @@ async function api(path, options = {}) {
   });
 
   if (!response.ok) {
+    if (response.status === 401 && state.session) {
+      state.session = null;
+      showLoggedOut();
+    }
     let detail = `Request failed (${response.status})`;
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
@@ -337,6 +350,7 @@ function setSessionGlyph(authenticated) {
 
 function showLoggedOut() {
   clearChainStatusRefresh();
+  clearWalletProofInteraction();
   byId('login-panel').classList.remove('hidden');
   byId('dashboard-view').classList.add('hidden');
   byId('tax-view').classList.add('hidden');
@@ -766,14 +780,15 @@ function renderWalletVerificationEligibility(eligibility) {
   const eligible = !eligibility || eligibility.eligible;
   const disabled = !eligible;
   const privacyEnabled = window.BtcPrivacy && BtcPrivacy.isEnabled();
+  const proofSubmitting = state.walletProofSubmissionWalletId === state.currentWalletId;
   modeEl.disabled = disabled;
   descriptorEl.disabled = disabled;
   externalEl.disabled = disabled;
   changeEl.disabled = disabled;
   ceilingEl.disabled = disabled;
   submitEl.disabled = disabled;
-  proofTransactionEl.disabled = disabled || privacyEnabled;
-  proofSubmitEl.disabled = disabled || privacyEnabled;
+  proofTransactionEl.disabled = disabled || privacyEnabled || proofSubmitting;
+  proofSubmitEl.disabled = disabled || privacyEnabled || proofSubmitting;
 
   if (!eligibility) {
     helperEl.textContent = 'Use a combined wallet descriptor when possible. First-run scan depth defaults to 50 addresses.';
@@ -904,7 +919,9 @@ function renderWalletProofOfSpend(data) {
 function resetWalletProofInteraction(walletId) {
   if (state.walletProofFormWalletId === walletId) return;
   state.walletProofFormWalletId = walletId;
-  state.walletProofRequestId += 1;
+  state.walletProofStatusRequestId += 1;
+  state.walletProofSubmissionRequestId += 1;
+  state.walletProofSubmissionWalletId = null;
   byId('wallet-proof-transaction').value = '';
   byId('wallet-proof-transaction').disabled = true;
   byId('wallet-proof-submit').disabled = true;
@@ -916,16 +933,24 @@ function resetWalletProofInteraction(walletId) {
 }
 
 async function loadWalletProofOfSpend(walletId) {
-  const requestId = ++state.walletProofRequestId;
+  const requestId = ++state.walletProofStatusRequestId;
   try {
     const data = await api(`api/verification/proof-of-spend/wallets/${encodeURIComponent(walletId)}`);
-    if (requestId !== state.walletProofRequestId || state.currentWalletId !== walletId) return;
+    if (
+      requestId !== state.walletProofStatusRequestId
+      || state.currentWalletId !== walletId
+      || state.walletProofSubmissionWalletId === walletId
+    ) return;
     renderWalletProofOfSpend(data);
     const messageEl = byId('wallet-proof-message');
     messageEl.textContent = 'Test only — no transaction will be broadcast.';
     messageEl.style.color = 'var(--muted)';
   } catch (error) {
-    if (requestId !== state.walletProofRequestId || state.currentWalletId !== walletId) return;
+    if (
+      requestId !== state.walletProofStatusRequestId
+      || state.currentWalletId !== walletId
+      || state.walletProofSubmissionWalletId === walletId
+    ) return;
     byId('wallet-proof-chip').textContent = 'unavailable';
     byId('wallet-proof-latest').innerHTML = `<strong>Proof status unavailable</strong><p class="muted">${escapeHtml(error.message)}</p>`;
   }
@@ -1771,7 +1796,9 @@ function bindEvents() {
       return;
     }
 
-    const requestId = ++state.walletProofRequestId;
+    state.walletProofStatusRequestId += 1;
+    const requestId = ++state.walletProofSubmissionRequestId;
+    state.walletProofSubmissionWalletId = submittedWalletId;
     submitBtn.disabled = true;
     submitBtn.textContent = 'Testing...';
     statusEl.textContent = 'Asking Bitcoin Core to evaluate mempool acceptance...';
@@ -1785,7 +1812,10 @@ function bindEvents() {
           raw_transaction_hex: rawTransactionHex,
         }),
       });
-      if (requestId !== state.walletProofRequestId || state.currentWalletId !== submittedWalletId) return;
+      if (
+        requestId !== state.walletProofSubmissionRequestId
+        || state.currentWalletId !== submittedWalletId
+      ) return;
       renderWalletProofOfSpend({
         wallet_id: submittedWalletId,
         latest: response.result,
@@ -1796,13 +1826,22 @@ function bindEvents() {
       statusEl.style.color = response.result.accepted ? 'var(--ok)' : 'var(--bad)';
       byId('wallet-proof-transaction').value = '';
     } catch (error) {
-      if (requestId !== state.walletProofRequestId || state.currentWalletId !== submittedWalletId) return;
+      if (
+        requestId !== state.walletProofSubmissionRequestId
+        || state.currentWalletId !== submittedWalletId
+      ) return;
       statusEl.textContent = error.message;
       statusEl.style.color = 'var(--bad)';
     } finally {
-      if (requestId === state.walletProofRequestId && state.currentWalletId === submittedWalletId) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Test Transaction';
+      if (requestId === state.walletProofSubmissionRequestId) {
+        state.walletProofStatusRequestId += 1;
+        state.walletProofSubmissionWalletId = null;
+        if (state.currentWalletId === submittedWalletId) {
+          submitBtn.textContent = 'Test Transaction';
+          renderWalletVerificationEligibility(
+            state.walletDetail ? state.walletDetail.verification_eligibility : null
+          );
+        }
       }
     }
   });
@@ -2658,8 +2697,7 @@ window.addEventListener('btc:privacy-change', function () {
   if (page === 'ledger') loadLedger();
   if (page === 'wallet' && state.currentWalletId) {
     if (window.BtcPrivacy && BtcPrivacy.isEnabled()) {
-      state.walletProofRequestId += 1;
-      byId('wallet-proof-transaction').value = '';
+      clearWalletProofInteraction();
     }
     loadWalletDetail(state.currentWalletId);
   }
