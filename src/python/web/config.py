@@ -165,6 +165,11 @@ def validate_web_config(config: WebConfig) -> None:
             )
 
     if config.app_env.lower() in {"production", "prod"}:
+        if not config.auth_enabled:
+            raise WebConfigurationError(
+                "Production web mode requires BITCOIN_ACCOUNTING_AUTH_ENABLED=1."
+            )
+
         if backend != "postgres" and not config.allow_sqlite_in_production:
             raise WebConfigurationError(
                 "Production web mode requires DB_BACKEND=postgres unless "

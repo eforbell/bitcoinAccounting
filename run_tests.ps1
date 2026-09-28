@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    Test runner for the cryptoAccounting project.
+    Test runner for the bitcoinAccounting project.
     
 .DESCRIPTION
-    Runs all unit tests in the tests/ directory using Python's unittest framework.
+    Runs all tests in the tests/ directory using pytest.
     Supports verbose output and coverage reporting.
     
 .PARAMETER Verbose
@@ -36,27 +36,31 @@ $ErrorColor = "Red"
 $InfoColor = "Cyan"
 $WarningColor = "Yellow"
 
-Write-Host "`n=== cryptoAccounting Test Runner ===" -ForegroundColor $InfoColor
-
-# Check if Python is available
-try {
-    $pythonVersion = python --version 2>&1
-    Write-Host "Python: $pythonVersion" -ForegroundColor $InfoColor
-} catch {
-    Write-Host "ERROR: Python is not installed or not in PATH" -ForegroundColor $ErrorColor
-    exit 1
-}
+Write-Host "`n=== bitcoinAccounting Test Runner ===" -ForegroundColor $InfoColor
 
 # Get the script directory
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Push-Location $scriptDir
 
 try {
+    $python = if (Test-Path (Join-Path $scriptDir ".venv/Scripts/python.exe")) {
+        Join-Path $scriptDir ".venv/Scripts/python.exe"
+    } elseif (Test-Path (Join-Path $scriptDir "venv/Scripts/python.exe")) {
+        Join-Path $scriptDir "venv/Scripts/python.exe"
+    } else {
+        "python"
+    }
+    $pythonVersion = & $python --version 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Python is not installed or not in PATH" -ForegroundColor $ErrorColor
+        exit 1
+    }
+    Write-Host "Python: $pythonVersion" -ForegroundColor $InfoColor
+
     # Build the test command
-    $testCommand = "python -m unittest discover -s tests -p test_*.py"
-    
+    $testArgs = @("-m", "pytest", "tests")
     if ($Verbose) {
-        $testCommand += " -v"
+        $testArgs += "-v"
         Write-Host "Running tests in verbose mode..." -ForegroundColor $InfoColor
     } else {
         Write-Host "Running tests..." -ForegroundColor $InfoColor
@@ -64,7 +68,7 @@ try {
     
     # Run tests
     Write-Host ""
-    Invoke-Expression $testCommand
+    & $python @testArgs
     $testExitCode = $LASTEXITCODE
     
     Write-Host ""
@@ -81,10 +85,10 @@ try {
         
         # Check if coverage is installed
         try {
-            $coverageVersion = pip show coverage 2>&1 | Select-String "Version"
+            $coverageVersion = & $python -m pip show coverage 2>&1 | Select-String "Version"
             if ($null -eq $coverageVersion) {
                 Write-Host "Installing coverage package..." -ForegroundColor $WarningColor
-                pip install coverage | Out-Null
+                & $python -m pip install coverage | Out-Null
             }
         } catch {
             Write-Host "Warning: Could not verify coverage installation" -ForegroundColor $WarningColor
@@ -92,8 +96,8 @@ try {
         
         # Run coverage
         Write-Host "Running coverage analysis..." -ForegroundColor $InfoColor
-        coverage run -m unittest discover -s tests -p test_*.py 2>&1 | Out-Null
-        coverage report -m --include="src/python/*"
+        & $python -m coverage run -m pytest tests 2>&1 | Out-Null
+        & $python -m coverage report -m --include="src/python/*"
     }
     
     exit $testExitCode
@@ -101,4 +105,3 @@ try {
 } finally {
     Pop-Location
 }
-

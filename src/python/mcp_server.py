@@ -16,9 +16,9 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
-mcp = FastMCP(
+mcp = MCPServer(
     "bitcoin-accounting",
     instructions="Read-only Bitcoin treasury tools for financial planning and tax optimization.",
 )
