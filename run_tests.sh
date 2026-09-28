@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ##
-# Test runner for the cryptoAccounting project (Linux/macOS)
+# Test runner for the bitcoinAccounting project (Linux/macOS)
 #
 # Usage:
 #   ./run_tests.sh              # Run all tests
@@ -46,7 +46,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Print header
-echo -e "\n${CYAN}=== cryptoAccounting Test Runner ===${NC}"
+echo -e "\n${CYAN}=== bitcoinAccounting Test Runner ===${NC}"
 
 # Check for local virtualenv and prefer it if available
 if [ -f "$SCRIPT_DIR/.venv/bin/python" ]; then
@@ -70,7 +70,7 @@ PYTHON_VERSION=$($PYTHON_CMD --version 2>&1)
 echo -e "${CYAN}Python: $PYTHON_VERSION${NC}"
 
 # Build the test command
-TEST_CMD="$PYTHON_CMD -m unittest discover -s tests -p test_*.py"
+TEST_CMD="$PYTHON_CMD -m pytest tests"
 
 if [ "$VERBOSE" = true ]; then
     TEST_CMD="$TEST_CMD -v"
@@ -101,7 +101,7 @@ if [ "$COVERAGE" = true ]; then
     
     # Run coverage
     echo -e "${CYAN}Running coverage analysis...${NC}"
-    $PYTHON_CMD -m coverage run -m unittest discover -s tests -p test_*.py > /dev/null 2>&1 || true
+    $PYTHON_CMD -m coverage run -m pytest tests > /dev/null 2>&1 || true
     $PYTHON_CMD -m coverage report -m --include="src/python/*"
 fi
 

@@ -19,11 +19,26 @@ def test_production_web_mode_requires_postgres_by_default() -> None:
             WebConfig(
                 app_env="production",
                 db_backend="sqlite",
+                auth_enabled=True,
+                auth_passphrase="orange-hodl",
+                session_secret="test-secret",
             )
         )
 
     assert "requires DB_BACKEND=postgres" in str(excinfo.value)
 
+
+def test_production_web_mode_requires_auth_enabled() -> None:
+    with pytest.raises(WebConfigurationError) as excinfo:
+        create_app(
+            WebConfig(
+                app_env="production",
+                db_backend="postgres",
+                auth_enabled=False,
+            )
+        )
+
+    assert "requires BITCOIN_ACCOUNTING_AUTH_ENABLED=1" in str(excinfo.value)
 
 def test_production_can_explicitly_allow_sqlite() -> None:
     app = create_app(
@@ -31,6 +46,9 @@ def test_production_can_explicitly_allow_sqlite() -> None:
             app_env="production",
             db_backend="sqlite",
             allow_sqlite_in_production=True,
+            auth_enabled=True,
+            auth_passphrase="orange-hodl",
+            session_secret="test-secret",
         )
     )
 

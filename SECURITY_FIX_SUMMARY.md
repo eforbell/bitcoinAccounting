@@ -174,7 +174,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Prevention Measures
 
 Going forward:
-- ✓ No hardcoded IPs, hostnames, or credentials
+- ✓ No hardcoded credentials in current runtime code; deployment examples still include host-specific names and paths
 - ✓ All sensitive config via environment variables with NO defaults
 - ✓ Clear error messages when required variables missing
 - ✓ `.env` file in `.gitignore`
@@ -184,7 +184,7 @@ Going forward:
 
 ## Notes
 
-- The exposed password has been changed ✓
-- The problematic commit (34803d8) is still in git history
-- Consider using `git filter-branch` or BFG Repo-Cleaner if you want to remove from history (advanced)
+- The exposed password was reported changed at the time; verify current credential rotation before publication.
+- The previously identified problematic commit (34803d8) is no longer reachable in the current local history.
+- Before publishing, audit and rewrite any reachable historical snapshots (including ancestors of `main`), refs, or tags that still expose pre-cleanup material. Removing a tag alone does not erase an ancestor from `main` history.
 - SQLite backend requires no credentials - good default for most users
