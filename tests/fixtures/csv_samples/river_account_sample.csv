@@ -1,0 +1,7 @@
+Date,Reference Code,Transaction Type,Sent Amount,Sent Currency,Received Amount,Received Currency,Fee Amount,Fee Currency,Total Amount,Total Currency,Method,Source,Destination,Cost Basis,Cost Basis Currency,Bitcoin Price Amount,Bitcoin Price Currency,Transaction ID,Recurring,Tag
+2024-03-04 09:00:00,RDEP0001,Cash Deposit,,,1000.00,USD,,,1000.00,USD,Cash Deposit,Checking ··0000,Cash Balance,,,,,,False,
+2024-03-04 09:05:00,RBUY0001,Buy,990.10,USD,0.01500000,BTC,9.90,USD,1000.00,USD,Cash Balance,Cash Balance,Bitcoin Balance,1000.00,USD,66000.00,USD,,False,
+2024-03-11 09:00:00,RBUY000002,Buy,250.00,USD,0.00380000,BTC,0.00,,250.00,USD,Cash Balance,Cash Balance,Bitcoin Balance,250.00,USD,65800.00,USD,,True,
+2024-03-15 18:30:00,RSND000001,Send,0.01880000,BTC,,,,,0.01880000,BTC,On Chain,Bitcoin Balance,bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4,2000.00,USD,67000.00,USD,deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef,False,
+2024-03-16 12:00:00,RINT000001,Interest Payout,,,0.00001200,BTC,,,0.00001200,BTC,Interest Earned,Cash Balance,Bitcoin Balance,0.81,USD,67250.00,USD,,False,Interest
+2024-03-25 10:15:00,RSND000002,Send,0.00500000,BTC,,,0.00000300,BTC,0.00500300,BTC,On Chain,Bitcoin Balance,bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq,340.00,USD,68000.00,USD,cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe,False,
