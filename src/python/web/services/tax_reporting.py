@@ -399,7 +399,11 @@ def build_holdings(accounts: BitcoinAccounts, *, coin: str = "BTC") -> TaxHoldin
         for wallet_id, balance in accounts.get_wallet_balance(coin, None).items()
         if wallet_id is not None and str(wallet_id).strip()
     }
-    open_lots = accounts.capital_gains_calc.get_open_lot_quantities(coin)
+    open_lots = {
+        str(wallet_id): quantity
+        for wallet_id, quantity in accounts.capital_gains_calc.get_open_lot_quantities(coin).items()
+        if str(wallet_id).strip()
+    }
     wallets = [
         TaxHoldingWalletResource(
             wallet_id=wallet_id,

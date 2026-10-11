@@ -111,9 +111,10 @@ class CapitalGainCalculator:
         """
         open_quantity: dict[str, float] = {}
         for lot in self.get_purchase_lots(coin):
-            wallet = lot[4]
-            if wallet:
-                open_quantity[wallet] = open_quantity.get(wallet, 0.0) + float(lot[1])
+            wallet, quantity = lot[4], float(lot[1])
+            # Mirror forecast_sale(): its queue never draws from non-positive lots.
+            if wallet and str(wallet).strip() and quantity > 0:
+                open_quantity[wallet] = open_quantity.get(wallet, 0.0) + quantity
         for sale in self.trade_query.get_sales(coin):
             wallet = sale['exchange']
             if wallet in open_quantity:
