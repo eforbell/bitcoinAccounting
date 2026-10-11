@@ -27,7 +27,9 @@
 ## Reports: Shared Chart Series
 
 - Every number a report shows comes from `viz/series.py` (`resolve_window`, `holdings_series`, `accumulation_series`, `price_series`); `OrangePlot`/`BalanceChart`/`CustodyChart`/`PDFReport` only draw. Web native charts should read the same series so the browser and the PDF agree
-- Holdings count every non-deleted BTC ledger row except `Stake` buys, matching `BalanceCalculator.get_balance()`; the balance chart used to count `Trade` rows only and drifted from the real balance
+- Holdings count every non-deleted BTC ledger row except `Stake` buys, matching `BalanceCalculator.get_balance()`; the balance chart used to count `Trade` rows only and drifted from the real balance. Keep the predicate identical (`trans_type <> 'Stake'`, no `COALESCE`): a buy with a NULL `trans_type` fails it in `get_balance()`, so Reports leaves it out too
+- `valuation()` rounds holdings to whole sats (8 decimals) before valuing: that drops float dust from summing rows but keeps a real 1-sat balance, which a `> 1e-8` cutoff would zero. The PDF shows `Total Invested: n/a` when no purchase has a USD cost
+- `tests/test_viz.py` imports `src.python.db`; `PriceLookup` checks `isinstance(..., db.SqliteBackend)`, so non-USD trades there need a backend from `db`, or the lookup runs the PostgreSQL SQL
 - Holdings are grouped per day so an exchange withdrawal and its wallet deposit don't draw a dip; rows before the window fold into the opening point
 - Cost basis is the running average of USD-priced purchases, seeded by purchases before the window; sales lower `summary.net_btc` but not the average. `valuation(price, holdings_btc)` values the actual balance (spends, mining and fees included) so Current Value agrees with Holdings; with no USD-priced purchase the cost and gain are `None`, never a gain measured against $0
 - Escape `$` in matplotlib titles (`\$`): two of them in one string switch on mathtext and mangle the text

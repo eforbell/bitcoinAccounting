@@ -145,10 +145,16 @@ class OrangePlot:
             sign = "+" if valuation.unrealized_gain_pct >= 0 else ""
             gain_text = f"{sign}{valuation.unrealized_gain_pct:.1f}%"
 
+        # With no USD-priced purchase the amount invested is unknown, not $0.
+        if summary.average_cost_usd is None:
+            invested_text = "n/a"
+        else:
+            invested_text = f"\\${summary.invested_usd:,.2f}"
+
         # Escape "$": two of them in one string switch matplotlib into mathtext.
         title = "Personal Orange Plot - Bitcoin Accumulation Strategy"
         subtitle = (
-            f"Total Invested: \\${summary.invested_usd:,.2f} | "
+            f"Total Invested: {invested_text} | "
             f"Current Value: \\${valuation.current_value_usd:,.2f} | "
             f"Unrealized Gain: {gain_text}"
         )

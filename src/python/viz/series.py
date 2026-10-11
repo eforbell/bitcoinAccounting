@@ -195,13 +195,16 @@ def holdings_series(backend: DatabaseBackend, window: DateWindow) -> HoldingsSer
     from what was actually held. Grouping by day keeps an exchange withdrawal
     and its matching wallet deposit from drawing a dip in the total.
     """
+    # The buy predicate matches BalanceCalculator.get_balance(), NULL included:
+    # a buy with a NULL trans_type fails the Stake check there, so it isn't
+    # counted here either.
     rows = backend.execute(
         """
         SELECT
             createddate AS date,
             exchange,
             COALESCE(CASE WHEN buy_curr = 'BTC'
-                          AND COALESCE(trans_type, '') <> 'Stake'
+                          AND trans_type <> 'Stake'
                           THEN buy END, 0)
             - COALESCE(CASE WHEN sell_curr = 'BTC' THEN sell END, 0) AS btc_change
         FROM ledger
@@ -303,8 +306,9 @@ class AccumulationSummary:
         purchase the cost is unknown, so cost and gain are None rather than a
         gain measured against zero.
         """
-        # Float dust from adding and subtracting rows counts as an empty stack.
-        position = holdings_btc if holdings_btc > BTC_EPSILON else 0.0
+        # Round to whole sats: that drops float dust from summing rows but keeps
+        # a real one-sat balance. A negative balance has nothing to value.
+        position = max(round(holdings_btc, 8), 0.0)
         current_value = position * price_usd
         if self.average_cost_usd is None:
             return Valuation(price_usd, current_value, None, None, None)

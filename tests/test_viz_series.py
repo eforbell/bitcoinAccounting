@@ -216,6 +216,19 @@ class TestHoldingsSeries:
         assert series.latest.total == pytest.approx(expected)
         assert series.latest.total == pytest.approx(0.5 + 0.02 + 0.001 - 0.3001 + 0.3 - 0.01)
 
+    def test_untyped_rows_match_get_balance(self, backend: SqliteBackend) -> None:
+        # A NULL trans_type fails get_balance()'s Stake check, so an untyped buy
+        # isn't counted there; Reports must agree. Untyped sells still count.
+        _ledger(
+            backend,
+            ("2020-01-15 10:00:00", "Trade", "BTC", 0.5, "USD", 5000.0, "River"),
+            ("2020-02-01 10:00:00", None, "BTC", 1.0, "", 0.0, "River"),
+            ("2020-03-01 10:00:00", None, "", 0.0, "BTC", 0.1, "River"),
+        )
+        series = holdings_series(backend, ALL_TIME)
+        assert series.latest.total == pytest.approx(BalanceCalculator(backend).get_balance("BTC"))
+        assert series.latest.total == pytest.approx(0.4)
+
     def test_same_day_transfer_does_not_dip(self, backend: SqliteBackend) -> None:
         _ledger(
             backend,
@@ -322,6 +335,12 @@ class TestAccumulationSeries:
         valuation = summary.valuation(20000.0, holdings)
         assert valuation.current_value_usd == pytest.approx(0.0)
         assert valuation.position_cost_usd == pytest.approx(0.0)
+
+    def test_valuation_keeps_a_single_sat(self, trades_backend: SqliteBackend) -> None:
+        summary = accumulation_series(trades_backend, ALL_TIME).summary
+        assert summary.valuation(100000.0, 0.00000001).current_value_usd == pytest.approx(0.001)
+        assert summary.valuation(100000.0, 2e-12).current_value_usd == 0.0
+        assert summary.valuation(100000.0, -0.5).current_value_usd == 0.0
 
     def test_valuation_without_known_cost(self, backend: SqliteBackend) -> None:
         # No USD cost means the basis is unknown, not zero: no gain is invented.

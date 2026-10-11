@@ -478,6 +478,39 @@ class TestOrangePlot:
         assert r"Total Invested: \$8,600.00" in title
         assert rf"Current Value: \${0.7 * latest_close:,.2f}" in title
 
+    def test_orange_plot_title_unknown_cost(
+        self,
+        temp_output_dir: Path,
+        sample_price_data: pd.DataFrame
+    ) -> None:
+        """With no USD-priced purchase, Total Invested reads n/a rather than $0."""
+        # The EUR price lookup checks isinstance against db.SqliteBackend; the
+        # src.python.db copy is a different class and would get the PostgreSQL SQL.
+        from db import SqliteBackend as DbSqliteBackend
+        from src.python.viz.series import accumulation_series, price_series, resolve_window
+
+        backend = DbSqliteBackend(':memory:', auto_create_tables=True)
+        backend.execute(
+            """
+            INSERT INTO ledger (createddate, trans_type, buy_curr, buy, sell_curr, sell,
+                                fee_curr, fee, exchange, "group", comment)
+            VALUES ('2020-02-01 10:00:00', 'Trade', 'BTC', 0.5, 'EUR', 4500.0,
+                    '', 0, 'Kraken', '', '')
+            """
+        )
+        plot = OrangePlot(backend, VizConfig(output_dir=temp_output_dir))
+        with patch.object(plot.price_fetcher, 'fetch_btc_price_history') as mock_fetch:
+            mock_fetch.return_value = sample_price_data
+            window = resolve_window(backend, 'all')
+            prices = price_series(plot.price_fetcher, window)
+        fig = plot._create_plot(prices, accumulation_series(backend, window), 0.5)
+
+        title = fig.axes[0].get_title()
+        assert "Total Invested: n/a" in title
+        assert "Unrealized Gain: n/a" in title
+        assert r"Current Value: \$" in title
+        backend.close()
+
     def test_orange_plot_log_scale(
         self,
         sample_backend: SqliteBackend,
