@@ -38,6 +38,14 @@
 - Tests patch `web.services.reports._price_fetcher` with an offline stub; never let route tests reach Yahoo
 - Trades without a USD price get `marker_price_usd` from the nearest close so the chart can still place them
 
+### Web Native Charts
+- The Reports page draws all three charts with Chart.js 4.4.7 + `chartjs-adapter-date-fns` 3.0.0, served from `ui/static/vendor/` (never a CDN). `ui/static/vendor/*` must stay in `pyproject.toml` package-data or deploys ship without it
+- Personal numbers go through `denomFormat()` / `currency()` (tooltips, summary cards) and `holdingsTick()` (axes), so privacy mode and sats/BTC apply. The BTC-USD close is public and uses its own unredacted formatter. Privacy also hides the gain %, which together with the public price would reveal the average cost
+- Colors come from the CSS tokens at render time (`reportColor('--accent')`); `renderReports()` re-runs on `btc:theme-change`, `btc:denom-change` and `btc:privacy-change` from the cached `state.reportsState.data` without refetching
+- Chart.js `stepped: true` matches matplotlib `steps-post`; the PDF and the browser draw holdings and basis the same way
+- Lower dataset `order` draws on top; the legend sorts by `datasetIndex` so it isn't reordered by drawing order
+- Changing range doesn't pass `refresh=true`, so the price cache holds across range clicks
+
 ## Web Tax: Guided Year → Wallet Workflow
 
 ### Discovery Endpoints

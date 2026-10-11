@@ -46,7 +46,7 @@ const state = {
   selectedTx: null,
   importState: { parsers: [], preview: null, duplicateIndices: [], step: 1, wallets: [] },
   tradesFilters: { exchange: '', page: 1, perPage: 50, view: 'trades' },
-  reportsState: { range: 'all', wired: false },
+  reportsState: { range: 'all', wired: false, requestId: 0, data: null },
 };
 
 function byId(id) {
@@ -2692,99 +2692,360 @@ function bindImportEvents() {
 }
 
 // ── Reports & Visualizations ──
+// Charts are drawn in the browser from /api/reports/series, the same series
+// the PDF uses. Personal amounts go through denomFormat()/currency() so
+// privacy mode and the sats/BTC toggle apply; the BTC-USD market price does not.
 
-function reportsUrl(path, range, bust) {
-  const params = new URLSearchParams({ range });
-  if (bust) {
-    // Bypass both the browser cache (unique URL) and the service-side byte
-    // cache (refresh flag) so a hard refresh re-renders from live data.
-    params.set('refresh', 'true');
-    params.set('t', String(Date.now()));
-  }
-  const rel = `api/reports/${path}?${params.toString()}`;
+const REPORT_CHARTS = ['orange', 'balance', 'custody'];
+const CUSTODY_SERIES = [
+  ['self_custodied_btc', 'Self-Custodied', '--ok'],
+  ['multisig_btc', 'Multisig', '--info'],
+  ['custodial_btc', 'Custodial', '--accent'],
+  ['unknown_btc', 'Unknown', '--dim'],
+];
+const reportCharts = {};
+const reportDateFormat = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+const marketPriceFormat = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+const marketAxisFormat = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
+const satsAxisFormat = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+
+function reportsUrl(path, params) {
+  const rel = `api/reports/${path}?${new URLSearchParams(params).toString()}`;
   return new URL(rel, new URL(appBase(), window.location.origin)).href;
 }
 
-function setReportImage(imgId, chart, range, bust, settle) {
-  const img = byId(imgId);
-  if (!img) {
-    settle(false);
-    return;
-  }
-  const frame = img.closest('.report-chart-frame');
-  if (frame) frame.classList.remove('is-error', 'is-loaded');
-  if (frame) frame.classList.add('is-loading');
-  img.onload = () => {
-    if (frame) {
-      frame.classList.remove('is-loading', 'is-error');
-      frame.classList.add('is-loaded');
-    }
-    settle(true);
-  };
-  img.onerror = () => {
-    if (frame) {
-      frame.classList.remove('is-loading', 'is-loaded');
-      frame.classList.add('is-error');
-    }
-    settle(false);
-  };
-  img.src = reportsUrl(`chart/${chart}.png`, range, bust);
+function reportColor(token) {
+  return getComputedStyle(document.documentElement).getPropertyValue(token).trim();
 }
 
-function loadReports(bust = false) {
+function withAlpha(hex, alpha) {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return hex;
+  const n = parseInt(match[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+function reportTime(value) {
+  // Series dates are naive ISO strings; parse them as local time like the ledger does.
+  return new Date(value).getTime();
+}
+
+function privacyOn() {
+  return Boolean(window.BtcPrivacy && BtcPrivacy.isEnabled());
+}
+
+function holdingsTick(value) {
+  if (privacyOn()) return '';
+  if (denomUnit() === 'sats') return satsAxisFormat.format(Math.round(value * 100000000));
+  return Number(value).toLocaleString('en-US', { maximumFractionDigits: 8 });
+}
+
+function setReportFrame(chart, status, message = '') {
+  const frame = byId(`report-frame-${chart}`);
+  if (!frame) return;
+  frame.classList.remove('is-loading', 'is-error', 'is-empty');
+  if (status) frame.classList.add(status);
+  frame.dataset.message = message;
+}
+
+function destroyReportChart(chart) {
+  if (reportCharts[chart]) {
+    reportCharts[chart].destroy();
+    delete reportCharts[chart];
+  }
+}
+
+function reportBaseOptions(data, yOptions) {
+  const ink = reportColor('--muted');
+  const grid = reportColor('--border-subtle');
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: { mode: 'nearest', intersect: false },
+    scales: {
+      x: {
+        type: 'time',
+        min: reportTime(data.window.start),
+        max: reportTime(data.window.end),
+        ticks: { color: ink, maxRotation: 0, autoSkipPadding: 16 },
+        grid: { color: grid },
+      },
+      y: {
+        ...yOptions,
+        ticks: { color: ink, ...(yOptions.ticks || {}) },
+        grid: { color: grid },
+        title: yOptions.title ? { display: true, color: ink, text: yOptions.title } : undefined,
+      },
+    },
+    plugins: {
+      legend: {
+        // List datasets in the order they're built, not their drawing order.
+        labels: { color: ink, usePointStyle: true, boxWidth: 8, boxHeight: 8, sort: (a, b) => a.datasetIndex - b.datasetIndex },
+      },
+      tooltip: {
+        callbacks: {
+          title: (items) => (items.length ? reportDateFormat.format(new Date(items[0].parsed.x)) : ''),
+        },
+      },
+    },
+  };
+}
+
+function drawReportChart(chart, config) {
+  destroyReportChart(chart);
+  const canvas = byId(`report-canvas-${chart}`);
+  if (!canvas) return;
+  reportCharts[chart] = new Chart(canvas, config);
+  setReportFrame(chart, null);
+}
+
+function tradeTooltip(trade) {
+  const lines = [`${trade.side === 'buy' ? 'Purchase' : 'Sale'} ${denomFormat(trade.btc)}`];
+  lines.push(trade.unit_price_usd != null ? `Price ${currency(trade.unit_price_usd)}` : 'No USD price recorded');
+  if (trade.total_usd != null) lines.push(`Total ${currency(trade.total_usd)}`);
+  if (trade.wallet_id) lines.push(`Wallet ${trade.wallet_id}`);
+  return lines;
+}
+
+function renderOrangeChart(data) {
+  const accumulation = data.accumulation;
+  const accent = reportColor('--accent');
+  const datasets = [];
+
+  // Bubble area scales with the trade size, relative to the largest trade.
+  const placed = accumulation.trades.filter((t) => t.marker_price_usd != null);
+  const maxBtc = placed.reduce((max, t) => Math.max(max, t.btc), 0);
+  const frame = byId('report-frame-orange');
+  const spread = frame && frame.clientWidth < 600 ? 4 : 9;
+  const radius = (t) => (maxBtc > 0 ? 2 + spread * Math.sqrt(t.btc / maxBtc) : 3);
+  for (const [side, label, color] of [['buy', 'Purchases', accent], ['sell', 'Sales', reportColor('--ok')]]) {
+    const rows = placed.filter((t) => t.side === side);
+    if (!rows.length) continue;
+    datasets.push({
+      kind: 'trade',
+      label,
+      data: rows.map((t) => ({ x: reportTime(t.date), y: t.marker_price_usd, trade: t })),
+      showLine: false,
+      pointRadius: rows.map(radius),
+      pointHoverRadius: rows.map((t) => radius(t) + 2),
+      backgroundColor: withAlpha(color, 0.55),
+      borderColor: color,
+      borderWidth: 1,
+      // Lower order draws on top: sales over purchases over the lines.
+      order: side === 'sell' ? 0 : 1,
+    });
+  }
+  if (accumulation.basis.length) {
+    datasets.push({
+      kind: 'basis',
+      label: 'Average cost',
+      data: accumulation.basis.map((b) => ({ x: reportTime(b.date), y: b.average_cost_usd })),
+      stepped: true,
+      borderColor: reportColor('--info'),
+      borderDash: [6, 4],
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHoverRadius: 3,
+      order: 2,
+    });
+  }
+  if (data.price) {
+    datasets.push({
+      kind: 'price',
+      label: 'BTC-USD',
+      data: data.price.points.map((p) => ({ x: reportTime(p.date), y: p.close_usd })),
+      borderColor: withAlpha(accent, 0.8),
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHoverRadius: 3,
+      order: 3,
+    });
+  }
+
+  if (!datasets.length) {
+    destroyReportChart('orange');
+    setReportFrame('orange', 'is-empty', 'No trades or price data for this range');
+    return;
+  }
+
+  const options = reportBaseOptions(data, {
+    title: 'USD',
+    ticks: { callback: (value) => marketAxisFormat.format(value) },
+  });
+  options.plugins.tooltip.callbacks.label = (ctx) => {
+    if (ctx.dataset.kind === 'price') return `BTC-USD ${marketPriceFormat.format(ctx.parsed.y)}`;
+    if (ctx.dataset.kind === 'basis') return `Average cost ${currency(ctx.parsed.y)}`;
+    return tradeTooltip(ctx.raw.trade);
+  };
+  drawReportChart('orange', { type: 'line', data: { datasets }, options });
+}
+
+function renderBalanceChart(data) {
+  const accent = reportColor('--accent');
+  const options = reportBaseOptions(data, { beginAtZero: true, title: denomUnit(), ticks: { callback: holdingsTick } });
+  options.interaction = { mode: 'nearest', axis: 'x', intersect: false };
+  options.plugins.legend.display = false;
+  options.plugins.tooltip.callbacks.label = (ctx) => `Holdings ${denomFormat(ctx.parsed.y)}`;
+  drawReportChart('balance', {
+    type: 'line',
+    data: {
+      datasets: [{
+        label: 'Holdings',
+        data: data.holdings.points.map((p) => ({ x: reportTime(p.date), y: p.total_btc })),
+        stepped: true,
+        fill: 'origin',
+        borderColor: accent,
+        backgroundColor: withAlpha(accent, 0.18),
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 3,
+      }],
+    },
+    options,
+  });
+}
+
+function renderCustodyChart(data) {
+  const points = data.holdings.points;
+  const active = CUSTODY_SERIES.filter(([field]) => points.some((p) => Math.abs(p[field]) > 1e-8));
+  if (!active.length) {
+    destroyReportChart('custody');
+    setReportFrame('custody', 'is-empty', 'No BTC held in this range');
+    return;
+  }
+
+  const datasets = active.map(([field, label, token], index) => {
+    const color = reportColor(token);
+    return {
+      label,
+      data: points.map((p) => ({ x: reportTime(p.date), y: p[field] })),
+      stepped: true,
+      fill: index === 0 ? 'origin' : '-1',
+      borderColor: color,
+      backgroundColor: withAlpha(color, 0.45),
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHoverRadius: 3,
+    };
+  });
+  const options = reportBaseOptions(data, {
+    stacked: true,
+    beginAtZero: true,
+    title: denomUnit(),
+    ticks: { callback: holdingsTick },
+  });
+  options.interaction = { mode: 'index', intersect: false };
+  options.plugins.tooltip.callbacks.label = (ctx) => `${ctx.dataset.label} ${denomFormat(ctx.parsed.y)}`;
+  options.plugins.tooltip.callbacks.footer = (items) => {
+    const point = items.length ? points[items[0].dataIndex] : null;
+    return point ? `Total ${denomFormat(point.total_btc)}` : '';
+  };
+  drawReportChart('custody', { type: 'line', data: { datasets }, options });
+}
+
+function renderReportSummary(data) {
+  const setText = (id, text) => {
+    const el = byId(id);
+    if (el) el.textContent = text;
+  };
+  if (!data || !data.has_transactions) {
+    for (const id of ['reports-holdings', 'reports-self-custody', 'reports-avg-cost', 'reports-value', 'reports-gain']) setText(id, '-');
+    return;
+  }
+  const summary = data.accumulation.summary;
+  const valuation = data.valuation;
+  const pct = data.holdings.self_custody_pct;
+  setText('reports-holdings', denomFormat(data.holdings.latest.total_btc));
+  setText('reports-self-custody', pct != null ? `${pct.toFixed(1)}%` : '-');
+  setText('reports-avg-cost', summary.average_cost_usd != null ? currency(summary.average_cost_usd) : '-');
+  setText('reports-value', valuation ? currency(valuation.current_value_usd) : '-');
+  let gain = '-';
+  if (valuation) {
+    gain = currency(valuation.unrealized_gain_usd);
+    // The percentage plus the public price would give away the average cost.
+    if (valuation.unrealized_gain_pct != null && !privacyOn()) {
+      const sign = valuation.unrealized_gain_pct >= 0 ? '+' : '';
+      gain += ` (${sign}${valuation.unrealized_gain_pct.toFixed(1)}%)`;
+    }
+  }
+  setText('reports-gain', gain);
+}
+
+function renderReports() {
+  const data = state.reportsState.data;
+  renderReportSummary(data);
+  renderWarnings('reports-warnings', data ? data.warnings : []);
+  if (!data) return;
+
+  if (typeof window.Chart === 'undefined') {
+    for (const chart of REPORT_CHARTS) setReportFrame(chart, 'is-error', 'Chart library failed to load');
+    return;
+  }
+  if (!data.has_transactions) {
+    for (const chart of REPORT_CHARTS) {
+      destroyReportChart(chart);
+      setReportFrame(chart, 'is-empty', 'No Bitcoin transactions yet');
+    }
+    return;
+  }
+  Chart.defaults.font.family = reportColor('--font-sans') || Chart.defaults.font.family;
+  renderOrangeChart(data);
+  renderBalanceChart(data);
+  renderCustodyChart(data);
+}
+
+async function loadReports() {
+  const reports = state.reportsState;
   const rangeSeg = byId('reports-range');
-  const range = state.reportsState.range || 'all';
 
   // Wire the range selector once.
-  if (!state.reportsState.wired) {
-    state.reportsState.wired = true;
+  if (!reports.wired) {
+    reports.wired = true;
     if (rangeSeg) {
       for (const btn of rangeSeg.querySelectorAll('button')) {
         btn.addEventListener('click', () => {
-          if (state.reportsState.range === btn.dataset.value) return;
-          state.reportsState.range = btn.dataset.value;
-          loadReports(true);
+          if (reports.range === btn.dataset.value) return;
+          reports.range = btn.dataset.value;
+          loadReports();
         });
       }
     }
   }
 
-  // Reflect active range in the selector.
+  const range = reports.range || 'all';
   if (rangeSeg) {
     for (const btn of rangeSeg.querySelectorAll('button')) {
       btn.classList.toggle('active', btn.dataset.value === range);
     }
   }
 
-  // Point the PDF download link at the current range.
   const pdfLink = byId('reports-pdf-link');
   if (pdfLink) {
-    pdfLink.href = reportsUrl('report.pdf', range, bust);
+    pdfLink.href = reportsUrl('report.pdf', { range });
     pdfLink.setAttribute('download', `btc_report_${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
+  const requestId = ++reports.requestId;
   const status = byId('reports-status');
-  if (status) status.textContent = 'Rendering charts…';
+  if (status) status.textContent = 'Loading charts…';
+  for (const chart of REPORT_CHARTS) setReportFrame(chart, 'is-loading');
 
-  const charts = [
-    ['report-img-orange', 'orange'],
-    ['report-img-balance', 'balance'],
-    ['report-img-custody', 'custody'],
-  ];
-  let pending = charts.length;
-  let anyError = false;
-  const settle = (ok) => {
-    pending -= 1;
-    if (!ok) anyError = true;
-    if (pending === 0 && byId('reports-status')) {
-      byId('reports-status').textContent = anyError
-        ? 'Some charts could not be rendered for this range (no data or price feed unavailable).'
-        : '';
+  try {
+    const data = await api(`api/reports/series?${new URLSearchParams({ range }).toString()}`);
+    if (requestId !== reports.requestId) return;
+    reports.data = data;
+    if (status) status.textContent = '';
+    renderReports();
+  } catch (error) {
+    if (requestId !== reports.requestId) return;
+    reports.data = null;
+    renderReports();
+    for (const chart of REPORT_CHARTS) {
+      destroyReportChart(chart);
+      setReportFrame(chart, 'is-error', 'Could not load chart data');
     }
-  };
-
-  for (const [imgId, chart] of charts) {
-    setReportImage(imgId, chart, range, bust, settle);
+    if (status) status.textContent = `Could not load reports: ${error.message}`;
   }
 }
 
@@ -2992,6 +3253,7 @@ window.addEventListener('btc:denom-change', function () {
   if (page === 'wallets') renderWalletsList(state.walletsList);
   if (page === 'trades') loadTradesPage();
   if (page === 'tax') rerenderTaxPage();
+  if (page === 'reports') renderReports();
   if (page === 'settings') initSettingsPage();
 });
 
@@ -3008,5 +3270,10 @@ window.addEventListener('btc:privacy-change', function () {
   if (page === 'wallets') renderWalletsList(state.walletsList);
   if (page === 'trades') loadTradesPage();
   if (page === 'tax') rerenderTaxPage();
+  if (page === 'reports') renderReports();
   if (page === 'settings') initSettingsPage();
+});
+
+window.addEventListener('btc:theme-change', function () {
+  if (state.currentPage === 'reports') renderReports();
 });

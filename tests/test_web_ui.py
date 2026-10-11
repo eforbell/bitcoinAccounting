@@ -82,3 +82,26 @@ def test_sovereign_fonts_css_route_uses_env_source_selection(monkeypatch) -> Non
     response_off = client.get("/sovereign-fonts.css")
     assert response_off.status_code == 200
     assert "disabled" in response_off.text.lower()
+
+
+def test_reports_page_draws_native_charts_from_vendored_chartjs() -> None:
+    app = create_app(WebConfig(auth_enabled=False))
+    client = TestClient(app)
+
+    shell = client.get("/").text
+    # Chart.js is served locally, never from a CDN, and loads before app.js.
+    assert 'src="static/vendor/chart.umd.min.js"' in shell
+    assert 'src="static/vendor/chartjs-adapter-date-fns.bundle.min.js"' in shell
+    assert shell.index("vendor/chart.umd.min.js") < shell.index('src="static/app.js"')
+    for chart in ("orange", "balance", "custody"):
+        assert f'id="report-canvas-{chart}"' in shell
+    assert 'id="report-img-' not in shell
+
+    for asset in ("chart.umd.min.js", "chartjs-adapter-date-fns.bundle.min.js"):
+        response = client.get(f"/static/vendor/{asset}")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/javascript")
+
+    js = client.get("/static/app.js").text
+    assert "api/reports/series" in js
+    assert "chart/${" not in js

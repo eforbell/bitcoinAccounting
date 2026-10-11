@@ -66,3 +66,4 @@ def test_pyproject_packages_web_ui_assets() -> None:
     assert "ui/*.html" in package_data["web"]
     assert "ui/static/*" in package_data["web"]
     assert "ui/static/brand/*" in package_data["web"]
+    assert "ui/static/vendor/*" in package_data["web"]
