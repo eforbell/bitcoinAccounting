@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import warnings
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -449,6 +450,27 @@ class TestOrangePlot:
 
             assert output_path.exists()
 
+    def test_orange_plot_title_values_net_of_sales(
+        self,
+        sample_backend: SqliteBackend,
+        temp_output_dir: Path,
+        sample_price_data: pd.DataFrame
+    ) -> None:
+        """Current Value prices the position left after the 0.1 BTC sale."""
+        from src.python.viz.series import accumulation_series, price_series, resolve_window
+
+        plot = OrangePlot(sample_backend, VizConfig(output_dir=temp_output_dir))
+        with patch.object(plot.price_fetcher, 'fetch_btc_price_history') as mock_fetch:
+            mock_fetch.return_value = sample_price_data
+            window = resolve_window(sample_backend, 'all')
+            prices = price_series(plot.price_fetcher, window)
+        fig = plot._create_plot(prices, accumulation_series(sample_backend, window))
+
+        latest_close = float(sample_price_data['close'].iloc[-1])
+        title = fig.axes[0].get_title()
+        assert r"Total Invested: \$8,600.00" in title
+        assert rf"Current Value: \${0.7 * latest_close:,.2f}" in title
+
     def test_orange_plot_log_scale(
         self,
         sample_backend: SqliteBackend,
@@ -512,152 +534,6 @@ class TestOrangePlot:
 
             with pytest.raises(RuntimeError, match="No BTC-USD price data available"):
                 plot.generate()
-
-    def test_calculate_running_cost_basis(
-        self,
-        sample_backend: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test running cost basis calculation."""
-        config = VizConfig(output_dir=temp_output_dir)
-        plot = OrangePlot(sample_backend, config)
-
-        # Get purchases from sample data
-        from src.python.db.queries import TradeQuery
-        trade_query = TradeQuery(sample_backend)
-        trades = trade_query.get_trade_cost('BTC', 'USD')
-        purchases = [t for t in trades if t['quantity'] > 0]
-
-        # Calculate cost basis
-        cost_basis_data = plot._calculate_running_cost_basis(purchases)
-
-        # Should have 2 cost basis points (2 purchases)
-        assert len(cost_basis_data) == 2
-
-        # First purchase: 0.5 BTC at $10,000 = $10,000 basis
-        assert cost_basis_data[0]['basis'] == pytest.approx(10000.0)
-
-        # Second purchase: (0.5*10000 + 0.3*12000) / (0.5 + 0.3) = 10750
-        expected_basis = (0.5 * 10000 + 0.3 * 12000) / (0.5 + 0.3)
-        assert cost_basis_data[1]['basis'] == pytest.approx(expected_basis)
-
-    def test_calculate_running_cost_basis_skips_none_prices(
-        self,
-        temp_output_dir: Path
-    ) -> None:
-        """Test that cost basis calculation skips purchases with None unit_cost."""
-        backend = SqliteBackend(':memory:', auto_create_tables=True)
-
-        # Add a BTC-EUR trade (counter currency is EUR, not USD)
-        # Request costs in USD, but don't add EUR-USD price data
-        backend.execute(
-            """
-            INSERT INTO ledger (
-                createddate, trans_type, buy_curr, buy, sell_curr, sell,
-                fee_curr, fee, exchange, "group", comment
-            ) VALUES
-            (:date1, 'Trade', 'BTC', 0.5, 'EUR', 4500.0, '', 0, 'Kraken', '', '')
-            """,
-            {'date1': '2020-01-15 10:00:00'}
-        )
-
-        # Don't add EUR-USD price data - unit_cost will be None when requesting USD costs
-
-        config = VizConfig(output_dir=temp_output_dir)
-        plot = OrangePlot(backend, config)
-
-        from src.python.db.queries import TradeQuery
-        trade_query = TradeQuery(backend)
-        # Request costs in USD, but trade is in EUR and no EUR-USD price available
-        trades = trade_query.get_trade_cost('BTC', 'USD')
-        purchases = [t for t in trades if t['quantity'] > 0]
-
-        # Calculate cost basis
-        cost_basis_data = plot._calculate_running_cost_basis(purchases)
-
-        # Should be empty since unit_cost is None (no EUR-USD conversion available)
-        assert len(cost_basis_data) == 0
-
-    def test_filter_to_date_range(
-        self,
-        sample_backend: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test filtering trades to date range."""
-        config = VizConfig(output_dir=temp_output_dir)
-        plot = OrangePlot(sample_backend, config)
-
-        from src.python.db.queries import TradeQuery
-        trade_query = TradeQuery(sample_backend)
-        trades = trade_query.get_trade_cost('BTC', 'USD')
-
-        # Filter to 2020 only
-        start = datetime(2020, 1, 1)
-        end = datetime(2020, 12, 31)
-        filtered = plot._filter_to_date_range(trades, start, end)
-
-        # Should have 2 trades (2 purchases in 2020)
-        assert len(filtered) == 2
-
-        # Sale in 2021 should be excluded
-        for trade in filtered:
-            date = trade['date']
-            if isinstance(date, str):
-                date = datetime.fromisoformat(date.replace('Z', '+00:00'))
-            assert start <= date <= end
-
-    def test_resolve_date_range_all(
-        self,
-        sample_backend: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test resolving 'all' date range preset."""
-        config = VizConfig(date_range='all', output_dir=temp_output_dir)
-        plot = OrangePlot(sample_backend, config)
-
-        start, end = plot._resolve_date_range()
-
-        # Should span from first trade (2020-01-15) to now
-        assert start.year == 2020
-        assert start.month == 1
-        assert start.day == 15
-
-    def test_resolve_date_range_ytd(
-        self,
-        sample_backend: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test resolving 'ytd' date range preset."""
-        config = VizConfig(date_range='ytd', output_dir=temp_output_dir)
-        plot = OrangePlot(sample_backend, config)
-
-        start, end = plot._resolve_date_range()
-
-        # Should be Jan 1 of current year to now
-        now = datetime.now()
-        assert start.year == now.year
-        assert start.month == 1
-        assert start.day == 1
-
-    def test_resolve_date_range_tuple(
-        self,
-        sample_backend: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test resolving tuple date range."""
-        start_date = datetime(2020, 6, 1)
-        end_date = datetime(2021, 6, 1)
-
-        config = VizConfig(
-            date_range=(start_date, end_date),
-            output_dir=temp_output_dir
-        )
-        plot = OrangePlot(sample_backend, config)
-
-        start, end = plot._resolve_date_range()
-
-        assert start == start_date
-        assert end == end_date
 
     def test_output_path_includes_date(
         self,
@@ -756,31 +632,6 @@ class TestBalanceChart:
         assert output_path.suffix == '.png'
         assert 'btc_balance' in output_path.name
 
-    def test_cumulative_balance_calculation(
-        self,
-        sample_backend: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test cumulative balance calculation."""
-        config = VizConfig(output_dir=temp_output_dir)
-        chart = BalanceChart(sample_backend, config)
-
-        from src.python.db.queries import TradeQuery
-        trade_query = TradeQuery(sample_backend)
-        trades = trade_query.get_trades('BTC')
-
-        start = datetime(2020, 1, 1)
-        end = datetime(2021, 12, 31)
-        balance_data = chart._calculate_cumulative_balance(trades, start, end)
-
-        # Should have: start point, 4 trades, end point = 6 points
-        assert len(balance_data) >= 5
-
-        # Verify cumulative balance progression
-        # Start: 0, +0.5, +0.3, +0.2, -0.1 = 0.9 final
-        final_balance = balance_data[-1]['balance']
-        assert final_balance == pytest.approx(0.9)
-
     def test_balance_chart_empty_ledger(
         self,
         temp_output_dir: Path
@@ -859,9 +710,17 @@ class TestBalanceChart:
 
         chart = BalanceChart(backend, config)
 
-        # Should warn about negative balance
-        with pytest.warns(RuntimeWarning, match="Negative balance detected"):
+        # Should warn about negative balance. Record rather than pytest.warns so
+        # a ResourceWarning from another test's unclosed backend being garbage
+        # collected mid-block cannot fail this test.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
             output_path = chart.generate()
+        assert any(
+            issubclass(w.category, RuntimeWarning)
+            and "Negative balance detected" in str(w.message)
+            for w in caught
+        )
 
         assert output_path.exists()
 
@@ -901,71 +760,6 @@ class TestBalanceChart:
         assert 21 in milestones  # Special Bitcoin number
         assert 100 in milestones
 
-    def test_resolve_date_range_all(
-        self,
-        sample_backend: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test resolving 'all' date range preset."""
-        config = VizConfig(date_range='all', output_dir=temp_output_dir)
-        chart = BalanceChart(sample_backend, config)
-
-        from src.python.db.queries import TradeQuery
-        trade_query = TradeQuery(sample_backend)
-        trades = trade_query.get_trades('BTC')
-
-        start, end = chart._resolve_date_range(trades)
-
-        # Should span from first trade (2020-01-15) to now
-        assert start.year == 2020
-        assert start.month == 1
-        assert start.day == 15
-
-    def test_resolve_date_range_ytd(
-        self,
-        sample_backend: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test resolving 'ytd' date range preset."""
-        config = VizConfig(date_range='ytd', output_dir=temp_output_dir)
-        chart = BalanceChart(sample_backend, config)
-
-        from src.python.db.queries import TradeQuery
-        trade_query = TradeQuery(sample_backend)
-        trades = trade_query.get_trades('BTC')
-
-        start, end = chart._resolve_date_range(trades)
-
-        # Should be Jan 1 of current year to now
-        now = datetime.now()
-        assert start.year == now.year
-        assert start.month == 1
-        assert start.day == 1
-
-    def test_resolve_date_range_tuple(
-        self,
-        sample_backend: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test resolving tuple date range."""
-        start_date = datetime(2020, 6, 1)
-        end_date = datetime(2021, 6, 1)
-
-        config = VizConfig(
-            date_range=(start_date, end_date),
-            output_dir=temp_output_dir
-        )
-        chart = BalanceChart(sample_backend, config)
-
-        from src.python.db.queries import TradeQuery
-        trade_query = TradeQuery(sample_backend)
-        trades = trade_query.get_trades('BTC')
-
-        start, end = chart._resolve_date_range(trades)
-
-        assert start == start_date
-        assert end == end_date
-
     def test_output_path_includes_date(
         self,
         sample_backend: SqliteBackend,
@@ -998,29 +792,6 @@ class TestBalanceChart:
         output_path = chart.generate()
 
         assert output_path.exists()
-
-    def test_date_range_filtering(
-        self,
-        sample_backend: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test that trades outside date range are excluded."""
-        config = VizConfig(output_dir=temp_output_dir)
-        chart = BalanceChart(sample_backend, config)
-
-        from src.python.db.queries import TradeQuery
-        trade_query = TradeQuery(sample_backend)
-        trades = trade_query.get_trades('BTC')
-
-        # Filter to 2020 only
-        start = datetime(2020, 1, 1)
-        end = datetime(2020, 12, 31)
-        balance_data = chart._calculate_cumulative_balance(trades, start, end)
-
-        # Should only include 2 trades from 2020 (+ start/end points)
-        # Verify no 2021 trades included
-        for point in balance_data:
-            assert point['date'] <= end
 
 class TestCustodyChart:
     """Tests for CustodyChart class (VIZ-004)."""
@@ -1113,32 +884,6 @@ class TestCustodyChart:
         assert output_path.suffix == '.png'
         assert 'btc_custody' in output_path.name
 
-    def test_custody_balance_calculation(
-        self,
-        sample_backend_with_wallets: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test custody balance calculation."""
-        config = VizConfig(output_dir=temp_output_dir)
-        chart = CustodyChart(sample_backend_with_wallets, config)
-
-        start = datetime(2020, 1, 1)
-        end = datetime(2021, 12, 31)
-        custody_data = chart._get_custody_balances(start, end)
-
-        # Should have: start, 5 trades, end = 7 points
-        assert len(custody_data) >= 6
-
-        # Verify final balances
-        # Self-custodied: 0.5 + 0.1 = 0.6
-        # Custodial: 0.3 - 0.1 = 0.2
-        # Multisig: 0.2
-        final = custody_data[-1]
-        assert final['self-custodied'] == pytest.approx(0.6)
-        assert final['custodial'] == pytest.approx(0.2)
-        assert final['multisig'] == pytest.approx(0.2)
-        assert final['unknown'] == pytest.approx(0.0)
-
     def test_custody_chart_empty_ledger(
         self,
         temp_output_dir: Path
@@ -1172,15 +917,6 @@ class TestCustodyChart:
 
         # Should succeed and show as "unknown" custody
         assert output_path.exists()
-
-        # Verify custody data
-        start = datetime(2020, 1, 1)
-        end = datetime(2021, 1, 1)
-        custody_data = chart._get_custody_balances(start, end)
-
-        final = custody_data[-1]
-        assert final['unknown'] == pytest.approx(0.5)
-        assert final['self-custodied'] == pytest.approx(0.0)
 
     def test_custody_chart_single_custody_type(
         self,
@@ -1220,71 +956,6 @@ class TestCustodyChart:
         # Should show single area (not stacked)
         assert output_path.exists()
 
-    def test_wallet_custody_map(
-        self,
-        sample_backend_with_wallets: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test wallet custody mapping."""
-        config = VizConfig(output_dir=temp_output_dir)
-        chart = CustodyChart(sample_backend_with_wallets, config)
-
-        wallet_map = chart._get_wallet_custody_map()
-
-        assert wallet_map['Coldcard'] == 'self-custodied'
-        assert wallet_map['Coinbase'] == 'custodial'
-        assert wallet_map['Casa'] == 'multisig'
-
-    def test_wallet_custody_map_no_wallets_table(
-        self,
-        sample_backend_no_wallets: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test wallet custody mapping when wallets table is empty."""
-        config = VizConfig(output_dir=temp_output_dir)
-        chart = CustodyChart(sample_backend_no_wallets, config)
-
-        wallet_map = chart._get_wallet_custody_map()
-
-        # Should return empty dict
-        assert wallet_map == {}
-
-    def test_resolve_date_range_all(
-        self,
-        sample_backend_with_wallets: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test resolving 'all' date range preset."""
-        config = VizConfig(date_range='all', output_dir=temp_output_dir)
-        chart = CustodyChart(sample_backend_with_wallets, config)
-
-        start, end = chart._resolve_date_range()
-
-        # Should span from first trade (2020-01-15) to now
-        assert start.year == 2020
-        assert start.month == 1
-        assert start.day == 15
-
-    def test_resolve_date_range_tuple(
-        self,
-        sample_backend_with_wallets: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test resolving tuple date range."""
-        start_date = datetime(2020, 6, 1)
-        end_date = datetime(2021, 6, 1)
-
-        config = VizConfig(
-            date_range=(start_date, end_date),
-            output_dir=temp_output_dir
-        )
-        chart = CustodyChart(sample_backend_with_wallets, config)
-
-        start, end = chart._resolve_date_range()
-
-        assert start == start_date
-        assert end == end_date
-
     def test_output_path_includes_date(
         self,
         sample_backend_with_wallets: SqliteBackend,
@@ -1317,57 +988,6 @@ class TestCustodyChart:
         output_path = chart.generate()
 
         assert output_path.exists()
-
-    def test_custody_type_normalization(
-        self,
-        temp_output_dir: Path
-    ) -> None:
-        """Test that custody types are normalized correctly."""
-        backend = SqliteBackend(':memory:', auto_create_tables=True)
-
-        # Add wallets with various custody type names
-        backend.execute(
-            """
-            INSERT INTO wallets (wallet_id, wallet_type, custody, description, active) VALUES
-            ('HW1', 'hardware', 'self', 'Self custody variant', 1),
-            ('HW2', 'hardware', 'cold', 'Cold storage', 1),
-            ('EX1', 'exchange', 'exchange', 'Exchange variant', 1),
-            ('MS1', 'multisig', 'multi-sig', 'Multisig variant', 1)
-            """
-        )
-
-        config = VizConfig(output_dir=temp_output_dir)
-        chart = CustodyChart(backend, config)
-
-        wallet_map = chart._get_wallet_custody_map()
-
-        # All should be normalized to standard types
-        assert wallet_map['HW1'] == 'self-custodied'
-        assert wallet_map['HW2'] == 'self-custodied'
-        assert wallet_map['EX1'] == 'custodial'
-        assert wallet_map['MS1'] == 'multisig'
-
-    def test_date_range_filtering(
-        self,
-        sample_backend_with_wallets: SqliteBackend,
-        temp_output_dir: Path
-    ) -> None:
-        """Test that trades outside date range are excluded."""
-        config = VizConfig(output_dir=temp_output_dir)
-        chart = CustodyChart(sample_backend_with_wallets, config)
-
-        # Filter to 2020 only
-        start = datetime(2020, 1, 1)
-        end = datetime(2020, 12, 31)
-        custody_data = chart._get_custody_balances(start, end)
-
-        # Should only include 2 trades from 2020
-        # Self-custodied: 0.5, Custodial: 0.3
-        final = custody_data[-1]
-        assert final['self-custodied'] == pytest.approx(0.5)
-        assert final['custodial'] == pytest.approx(0.3)
-        assert final['multisig'] == pytest.approx(0.0)  # 2021 trade excluded
-
 
 class TestPDFReport:
     """Tests for PDFReport class."""

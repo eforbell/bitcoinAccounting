@@ -24,6 +24,15 @@
 - iOS Safari/WKWebView auto-zooms focused form controls when their computed font-size is below 16px; keep interactive `input`, `select`, and `textarea` controls at `font-size: 1rem` minimum
 - Do not rely on surrounding label/container text sizing for form controls; set the control font-size explicitly so mobile breakpoints cannot reintroduce sub-16px inputs
 
+## Reports: Shared Chart Series
+
+- Every number a report shows comes from `viz/series.py` (`resolve_window`, `holdings_series`, `accumulation_series`, `price_series`); `OrangePlot`/`BalanceChart`/`CustodyChart`/`PDFReport` only draw. Web native charts should read the same series so the browser and the PDF agree
+- Holdings count every non-deleted BTC ledger row except `Stake` buys, matching `BalanceCalculator.get_balance()`; the balance chart used to count `Trade` rows only and drifted from the real balance
+- Holdings are grouped per day so an exchange withdrawal and its wallet deposit don't draw a dip; rows before the window fold into the opening point
+- Cost basis is the running average of USD-priced purchases, seeded by purchases before the window; sales shrink the position (`summary.net_btc`) but not the average. `valuation(price)` values the net position, not everything ever bought
+- Escape `$` in matplotlib titles (`\$`): two of them in one string switch on mathtext and mangle the text
+- The TUI keeps using the matplotlib classes and doesn't need feature parity with the web's native charts
+
 ## Web Tax: Guided Year → Wallet Workflow
 
 ### Discovery Endpoints
