@@ -946,7 +946,7 @@
 
             <p id="tax-overview-message" class="status-line">Loading sales for the selected year…</p>
             <div id="tax-overview-body" class="hidden">
-              <div class="summary-grid">
+              <div id="overview-summary" class="summary-grid">
                 <article class="summary-card">
                   <span class="summary-label">Sales</span>
                   <strong id="overview-sales">0</strong>
@@ -966,23 +966,25 @@
                 </article>
               </div>
               <div id="overview-warnings" class="warning-stack"></div>
-              <div class="table-shell gains">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Wallet</th>
-                      <th>Sales</th>
-                      <th>Sold</th>
-                      <th>Proceeds</th>
-                      <th>Cost Basis</th>
-                      <th>Net Gain/Loss</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody id="overview-table"></tbody>
-                </table>
+              <div id="overview-wallets">
+                <div class="table-shell gains">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Wallet</th>
+                        <th>Sales</th>
+                        <th>Sold</th>
+                        <th>Proceeds</th>
+                        <th>Cost Basis</th>
+                        <th>Net Gain/Loss</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="overview-table"></tbody>
+                  </table>
+                </div>
+                <div id="overview-cards" class="data-cards"></div>
               </div>
-              <div id="overview-cards" class="data-cards"></div>
             </div>
           </section>
 
@@ -1073,6 +1075,7 @@
                 <button class="button" type="submit">Forecast Sale</button>
               </div>
             </form>
+            <p id="forecast-status" class="status-line hidden"></p>
 
             <div class="summary-grid">
               <article class="summary-card">

@@ -296,6 +296,7 @@ class TaxYearOverviewResponse(APIModel):
     message: str
     totals: TaxYearTotalsResource
     wallets: list[TaxYearWalletSummaryResource]
+    unassigned_sale_count: int = 0
     spend_count: int
     warnings: list[TaxPolicyWarningResource]
 

@@ -35,12 +35,19 @@
 ### Missing-Lot Sales
 - `CapitalGainCalculator.get_1099b_data()` used to return `[], []` when a wallet had no purchase lots, silently dropping sales of coins deposited into an exchange and sold there; it now emits them as `UNKNOWN`/$0-basis lots
 - The overview surfaces this as a `missing_basis` warning; `Spend` disposals are counted and flagged (`spends_not_included`) because the FIFO report only covers `Trade` sales
+- Match a sale's proceeds by ledger `id` (`get_trade_cost()` rows carry `id`), never by timestamp: two wallets can sell at the same instant and the first trade found would hand its proceeds to both
+
+### Sales With No Wallet
+- A `NULL`/blank `exchange` cannot go through wallet-scoped FIFO (a blank wallet filter means "all wallets"), so the overview counts these as `unassigned_sale_count` with an `unassigned_wallet_sales` warning instead of inventing a `"None"`/`""` wallet row
+- 2025+ totals exclude them; pre-2025 global FIFO totals (and `totals.sale_count`) include them; a year whose only sales are unassigned still reports `has_sales=true` with no wallet rows
 
 ### Frontend
 - The tax page no longer auto-runs gains/forecast on login or navigation (it flooded Recent Runs); `loadTaxPage()` loads the index, overview, and holdings only
 - Cache results in `state.taxOverview` / `state.gainsReport` / `state.forecastResult` and re-render on denomination/privacy toggles instead of re-fetching
 - For 2025+ the gains wallet dropdown has no "All wallets" option, which enforces the export wallet policy in the UI
 - Recent Runs rows are buttons: gains/preview entries restore year/coin/wallet and reload lots, export entries re-download, forecast entries refill the form and rerun
+- Replays must check the dropdown kept the recorded wallet: the selects fall back to the first option when a wallet no longer qualifies, so show an inline error rather than running or exporting a different wallet
+- Overview warnings render even when the year has no sales (a Spend-only year still needs the Spend warning); only the totals and wallet table hide
 - CSV exports are fetched as blobs (not `window.location`) so policy errors show inline and Recent Runs refreshes after the download
 
 ## Feature-18: Web Tax Reporting and Forecasting - WTX-001 / WTX-004

@@ -314,3 +314,99 @@ def test_holdings_lists_wallets_with_positive_balance(client: TestClient) -> Non
         "total_balance": 0.25,
         "wallets": [{"wallet_id": "Vault", "balance": 0.25}],
     }
+
+
+def test_overview_keeps_proceeds_of_same_timestamp_sales_in_separate_wallets(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    # Vault sells at the exact timestamp of Coldcard's sale; each sale must keep
+    # its own proceeds rather than the first trade found at that time.
+    seeded_accounts.execute_trade(
+        trade_date=datetime(2025, 12, 15),
+        buy=12000.0,
+        buy_curr="USD",
+        sell=0.1,
+        sell_curr="BTC",
+        exchange="Vault",
+    )
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2025, "coin": "BTC"}).json()
+
+    proceeds = {w["wallet_id"]: w["proceeds_usd"] for w in body["wallets"]}
+    assert proceeds == {
+        "Coldcard": pytest.approx(45000.0),
+        "Vault": pytest.approx(12000.0),
+    }
+
+
+def _add_sales_without_wallet(accounts: BitcoinAccounts, year: int) -> None:
+    for day, wallet in ((1, ""), (2, None)):
+        accounts.execute_trade(
+            trade_date=datetime(year, 8, day),
+            buy=1000.0,
+            buy_curr="USD",
+            sell=0.01,
+            sell_curr="BTC",
+            exchange=wallet or "",
+        )
+    accounts.backend.execute(
+        "UPDATE ledger SET exchange = NULL WHERE createddate LIKE :day",
+        {"day": f"{year}-08-02%"},
+    )
+    accounts.backend.commit()
+
+
+def test_overview_separates_2025_sales_with_no_wallet(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    _add_sales_without_wallet(seeded_accounts, 2025)
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2025, "coin": "BTC"}).json()
+
+    assert [w["wallet_id"] for w in body["wallets"]] == ["Coldcard"]
+    assert body["unassigned_sale_count"] == 2
+    assert body["totals"]["sale_count"] == 1
+    assert body["totals"]["proceeds_usd"] == pytest.approx(45000.0)
+    warning = next(w for w in body["warnings"] if w["code"] == "unassigned_wallet_sales")
+    assert "not included in these totals" in warning["message"]
+
+
+def test_overview_counts_pre_2025_sales_with_no_wallet_in_global_totals(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    _add_sales_without_wallet(seeded_accounts, 2024)
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2024, "coin": "BTC"}).json()
+
+    assert body["totals_method"] == "global_fifo"
+    assert [w["wallet_id"] for w in body["wallets"]] == ["Strike"]
+    assert body["totals"]["sale_count"] == 3
+    assert body["totals"]["proceeds_usd"] == pytest.approx(62000.0)
+    assert "unassigned_wallet_sales" in [w["code"] for w in body["warnings"]]
+
+
+def test_overview_reports_year_whose_only_sales_have_no_wallet(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    _add_sales_without_wallet(seeded_accounts, 2026)
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2026, "coin": "BTC"}).json()
+
+    assert body["has_sales"] is True
+    assert body["wallets"] == []
+    assert body["unassigned_sale_count"] == 2
+    assert "none has a wallet recorded" in body["message"]
+
+
+def test_overview_keeps_spend_warning_in_year_without_sales(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    seeded_accounts.ledger_writer.spend(
+        datetime(2023, 7, 4), 0.01, "BTC", 0.0, "", "Vault", "", "gift"
+    )
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2023, "coin": "BTC"}).json()
+
+    assert body["has_sales"] is False
+    assert body["message"] == "No sales found for tax year 2023 with digital asset BTC."
+    assert [w["code"] for w in body["warnings"]] == ["spends_not_included"]

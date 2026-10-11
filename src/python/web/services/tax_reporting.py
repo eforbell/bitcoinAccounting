@@ -230,10 +230,20 @@ def build_tax_year_overview(
     """
     wallet_required = tax_year >= WALLET_SEPARATION_FROM_TAX_YEAR
 
+    # Sales with no wallet recorded cannot be run through wallet-scoped FIFO
+    # (a blank wallet filter means "all wallets"), so count them separately.
     sales_by_wallet: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    unassigned_sales: list[dict[str, Any]] = []
     for row in accounts.trade_query.get_disposals(coin=coin):
-        if _as_datetime(row["createddate"]).year == tax_year:
-            sales_by_wallet[str(row["exchange"])].append(row)
+        if _as_datetime(row["createddate"]).year != tax_year:
+            continue
+        wallet_id = row["exchange"]
+        if wallet_id is None or not str(wallet_id).strip():
+            unassigned_sales.append(row)
+        else:
+            sales_by_wallet[str(wallet_id)].append(row)
+
+    unassigned_sale_count = len(unassigned_sales)
 
     spend_count = sum(
         1
@@ -257,7 +267,7 @@ def build_tax_year_overview(
             )
         )
 
-    if wallet_required or not wallets:
+    if wallet_required or not (wallets or unassigned_sales):
         totals_method = "wallet_fifo"
         gains_totals: dict[str, float] = {
             key: sum(float(getattr(w, key)) for w in wallets)
@@ -278,15 +288,21 @@ def build_tax_year_overview(
         global_summary.pop("lot_count")
         gains_totals = {key: float(value) for key, value in global_summary.items()}
 
+    # Counts cover the same sales as the gains: global FIFO includes the
+    # wallet-less sales, wallet FIFO cannot.
+    counted_unassigned = unassigned_sales if totals_method == "global_fifo" else []
     totals = TaxYearTotalsResource(
-        sale_count=sum(w.sale_count for w in wallets),
+        sale_count=sum(w.sale_count for w in wallets) + len(counted_unassigned),
         wallet_count=len(wallets),
-        quantity_sold=sum(w.quantity_sold for w in wallets),
+        quantity_sold=(
+            sum(w.quantity_sold for w in wallets)
+            + sum(float(row["quantity"]) for row in counted_unassigned)
+        ),
         **gains_totals,
     )
 
     warnings: list[TaxPolicyWarningResource] = []
-    if wallets and not wallet_required:
+    if totals_method == "global_fifo":
         warnings.append(
             TaxPolicyWarningResource(
                 code="global_fifo_historical",
@@ -296,6 +312,23 @@ def build_tax_year_overview(
                     "use wallet-scoped FIFO, so they may not add up to the totals."
                 ),
                 reference_doc=IRS_WALLET_RULES_DOC,
+            )
+        )
+    if unassigned_sale_count:
+        sales_noun = "sale" if unassigned_sale_count == 1 else "sales"
+        if totals_method == "global_fifo":
+            impact = "They are included in the global FIFO totals but not in any wallet row."
+        else:
+            impact = "They are not included in these totals."
+        warnings.append(
+            TaxPolicyWarningResource(
+                code="unassigned_wallet_sales",
+                severity="warning",
+                message=(
+                    f"{unassigned_sale_count} {sales_noun} of {coin} in {tax_year} have no "
+                    f"wallet recorded. {impact} Assign them to a wallet in the Ledger "
+                    "before filing."
+                ),
             )
         )
     if totals.missing_basis_quantity > _DUST:
@@ -329,6 +362,12 @@ def build_tax_year_overview(
             f"{totals.sale_count} {noun} of {coin} across {len(wallets)} {where} in "
             f"tax year {tax_year}. Sales are reportable on Form 8949 even at a loss."
         )
+    elif unassigned_sale_count:
+        noun = "sale" if unassigned_sale_count == 1 else "sales"
+        message = (
+            f"{unassigned_sale_count} {noun} of {coin} in tax year {tax_year}, but none "
+            "has a wallet recorded. Assign them to a wallet to see their gains."
+        )
     else:
         message = f"No sales found for tax year {tax_year} with digital asset {coin}."
 
@@ -337,10 +376,11 @@ def build_tax_year_overview(
         coin=coin,
         wallet_separation_required=wallet_required,
         totals_method=totals_method,
-        has_sales=bool(wallets),
+        has_sales=bool(wallets) or unassigned_sale_count > 0,
         message=message,
         totals=totals,
         wallets=wallets,
+        unassigned_sale_count=unassigned_sale_count,
         spend_count=spend_count,
         warnings=warnings,
     )

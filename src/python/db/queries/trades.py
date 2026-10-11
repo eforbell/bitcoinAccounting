@@ -61,6 +61,7 @@ class TradeQuery:
             - from_curr: The counter currency
             - from_quantity: Amount of counter currency
             - exchange: Wallet/exchange name
+            - id: Ledger transaction ID
 
             Returns empty list [] if no trades found.
         """
@@ -87,12 +88,13 @@ class TradeQuery:
                     WHEN buy_curr = :coin THEN sell
                     WHEN sell_curr = :coin THEN buy
                 END AS from_quantity,
-                exchange
+                exchange,
+                id
             FROM ledger
             WHERE trans_type = 'Trade'
               AND (buy_curr = :coin OR sell_curr = :coin)
               AND (deleted = 0 OR deleted IS NULL)
-            ORDER BY createddate ASC
+            ORDER BY createddate ASC, id ASC
         """
 
         results = self.backend.execute(query, {"coin": coin})
@@ -125,6 +127,7 @@ class TradeQuery:
             - total_cost: Total cost of trade in cost_currency (None if price unavailable)
             - cost_curr_quote_date: Timestamp of price used for conversion (trade date if direct)
             - exchange: Wallet/exchange name where trade occurred
+            - id: Ledger transaction ID
 
             Returns empty list [] if no trades found.
         """
@@ -176,7 +179,8 @@ class TradeQuery:
                 'unit_cost': unit_cost,
                 'total_cost': total_cost,
                 'cost_curr_quote_date': cost_curr_quote_date,
-                'exchange': trade.get('exchange')
+                'exchange': trade.get('exchange'),
+                'id': trade.get('id')
             })
 
         return result
@@ -262,7 +266,7 @@ class TradeQuery:
             query += " AND exchange = :wallet"
             params["wallet"] = wallet
 
-        query += " ORDER BY createddate ASC"
+        query += " ORDER BY createddate ASC, id ASC"
 
         results = self.backend.execute(query, params)
         return [dict(row) for row in results]

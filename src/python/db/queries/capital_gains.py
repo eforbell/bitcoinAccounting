@@ -133,8 +133,12 @@ class CapitalGainCalculator:
         if not all_purchases and not sales:
             return [], []
 
-        # Get trade costs for proceeds calculation
+        # Get trade costs for proceeds calculation, keyed by ledger id so sales
+        # sharing a timestamp (e.g. in different wallets) keep their own proceeds
         all_trade_costs = self.trade_query.get_trade_cost(coin, 'USD')
+        sale_costs_by_id = {
+            t['id']: t for t in all_trade_costs if t['quantity'] < 0
+        }
 
         # Build purchase queue for FIFO matching
         purchase_queue: list[dict[str, Any]] = []
@@ -178,16 +182,11 @@ class CapitalGainCalculator:
                 # Get proceeds (what we sold the coin for in USD) using TradeQuery
                 # Find this specific sale in the trade cost data
                 sale_found = False
-                for t in all_trade_costs:
-                    t_date = t['date']
-                    if isinstance(t_date, str):
-                        t_date = datetime.fromisoformat(t_date.replace('Z', '+00:00'))
-
-                    if t_date == sale_date and t['quantity'] < 0:
-                        proceeds_total = abs(float(t['total_cost'])) if t['total_cost'] is not None else 0.0
-                        proceeds_per_unit = abs(float(t['unit_cost'])) if t['unit_cost'] is not None else 0.0
-                        sale_found = True
-                        break
+                t = sale_costs_by_id.get(sale_id)
+                if t is not None:
+                    proceeds_total = abs(float(t['total_cost'])) if t['total_cost'] is not None else 0.0
+                    proceeds_per_unit = abs(float(t['unit_cost'])) if t['unit_cost'] is not None else 0.0
+                    sale_found = True
 
                 if not sale_found:
                     # Fallback: use price lookup - convert datetime to string for price lookup
