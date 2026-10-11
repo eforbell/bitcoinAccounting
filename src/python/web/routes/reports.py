@@ -1,8 +1,8 @@
 """Reports/visualization routes.
 
-Serves the resurrected ``viz`` charts (orange plot, balance, custody) as PNGs
-and the combined portfolio PDF, generated on demand from the request-scoped
-database backend.
+Serves the chart data as JSON for browser-drawn charts, the resurrected ``viz``
+charts (orange plot, balance, custody) as PNGs, and the combined portfolio
+PDF, generated on demand from the request-scoped database backend.
 """
 
 from __future__ import annotations
@@ -14,10 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from db import DatabaseBackend
 from web.auth import require_authenticated_principal
 from web.dependencies import get_request_backend
+from web.models import ReportSeriesResponse
 from web.services.reports import (
     VALID_CHARTS,
     VALID_RANGES,
     ReportError,
+    build_report_series,
     render_chart_png,
     render_report_pdf,
 )
@@ -32,6 +34,21 @@ router = APIRouter(
 # load without pinning stale data across sessions. Applied to both the PNG and
 # PDF responses for consistent caching semantics.
 _CACHE_CONTROL = "private, max-age=120"
+
+
+@router.get("/series", response_model=ReportSeriesResponse)
+def report_series(
+    range: str = Query("all"),
+    refresh: bool = Query(False),
+    backend: DatabaseBackend = Depends(get_request_backend),
+) -> ReportSeriesResponse:
+    """Return holdings, trades, cost basis and BTC-USD prices for the charts.
+
+    ``refresh`` bypasses the cached price history.
+    """
+    if range not in VALID_RANGES:
+        raise HTTPException(status_code=400, detail=f"Unknown range '{range}'")
+    return build_report_series(backend, date_range=range, refresh=refresh)
 
 
 @router.get("/chart/{chart_type}.png")

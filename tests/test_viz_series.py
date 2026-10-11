@@ -340,6 +340,15 @@ class TestPriceSeries:
         points = price_series(_StubFetcher(frame), ALL_TIME)
         assert points == [PricePoint(datetime(2019, 1, 1), 3800.0)]
 
+    def test_mid_day_window_keeps_first_days_close(self) -> None:
+        frame = pd.DataFrame(
+            {"close": [3800.0, 3900.0]},
+            index=pd.DatetimeIndex(["2020-01-15", "2020-01-16"]),
+        )
+        window = DateWindow(datetime(2020, 1, 15, 14, 30), datetime(2020, 2, 1))
+        points = price_series(_StubFetcher(frame), window)
+        assert points[0] == PricePoint(datetime(2020, 1, 15), 3800.0)
+
     def test_empty_feed_raises(self) -> None:
         with pytest.raises(RuntimeError, match="No BTC-USD price data available"):
             price_series(_StubFetcher(pd.DataFrame()), ALL_TIME)

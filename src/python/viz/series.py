@@ -430,7 +430,10 @@ def price_series(fetcher: PriceDataFetcher, window: DateWindow) -> list[PricePoi
     Raises:
         RuntimeError: The feed returned no rows for the window.
     """
-    frame = fetcher.fetch_btc_price_history(window.start, window.end)
+    # Daily closes are stamped at midnight; start from the window's first day so
+    # a window opening mid-day (first trade, 1Y) still gets that day's close.
+    first_day = window.start.replace(hour=0, minute=0, second=0, microsecond=0)
+    frame = fetcher.fetch_btc_price_history(first_day, window.end)
     if frame.empty:
         raise RuntimeError(
             f"No BTC-USD price data available for range {window.start} to {window.end}"
@@ -440,7 +443,9 @@ def price_series(fetcher: PriceDataFetcher, window: DateWindow) -> list[PricePoi
         for when, close in frame["close"].items()
     ]
     # The fetcher may hand back cached rows beyond the window.
-    points = sorted((p for p in points if window.contains(p.when)), key=lambda p: p.when)
+    points = sorted(
+        (p for p in points if first_day <= p.when <= window.end), key=lambda p: p.when
+    )
     if not points:
         raise RuntimeError(
             f"No BTC-USD price data available for range {window.start} to {window.end}"

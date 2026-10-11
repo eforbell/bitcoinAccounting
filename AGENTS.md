@@ -32,6 +32,11 @@
 - Cost basis is the running average of USD-priced purchases, seeded by purchases before the window; sales shrink the position (`summary.net_btc`) but not the average. `valuation(price)` values the net position, not everything ever bought
 - Escape `$` in matplotlib titles (`\$`): two of them in one string switch on mathtext and mangle the text
 - The TUI keeps using the matplotlib classes and doesn't need feature parity with the web's native charts
+- `GET /api/reports/series?range=` (`build_report_series()`) serves those series as JSON for browser charts: holdings by custody, trades with `wallet_id`/`ledger_id`, basis, summary, BTC-USD closes, and valuation
+- Ledger data always loads; a price feed failure returns `price`/`valuation` as null plus a `price_unavailable` warning rather than an error. An empty ledger is a 200 with `has_transactions=false` and never calls the feed
+- `PriceDataFetcher` goes back to Yahoo whenever its parquet cache doesn't reach "now" (nearly always), so the series keeps its own in-process price cache (`REPORTS_PRICE_CACHE_TTL_SECONDS`, default 900, `refresh=true` bypasses). Ledger writes don't clear it; prices don't depend on the ledger
+- Tests patch `web.services.reports._price_fetcher` with an offline stub; never let route tests reach Yahoo
+- Trades without a USD price get `marker_price_usd` from the nearest close so the chart can still place them
 
 ## Web Tax: Guided Year → Wallet Workflow
 
