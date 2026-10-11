@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import csv
+from collections import defaultdict
+from datetime import datetime, timezone
 from io import StringIO
+from typing import Any
 
 from fastapi import HTTPException, status
 
 from bitcoinAccounts import BitcoinAccounts
+from imports.base import is_fiat
 from web.models import (
     ForecastLotResource,
     ForecastResponse,
@@ -16,11 +20,20 @@ from web.models import (
     GainsReportResponse,
     GainsSummaryResource,
     GainsWorksheetEntryResource,
+    TaxHoldingsResponse,
+    TaxHoldingWalletResource,
     TaxPolicyResource,
     TaxPolicyWarningResource,
+    TaxSalesIndexCoinResource,
+    TaxSalesIndexResponse,
+    TaxYearOverviewResponse,
+    TaxYearTotalsResource,
+    TaxYearWalletSummaryResource,
 )
 
 IRS_WALLET_RULES_DOC = "docs/IRS_2025_WALLET_RULES.md"
+WALLET_SEPARATION_FROM_TAX_YEAR = 2025
+_DUST = 1e-8
 
 
 class TaxPolicyError(ValueError):
@@ -35,7 +48,7 @@ def _tax_policy_warnings(
 ) -> list[TaxPolicyWarningResource]:
     warnings: list[TaxPolicyWarningResource] = []
 
-    if tax_year is not None and tax_year >= 2025 and wallet is None:
+    if tax_year is not None and tax_year >= WALLET_SEPARATION_FROM_TAX_YEAR and wallet is None:
         message = (
             "Tax year 2025 and later requires an explicit wallet filter for "
             "wallet-separated FIFO reporting."
@@ -50,7 +63,7 @@ def _tax_policy_warnings(
                 reference_doc=IRS_WALLET_RULES_DOC,
             )
         )
-    elif tax_year is not None and tax_year < 2025 and wallet is None:
+    elif tax_year is not None and tax_year < WALLET_SEPARATION_FROM_TAX_YEAR and wallet is None:
         warnings.append(
             TaxPolicyWarningResource(
                 code="global_fifo_historical",
@@ -69,7 +82,7 @@ def _tax_policy_warnings(
 def get_tax_policy() -> TaxPolicyResource:
     """Return static tax policy metadata for web clients."""
     return TaxPolicyResource(
-        wallet_separation_required_from_tax_year=2025,
+        wallet_separation_required_from_tax_year=WALLET_SEPARATION_FROM_TAX_YEAR,
         strict_wallet_enforcement_for_exports=True,
         reference_doc=IRS_WALLET_RULES_DOC,
         summary=(
@@ -157,6 +170,195 @@ def build_gains_report(
         lots=lots,
         worksheet=worksheet_rows,
         warnings=warnings,
+    )
+
+
+def _as_datetime(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+def build_sales_index(accounts: BitcoinAccounts) -> TaxSalesIndexResponse:
+    """List every non-fiat coin with sales and the tax years they fall in."""
+    years_by_coin: dict[str, set[int]] = defaultdict(set)
+    for row in accounts.trade_query.get_disposals():
+        coin = str(row["coin"])
+        if is_fiat(coin):
+            continue
+        years_by_coin[coin].add(_as_datetime(row["createddate"]).year)
+
+    coins = [
+        TaxSalesIndexCoinResource(coin=coin, years=sorted(years, reverse=True))
+        for coin, years in sorted(years_by_coin.items())
+    ]
+    return TaxSalesIndexResponse(
+        current_year=datetime.now(timezone.utc).year,
+        coins=coins,
+    )
+
+
+def _summarize_report(report: GainsReportResponse) -> dict[str, float | int]:
+    return {
+        "lot_count": report.summary.lot_count,
+        "proceeds_usd": report.summary.proceeds_usd,
+        "cost_basis_usd": report.summary.cost_basis_usd,
+        "gain_loss_usd": report.summary.gain_loss_usd,
+        "short_term_gain_usd": sum(
+            row.gain_loss_usd for row in report.worksheet if row.term == "Short"
+        ),
+        "long_term_gain_usd": sum(
+            row.gain_loss_usd for row in report.worksheet if row.term == "Long"
+        ),
+        "missing_basis_quantity": sum(
+            row.lot_quantity for row in report.worksheet if row.missing_basis
+        ),
+    }
+
+
+def build_tax_year_overview(
+    accounts: BitcoinAccounts,
+    *,
+    tax_year: int,
+    coin: str = "BTC",
+) -> TaxYearOverviewResponse:
+    """Find every wallet with sales in a tax year and summarize its gains.
+
+    Each wallet is run through wallet-scoped FIFO. For 2025+ the year totals are
+    the sum of those wallet reports; for earlier years the totals come from the
+    historical global FIFO view.
+    """
+    wallet_required = tax_year >= WALLET_SEPARATION_FROM_TAX_YEAR
+
+    sales_by_wallet: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in accounts.trade_query.get_disposals(coin=coin):
+        if _as_datetime(row["createddate"]).year == tax_year:
+            sales_by_wallet[str(row["exchange"])].append(row)
+
+    spend_count = sum(
+        1
+        for row in accounts.trade_query.get_disposals(coin=coin, trans_type="Spend")
+        if _as_datetime(row["createddate"]).year == tax_year
+    )
+
+    wallets: list[TaxYearWalletSummaryResource] = []
+    for wallet_id in sorted(sales_by_wallet):
+        rows = sales_by_wallet[wallet_id]
+        sale_dates = [_as_datetime(row["createddate"]) for row in rows]
+        report = build_gains_report(accounts, tax_year=tax_year, coin=coin, wallet=wallet_id)
+        wallets.append(
+            TaxYearWalletSummaryResource(
+                wallet_id=wallet_id,
+                sale_count=len(rows),
+                quantity_sold=sum(float(row["quantity"]) for row in rows),
+                first_sale_date=min(sale_dates).strftime("%Y-%m-%d"),
+                last_sale_date=max(sale_dates).strftime("%Y-%m-%d"),
+                **_summarize_report(report),
+            )
+        )
+
+    if wallet_required or not wallets:
+        totals_method = "wallet_fifo"
+        gains_totals: dict[str, float] = {
+            key: sum(float(getattr(w, key)) for w in wallets)
+            for key in (
+                "proceeds_usd",
+                "cost_basis_usd",
+                "gain_loss_usd",
+                "short_term_gain_usd",
+                "long_term_gain_usd",
+                "missing_basis_quantity",
+            )
+        }
+    else:
+        totals_method = "global_fifo"
+        global_summary = _summarize_report(
+            build_gains_report(accounts, tax_year=tax_year, coin=coin, wallet=None)
+        )
+        global_summary.pop("lot_count")
+        gains_totals = {key: float(value) for key, value in global_summary.items()}
+
+    totals = TaxYearTotalsResource(
+        sale_count=sum(w.sale_count for w in wallets),
+        wallet_count=len(wallets),
+        quantity_sold=sum(w.quantity_sold for w in wallets),
+        **gains_totals,
+    )
+
+    warnings: list[TaxPolicyWarningResource] = []
+    if wallets and not wallet_required:
+        warnings.append(
+            TaxPolicyWarningResource(
+                code="global_fifo_historical",
+                severity="info",
+                message=(
+                    f"Totals for {tax_year} use historical global FIFO. Per-wallet rows "
+                    "use wallet-scoped FIFO, so they may not add up to the totals."
+                ),
+                reference_doc=IRS_WALLET_RULES_DOC,
+            )
+        )
+    if totals.missing_basis_quantity > _DUST:
+        warnings.append(
+            TaxPolicyWarningResource(
+                code="missing_basis",
+                severity="warning",
+                message=(
+                    f"{totals.missing_basis_quantity:.8f} {coin} sold in {tax_year} has no "
+                    "matching acquisition lot in its wallet and is reported with $0 basis. "
+                    "Record the original purchase or transfer-in basis before filing."
+                ),
+            )
+        )
+    if spend_count:
+        warnings.append(
+            TaxPolicyWarningResource(
+                code="spends_not_included",
+                severity="warning",
+                message=(
+                    f"{spend_count} Spend transaction(s) of {coin} in {tax_year} are "
+                    "disposals too, but are not included in these gains figures."
+                ),
+            )
+        )
+
+    if wallets:
+        noun = "sale" if totals.sale_count == 1 else "sales"
+        where = "wallet" if len(wallets) == 1 else "wallets"
+        message = (
+            f"{totals.sale_count} {noun} of {coin} across {len(wallets)} {where} in "
+            f"tax year {tax_year}. Sales are reportable on Form 8949 even at a loss."
+        )
+    else:
+        message = f"No sales found for tax year {tax_year} with digital asset {coin}."
+
+    return TaxYearOverviewResponse(
+        tax_year=tax_year,
+        coin=coin,
+        wallet_separation_required=wallet_required,
+        totals_method=totals_method,
+        has_sales=bool(wallets),
+        message=message,
+        totals=totals,
+        wallets=wallets,
+        spend_count=spend_count,
+        warnings=warnings,
+    )
+
+
+def build_holdings(accounts: BitcoinAccounts, *, coin: str = "BTC") -> TaxHoldingsResponse:
+    """List wallets with a positive balance of a coin, largest first."""
+    balances = accounts.get_wallet_balance(coin, None)
+    wallets = [
+        TaxHoldingWalletResource(wallet_id=str(wallet_id), balance=float(balance))
+        for wallet_id, balance in balances.items()
+        if float(balance) > _DUST
+    ]
+    wallets.sort(key=lambda w: (-w.balance, w.wallet_id))
+    return TaxHoldingsResponse(
+        coin=coin,
+        total_balance=sum(w.balance for w in wallets),
+        wallets=wallets,
     )
 
 

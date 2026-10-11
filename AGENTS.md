@@ -12,7 +12,7 @@
 ### Runtime Bootstrap
 - `initialize_web_runtime()` is the deployment bootstrap seam: validate config, probe the DB, ensure runtime schema, then exit cleanly
 - SQLite may create core tables via `create_tables()`, but PostgreSQL production bootstrap should verify core tables and fail with an actionable `psql -f src/sql/tables.sql` message if they are missing
-- Web-owned tables like `web_tax_presets` and `web_tax_history` are safe to initialize from the Python web runtime on both backends
+- Web-owned tables like `web_tax_history` are safe to initialize from the Python web runtime on both backends
 
 ### Deploy Assets
 - For the Python web app, prefer a systemd-managed `uvicorn web.app:create_app --factory` service over trying to mirror the Node process model exactly
@@ -23,6 +23,25 @@
 
 - iOS Safari/WKWebView auto-zooms focused form controls when their computed font-size is below 16px; keep interactive `input`, `select`, and `textarea` controls at `font-size: 1rem` minimum
 - Do not rely on surrounding label/container text sizing for form controls; set the control font-size explicitly so mobile breakpoints cannot reintroduce sub-16px inputs
+
+## Web Tax: Guided Year → Wallet Workflow
+
+### Discovery Endpoints
+- `GET /api/tax/sales-index` lists non-fiat coins with Trade sales and their years; `GET /api/tax/overview?tax_year&coin` runs wallet-scoped FIFO for every wallet that sold that year; `GET /api/tax/holdings?coin` lists wallets with a positive balance for forecast selection
+- Overview totals are the sum of wallet reports for 2025+ (`totals_method="wallet_fifo"`) and the global FIFO report before 2025 (`"global_fifo"`), so pre-2025 wallet rows may not sum to totals — say so in a warning
+- Discover sales with `TradeQuery.get_disposals()` and bucket by year in Python (`createddate` is TEXT on SQLite, timestamp on PostgreSQL); do not add DB-specific year extraction
+- Discovery endpoints do not write `web_tax_history`; only real gains/export/forecast runs do
+
+### Missing-Lot Sales
+- `CapitalGainCalculator.get_1099b_data()` used to return `[], []` when a wallet had no purchase lots, silently dropping sales of coins deposited into an exchange and sold there; it now emits them as `UNKNOWN`/$0-basis lots
+- The overview surfaces this as a `missing_basis` warning; `Spend` disposals are counted and flagged (`spends_not_included`) because the FIFO report only covers `Trade` sales
+
+### Frontend
+- The tax page no longer auto-runs gains/forecast on login or navigation (it flooded Recent Runs); `loadTaxPage()` loads the index, overview, and holdings only
+- Cache results in `state.taxOverview` / `state.gainsReport` / `state.forecastResult` and re-render on denomination/privacy toggles instead of re-fetching
+- For 2025+ the gains wallet dropdown has no "All wallets" option, which enforces the export wallet policy in the UI
+- Recent Runs rows are buttons: gains/preview entries restore year/coin/wallet and reload lots, export entries re-download, forecast entries refill the form and rerun
+- CSV exports are fetched as blobs (not `window.location`) so policy errors show inline and Recent Runs refreshes after the download
 
 ## Feature-18: Web Tax Reporting and Forecasting - WTX-001 / WTX-004
 
@@ -42,7 +61,8 @@
 - Good minimum coverage: auth requirement, historical gains summary, 2025+ wallet requirement, CSV export shape, and forecast lot breakdown
 
 ### Web-Owned Tax State
-- Keep saved presets and recent-run history in dedicated web tables such as `web_tax_presets` and `web_tax_history`; this state belongs to the web product layer, not to ledger accounting
+- Keep recent-run history in the dedicated `web_tax_history` table; this state belongs to the web product layer, not to ledger accounting
+- Saved presets were removed (they could be saved and deleted but never applied); the old `web_tax_presets` table is left in place, unused, and not dropped
 - Lazily create the web state tables from the route/service layer with `CREATE TABLE IF NOT EXISTS ...` and explicit `backend.commit()` so both SQLite and PostgreSQL work without separate migrations for the first pass
 - Record web history from the API routes that actually serve gains, preview, export, worksheet, and forecast requests so the stored trail reflects real web usage only
 

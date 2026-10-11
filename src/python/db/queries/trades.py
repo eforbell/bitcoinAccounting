@@ -181,6 +181,45 @@ class TradeQuery:
 
         return result
 
+    def get_disposals(
+        self,
+        coin: str | None = None,
+        trans_type: str = 'Trade',
+    ) -> list[dict[str, Any]]:
+        """Get disposals of any non-empty currency, optionally limited to one coin.
+
+        Used to discover which coins, years, and wallets have sales without
+        running FIFO matching.
+
+        Args:
+            coin: Optional currency code to restrict results to
+            trans_type: Ledger transaction type to treat as a disposal
+                ('Trade' for sales, 'Spend' for spending)
+
+        Returns:
+            List of dicts ordered by date (ascending), each containing
+            createddate, coin, quantity, exchange, and id.
+        """
+        query = """
+            SELECT createddate, sell_curr AS coin, sell AS quantity, exchange, id
+            FROM ledger
+            WHERE trans_type = :trans_type
+                AND sell > 0
+                AND sell_curr IS NOT NULL
+                AND sell_curr <> ''
+                AND (deleted = 0 OR deleted IS NULL)
+        """
+        params: dict[str, Any] = {"trans_type": trans_type}
+
+        if coin is not None:
+            query += " AND sell_curr = :coin"
+            params["coin"] = coin
+
+        query += " ORDER BY createddate ASC, id ASC"
+
+        results = self.backend.execute(query, params)
+        return [dict(row) for row in results]
+
     def get_sales(
         self,
         coin: str,

@@ -203,21 +203,37 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             playwright.expect(page.locator('#tax-view h1')).to_have_text("Tax")
             playwright.expect(page.locator("#policy-summary")).to_contain_text("Wallet-separated FIFO")
 
+            # Choosing a year discovers the wallets that sold in it.
+            page.locator("#gains-year").select_option("2024")
+            playwright.expect(page.locator("#tax-overview-message")).to_contain_text(
+                "1 sale of BTC across 1 wallet in tax year 2024"
+            )
+            playwright.expect(page.locator("#overview-table")).to_contain_text("Strike")
+            playwright.expect(page.locator("#gains-wallet")).to_contain_text("Strike")
             page.get_by_role("button", name="Load Gains").click()
             playwright.expect(page.locator("#gains-lots")).to_have_text("1")
             playwright.expect(page.locator("#gains-table")).to_contain_text("12/01/2024")
 
-            page.locator("#forecast-wallet").fill("Vault")
+            page.locator("#forecast-wallet").select_option("Vault")
             page.locator("#forecast-quantity").fill("0.2")
             page.get_by_role("button", name="Forecast Sale").click()
             playwright.expect(page.locator("#forecast-balance")).to_have_text("0.25000000 BTC")
             playwright.expect(page.locator("#forecast-table")).to_contain_text("2025-12-01")
 
-            page.locator("#preset-name").fill("Vault Forecast")
-            page.locator("#preset-type").select_option("forecast")
-            page.get_by_role("button", name="Save Current Filters").click()
-            playwright.expect(page.locator("#presets-list")).to_contain_text("Vault Forecast")
-            playwright.expect(page.locator("#history-list")).to_contain_text("forecast")
+            playwright.expect(page.locator("#history-list")).to_contain_text("Sale forecast")
+
+            # Recent Runs rows rerun their workflow with the recorded filters.
+            page.locator("#forecast-quantity").fill("0.05")
+            page.locator("#history-list").get_by_role("button", name="Run again: Sale forecast").click()
+            playwright.expect(page.locator("#forecast-quantity")).to_have_value("0.2")
+            playwright.expect(page.locator("#forecast-wallet")).to_have_value("Vault")
+            page.locator("#history-list").get_by_role("button", name="Run again: Gains report").click()
+            playwright.expect(page.locator("#gains-year")).to_have_value("2024")
+            playwright.expect(page.locator("#gains-table")).to_contain_text("12/01/2024")
+            with page.expect_download() as download_info:
+                page.get_by_role("button", name="Export 1099-B CSV").click()
+            assert download_info.value.suggested_filename == "1099b_2024.csv"
+            playwright.expect(page.locator("#history-list")).to_contain_text("1099-B export (CSV)")
 
             # Navigate back to dashboard and click into wallet detail
             page.locator('.app-sidebar .nav-item[data-route="dashboard"]').click()
@@ -537,11 +553,13 @@ def test_mobile_data_views_stay_within_the_viewport(tmp_path: Path) -> None:
             assert_viewport_contained()
 
             page.goto(base_url + "tax", wait_until="networkidle")
-            playwright.expect(page.locator("#gains-cards")).to_be_visible()
+            page.locator("#gains-year").select_option("2024")
+            playwright.expect(page.locator("#overview-cards")).to_be_visible()
+            playwright.expect(page.locator("#overview-cards")).to_contain_text("Strike")
             playwright.expect(page.locator("#forecast-cards")).to_be_visible()
             page.get_by_role("button", name="Load Gains").click()
             playwright.expect(page.locator("#gains-cards")).to_contain_text("12/01/2024")
-            page.locator("#forecast-wallet").fill("Vault")
+            page.locator("#forecast-wallet").select_option("Vault")
             page.locator("#forecast-quantity").fill("0.2")
             page.get_by_role("button", name="Forecast Sale").click()
             playwright.expect(page.locator("#forecast-cards")).to_contain_text("2025-12-01")

@@ -123,12 +123,15 @@ class CapitalGainCalculator:
         # Get all purchases using helper method
         all_purchases = self.get_purchase_lots(coin, wallet)
 
-        if not all_purchases:
-            return [], []
-
         # Get all sales using TradeQuery
         sales_data = self.trade_query.get_sales(coin, wallet=wallet)
         sales = [(s['createddate'], abs(s['quantity']), s['exchange'], s['id']) for s in sales_data]
+
+        # A wallet can hold sales with no purchase lots of its own (e.g. coins
+        # deposited to an exchange and sold there). Those sales still have to be
+        # reported, so fall through and emit them as missing-basis lots.
+        if not all_purchases and not sales:
+            return [], []
 
         # Get trade costs for proceeds calculation
         all_trade_costs = self.trade_query.get_trade_cost(coin, 'USD')

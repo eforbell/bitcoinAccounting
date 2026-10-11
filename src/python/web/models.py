@@ -240,31 +240,79 @@ class ForecastResponse(APIModel):
     warnings: list[TaxPolicyWarningResource]
 
 
-class TaxPresetResource(APIModel):
-    """Saved tax filter preset for the private operator."""
+class TaxSalesIndexCoinResource(APIModel):
+    """A coin with recorded sales and the tax years those sales fall in."""
 
-    preset_id: str
-    name: str
-    preset_type: str
     coin: str
-    tax_year: int | None = None
-    wallet_id: str | None = None
-    quantity: float | None = None
-    sale_price_usd: float | None = None
-    created_at: datetime
-    updated_at: datetime
+    years: list[int]
 
 
-class TaxPresetCreateRequest(APIModel):
-    """Create a saved tax preset."""
+class TaxSalesIndexResponse(APIModel):
+    """Coins and tax years that have sales, used to drive the tax pickers."""
 
-    name: str
-    preset_type: str
-    coin: str = "BTC"
-    tax_year: int | None = None
-    wallet_id: str | None = None
-    quantity: float | None = None
-    sale_price_usd: float | None = None
+    current_year: int
+    coins: list[TaxSalesIndexCoinResource]
+
+
+class TaxYearWalletSummaryResource(APIModel):
+    """Realized gains for one wallet that had sales in a tax year."""
+
+    wallet_id: str
+    sale_count: int
+    quantity_sold: float
+    first_sale_date: str
+    last_sale_date: str
+    lot_count: int
+    proceeds_usd: float
+    cost_basis_usd: float
+    gain_loss_usd: float
+    short_term_gain_usd: float
+    long_term_gain_usd: float
+    missing_basis_quantity: float
+
+
+class TaxYearTotalsResource(APIModel):
+    """Year-level realized gains totals."""
+
+    sale_count: int
+    wallet_count: int
+    quantity_sold: float
+    proceeds_usd: float
+    cost_basis_usd: float
+    gain_loss_usd: float
+    short_term_gain_usd: float
+    long_term_gain_usd: float
+    missing_basis_quantity: float
+
+
+class TaxYearOverviewResponse(APIModel):
+    """Answer to "did I sell anything this tax year, and where?"."""
+
+    tax_year: int
+    coin: str
+    wallet_separation_required: bool
+    totals_method: str
+    has_sales: bool
+    message: str
+    totals: TaxYearTotalsResource
+    wallets: list[TaxYearWalletSummaryResource]
+    spend_count: int
+    warnings: list[TaxPolicyWarningResource]
+
+
+class TaxHoldingWalletResource(APIModel):
+    """A wallet currently holding a positive balance of a coin."""
+
+    wallet_id: str
+    balance: float
+
+
+class TaxHoldingsResponse(APIModel):
+    """Wallets that could fund a hypothetical sale."""
+
+    coin: str
+    total_balance: float
+    wallets: list[TaxHoldingWalletResource]
 
 
 class TaxHistoryEntryResource(APIModel):
