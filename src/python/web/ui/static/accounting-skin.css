@@ -1088,8 +1088,8 @@ td.num {
 
 /* ══════════════════════════════════════════════════════════════════════════
    REPORTS / VISUALIZATIONS
-   Server-rendered matplotlib charts (PNG) + PDF export. Charts are white
-   images, so each frame gets a white matte for consistent light/dark reading.
+   Chart.js canvases drawn from /api/reports/series, coloured from the theme
+   tokens at render time, plus the server-rendered PDF export.
    ══════════════════════════════════════════════════════════════════════════ */
 
 .reports-toolbar {
@@ -1097,6 +1097,20 @@ td.num {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+#reports-status:empty {
+  display: none;
+}
+
+.reports-summary {
+  margin-top: 8px;
+}
+
+@media (min-width: 769px) {
+  .summary-grid.reports-summary {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
 }
 
 .reports-charts {
@@ -1124,44 +1138,54 @@ td.num {
 
 .report-chart-frame {
   position: relative;
-  min-height: 220px;
-  background: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  height: 340px;
+  padding: 12px 12px 8px;
 }
 
-.report-chart-frame img {
+.report-chart-frame canvas {
   display: block;
   width: 100%;
-  height: auto;
-  max-width: 100%;
+  height: 100%;
 }
 
 /* Loading spinner */
 .report-chart-frame.is-loading::after {
   content: "";
   position: absolute;
+  top: 50%;
+  left: 50%;
   width: 28px;
   height: 28px;
-  border: 3px solid rgba(0, 0, 0, 0.15);
+  margin: -14px 0 0 -14px;
+  border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: report-spin 0.8s linear infinite;
 }
 
-.report-chart-frame.is-loading img {
+.report-chart-frame.is-loading canvas {
   opacity: 0.35;
 }
 
-/* Error / empty state */
-.report-chart-frame.is-error img {
+/* Error / empty state: the message comes from data-message */
+.report-chart-frame.is-error canvas,
+.report-chart-frame.is-empty canvas {
   display: none;
 }
 
-.report-chart-frame.is-error::after {
-  content: "No data for this range";
-  color: #6b7280;
+.report-chart-frame.is-error,
+.report-chart-frame.is-empty {
+  height: auto;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.report-chart-frame.is-error::after,
+.report-chart-frame.is-empty::after {
+  content: attr(data-message);
+  color: var(--muted);
   font-size: var(--text-sm, 0.85rem);
   padding: 24px;
   text-align: center;
@@ -1178,5 +1202,9 @@ td.num {
   }
   .report-chart figcaption {
     padding: 10px 12px;
+  }
+  .report-chart-frame {
+    height: 280px;
+    padding: 8px 6px 4px;
   }
 }

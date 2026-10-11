@@ -1294,7 +1294,7 @@
             <div>
               <p class="eyebrow">Private Sovereignty Treasury</p>
               <h1>Reports</h1>
-              <p class="muted">Visual portfolio insights and a downloadable PDF report.</p>
+              <p class="muted">Interactive portfolio charts and a downloadable PDF report.</p>
             </div>
             <div class="reports-toolbar">
               <div id="reports-range" class="seg" role="group" aria-label="Date range">
@@ -1309,23 +1309,48 @@
 
           <p id="reports-status" class="status-line"></p>
 
+          <div class="summary-grid reports-summary">
+            <article class="summary-card">
+              <span class="summary-label">Holdings</span>
+              <strong id="reports-holdings">-</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Self-Custody</span>
+              <strong id="reports-self-custody">-</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Average Cost</span>
+              <strong id="reports-avg-cost">-</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Current Value</span>
+              <strong id="reports-value">-</strong>
+            </article>
+            <article class="summary-card">
+              <span class="summary-label">Unrealized Gain</span>
+              <strong id="reports-gain">-</strong>
+            </article>
+          </div>
+
+          <div id="reports-warnings" class="warning-stack"></div>
+
           <div class="reports-charts">
             <figure class="report-chart">
               <figcaption>Orange Plot — Bitcoin Accumulation Strategy</figcaption>
-              <div class="report-chart-frame">
-                <img id="report-img-orange" alt="Orange plot: purchases and sales over BTC-USD price history">
+              <div class="report-chart-frame" id="report-frame-orange">
+                <canvas id="report-canvas-orange" role="img" aria-label="Orange plot: purchases and sales over BTC-USD price history"></canvas>
               </div>
             </figure>
             <figure class="report-chart">
               <figcaption>Bitcoin Stack Growth Over Time</figcaption>
-              <div class="report-chart-frame">
-                <img id="report-img-balance" alt="Cumulative BTC balance over time">
+              <div class="report-chart-frame" id="report-frame-balance">
+                <canvas id="report-canvas-balance" role="img" aria-label="Cumulative BTC balance over time"></canvas>
               </div>
             </figure>
             <figure class="report-chart">
               <figcaption>Holdings by Custody Type</figcaption>
-              <div class="report-chart-frame">
-                <img id="report-img-custody" alt="BTC holdings by custody type over time">
+              <div class="report-chart-frame" id="report-frame-custody">
+                <canvas id="report-canvas-custody" role="img" aria-label="BTC holdings by custody type over time"></canvas>
               </div>
             </figure>
           </div>
@@ -1398,6 +1423,8 @@
   <script src="static/theme.js"></script>
   <script src="static/denom.js"></script>
   <script src="static/privacy.js"></script>
+  <script src="static/vendor/chart.umd.min.js"></script>
+  <script src="static/vendor/chartjs-adapter-date-fns.bundle.min.js"></script>
   <script src="static/app.js"></script>
 </body>
 </html>

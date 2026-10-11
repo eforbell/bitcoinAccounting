@@ -1,9 +1,10 @@
-"""Regression tests for opening-balance seeding in balance/custody charts.
+"""Regression tests for opening-balance seeding in the holdings series.
 
 Narrow date ranges (1Y/YTD/5Y) must start from the holdings actually on hand at
 the window's start, not from zero. Transactions before the window are folded
 into an opening balance; the "all" range starts before any trade so its opening
-is zero (backward compatible).
+is zero (backward compatible). The balance and custody charts both draw this
+series.
 """
 
 from __future__ import annotations
@@ -14,9 +15,7 @@ import pytest
 
 from bitcoinAccounts import BitcoinAccounts
 from db import SqliteBackend
-from viz.balance_chart import BalanceChart
-from viz.config import VizConfig
-from viz.custody_chart import CustodyChart
+from viz.series import DateWindow, holdings_series
 
 
 @pytest.fixture
@@ -40,48 +39,24 @@ def accounts() -> BitcoinAccounts:
     acc.close()
 
 
-def _config(start: datetime, end: datetime) -> VizConfig:
-    return VizConfig(date_range=(start, end), output_dir="/tmp")
+def test_narrow_range_seeds_opening(accounts: BitcoinAccounts) -> None:
+    window = DateWindow(datetime(2022, 1, 1), datetime(2022, 12, 31))  # no trades in-window
+    points = holdings_series(accounts.backend, window).points
+
+    opening = points[0]
+    assert opening.total == pytest.approx(0.30)                      # prior holdings
+    assert opening.by_custody["self-custodied"] == pytest.approx(0.30)
+    assert opening.by_custody["multisig"] == pytest.approx(0.0)      # 2023 buy is later
+    # No in-window activity, so the closing point matches the opening.
+    assert points[-1].total == pytest.approx(0.30)
+    assert points[-1].by_custody["self-custodied"] == pytest.approx(0.30)
 
 
-def test_balance_narrow_range_seeds_opening(accounts: BitcoinAccounts) -> None:
-    start, end = datetime(2022, 1, 1), datetime(2022, 12, 31)  # no trades in-window
-    chart = BalanceChart(accounts.backend, _config(start, end))
-    trades = chart.trade_query.get_trades("BTC")
-    data = chart._calculate_cumulative_balance(trades, start, end)
+def test_all_range_starts_from_zero(accounts: BitcoinAccounts) -> None:
+    window = DateWindow(datetime(2020, 1, 1), datetime(2024, 1, 1))  # before any trade
+    points = holdings_series(accounts.backend, window).points
 
-    assert data[0]["balance"] == pytest.approx(0.30)   # opening = prior holdings
-    assert data[-1]["balance"] == pytest.approx(0.30)  # nothing added in-window
-
-
-def test_balance_all_range_starts_from_zero(accounts: BitcoinAccounts) -> None:
-    start, end = datetime(2020, 1, 1), datetime(2024, 1, 1)  # before any trade
-    chart = BalanceChart(accounts.backend, _config(start, end))
-    trades = chart.trade_query.get_trades("BTC")
-    data = chart._calculate_cumulative_balance(trades, start, end)
-
-    assert data[0]["balance"] == pytest.approx(0.0)
-    assert data[-1]["balance"] == pytest.approx(0.50)
-
-
-def test_custody_narrow_range_seeds_opening(accounts: BitcoinAccounts) -> None:
-    start, end = datetime(2022, 1, 1), datetime(2022, 12, 31)
-    chart = CustodyChart(accounts.backend, _config(start, end))
-    data = chart._get_custody_balances(start, end)
-
-    opening = data[0]
-    assert opening["self-custodied"] == pytest.approx(0.30)  # from pre-window buy
-    assert opening["multisig"] == pytest.approx(0.0)         # 2023 buy is later
-    # No in-window activity, so the closing snapshot matches the opening.
-    assert data[-1]["self-custodied"] == pytest.approx(0.30)
-
-
-def test_custody_all_range_starts_from_zero(accounts: BitcoinAccounts) -> None:
-    start, end = datetime(2020, 1, 1), datetime(2024, 1, 1)
-    chart = CustodyChart(accounts.backend, _config(start, end))
-    data = chart._get_custody_balances(start, end)
-
-    assert data[0]["self-custodied"] == pytest.approx(0.0)
-    assert data[0]["multisig"] == pytest.approx(0.0)
-    assert data[-1]["self-custodied"] == pytest.approx(0.30)
-    assert data[-1]["multisig"] == pytest.approx(0.20)
+    assert points[0].total == pytest.approx(0.0)
+    assert points[-1].total == pytest.approx(0.50)
+    assert points[-1].by_custody["self-custodied"] == pytest.approx(0.30)
+    assert points[-1].by_custody["multisig"] == pytest.approx(0.20)

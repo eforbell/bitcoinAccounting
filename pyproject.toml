@@ -55,4 +55,5 @@ web = [
     "ui/*.html",
     "ui/static/*",
     "ui/static/brand/*",
+    "ui/static/vendor/*",
 ]

@@ -537,3 +537,123 @@ class SessionResponse(APIModel):
 
     authenticated: bool
     username: str
+
+
+class ReportWarningResource(APIModel):
+    """Operator-facing note about gaps in a report's data."""
+
+    code: str
+    severity: str
+    message: str
+
+
+class ReportWindowResource(APIModel):
+    """Inclusive date window a report covers."""
+
+    range: str
+    start: datetime
+    end: datetime
+
+
+class HoldingsPointResource(APIModel):
+    """End-of-day BTC holdings, split by custody type."""
+
+    date: datetime
+    total_btc: float
+    self_custodied_btc: float
+    multisig_btc: float
+    custodial_btc: float
+    unknown_btc: float
+
+
+class HoldingsSeriesResource(APIModel):
+    """BTC holdings over the window; the first point is the opening balance."""
+
+    points: list[HoldingsPointResource]
+    latest: HoldingsPointResource
+    self_custody_pct: float | None = None
+
+
+class ReportTradeResource(APIModel):
+    """A BTC purchase or sale inside the window."""
+
+    date: datetime
+    side: str
+    btc: float
+    unit_price_usd: float | None = None
+    total_usd: float | None = None
+    # unit_price_usd, or the nearest market close when the trade has no USD price.
+    marker_price_usd: float | None = None
+    wallet_id: str | None = None
+    ledger_id: int | None = None
+
+
+class BasisPointResource(APIModel):
+    """Running average cost of USD-priced purchases."""
+
+    date: datetime
+    average_cost_usd: float
+
+
+class AccumulationSummaryResource(APIModel):
+    """Trade totals through the window end."""
+
+    purchase_count: int
+    sale_count: int
+    btc_purchased: float
+    btc_sold: float
+    net_btc: float
+    invested_usd: float
+    invested_in_window_usd: float
+    average_cost_usd: float | None = None
+    purchases_missing_cost: int
+
+
+class AccumulationSeriesResource(APIModel):
+    """Trades, cost basis and totals for the orange plot."""
+
+    trades: list[ReportTradeResource]
+    basis: list[BasisPointResource]
+    summary: AccumulationSummaryResource
+
+
+class PricePointResource(APIModel):
+    """Daily BTC-USD close."""
+
+    date: datetime
+    close_usd: float
+
+
+class PriceSeriesResource(APIModel):
+    """BTC-USD closes for the window, oldest first."""
+
+    points: list[PricePointResource]
+    latest: PricePointResource
+
+
+class ValuationResource(APIModel):
+    """Holdings at the window end valued at the latest close in the window."""
+
+    as_of: datetime
+    price_usd: float
+    current_value_usd: float
+    # Null when no purchase has a USD cost: the basis is unknown, not zero.
+    position_cost_usd: float | None = None
+    unrealized_gain_usd: float | None = None
+    unrealized_gain_pct: float | None = None
+
+
+class ReportSeriesResponse(APIModel):
+    """Data behind the reports page charts.
+
+    ``price`` and ``valuation`` are null when the price feed is unavailable;
+    holdings and trades still load.
+    """
+
+    window: ReportWindowResource
+    has_transactions: bool
+    holdings: HoldingsSeriesResource
+    accumulation: AccumulationSeriesResource
+    price: PriceSeriesResource | None = None
+    valuation: ValuationResource | None = None
+    warnings: list[ReportWarningResource]
