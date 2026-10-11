@@ -632,13 +632,14 @@ class PriceSeriesResource(APIModel):
 
 
 class ValuationResource(APIModel):
-    """Net traded position valued at the latest close in the window."""
+    """Holdings at the window end valued at the latest close in the window."""
 
     as_of: datetime
     price_usd: float
     current_value_usd: float
-    position_cost_usd: float
-    unrealized_gain_usd: float
+    # Null when no purchase has a USD cost: the basis is unknown, not zero.
+    position_cost_usd: float | None = None
+    unrealized_gain_usd: float | None = None
     unrealized_gain_pct: float | None = None
 
 

@@ -88,17 +88,19 @@ def _years_before(moment: datetime, years: int) -> datetime:
 
 
 def _first_btc_activity(backend: DatabaseBackend) -> datetime | None:
-    row = backend.execute_one(
+    # Take the minimum after parsing: SQLite stores createddate as TEXT, and
+    # MIN() would sort "2024-01-01T09:00" after "2024-01-01 10:00".
+    rows = backend.execute(
         """
-        SELECT MIN(createddate) AS min_date
+        SELECT DISTINCT createddate
         FROM ledger
         WHERE (buy_curr = 'BTC' OR sell_curr = 'BTC')
           AND (deleted = 0 OR deleted IS NULL)
+          AND createddate IS NOT NULL
         """
     )
-    if not row or not row.get("min_date"):
-        return None
-    return to_naive_datetime(row["min_date"])
+    dates = [to_naive_datetime(row["createddate"]) for row in rows if row.get("createddate")]
+    return min(dates) if dates else None
 
 
 def resolve_window(
@@ -261,10 +263,12 @@ class BasisPoint:
 
 @dataclass(frozen=True)
 class Valuation:
+    """Holdings valued at a price. Cost and gain are None when no purchase has a USD cost."""
+
     price_usd: float
     current_value_usd: float
-    position_cost_usd: float
-    unrealized_gain_usd: float
+    position_cost_usd: float | None
+    unrealized_gain_usd: float | None
     unrealized_gain_pct: float | None
 
 
@@ -290,15 +294,21 @@ class AccumulationSummary:
     def net_btc(self) -> float:
         return self.btc_purchased - self.btc_sold
 
-    def valuation(self, price_usd: float) -> Valuation:
-        """Value the net traded position at ``price_usd``.
+    def valuation(self, price_usd: float, holdings_btc: float) -> Valuation:
+        """Value ``holdings_btc`` (the actual balance) at ``price_usd``.
 
-        The position is priced at the average cost; purchases without a USD
-        price are assumed to cost the same average.
+        Valuing the balance rather than ``net_btc`` keeps Current Value in step
+        with Holdings: spends, mining, income and transfer fees all count. The
+        holdings are costed at the average purchase cost; with no USD-priced
+        purchase the cost is unknown, so cost and gain are None rather than a
+        gain measured against zero.
         """
-        position = max(self.net_btc, 0.0)
+        # Float dust from adding and subtracting rows counts as an empty stack.
+        position = holdings_btc if holdings_btc > BTC_EPSILON else 0.0
         current_value = position * price_usd
-        position_cost = position * (self.average_cost_usd or 0.0)
+        if self.average_cost_usd is None:
+            return Valuation(price_usd, current_value, None, None, None)
+        position_cost = position * self.average_cost_usd
         gain = current_value - position_cost
         pct = gain / position_cost * 100 if position_cost > 0 else None
         return Valuation(price_usd, current_value, position_cost, gain, pct)

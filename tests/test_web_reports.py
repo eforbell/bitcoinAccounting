@@ -208,6 +208,35 @@ def test_series_caches_prices_until_refresh(client: TestClient, stub_prices) -> 
     assert stub_prices.calls == 2
 
 
+def test_series_backs_off_after_price_feed_failure(client: TestClient, stub_prices) -> None:
+    # During an outage, queued requests fail fast instead of each retrying Yahoo.
+    stub_prices.fail = True
+    for _ in range(3):
+        body = client.get("/api/reports/series?range=1y").json()
+        assert [w["code"] for w in body["warnings"]] == ["price_unavailable"]
+    assert stub_prices.calls == 1
+
+    # refresh=true retries at once, and a success clears the backoff.
+    stub_prices.fail = False
+    assert client.get("/api/reports/series?range=1y&refresh=true").json()["price"] is not None
+    assert stub_prices.calls == 2
+
+
+def test_series_valuation_without_usd_cost() -> None:
+    backend = SqliteBackend(":memory:", auto_create_tables=True)
+    try:
+        BitcoinAccounts(backend=backend).execute_trade(
+            trade_date=datetime(2023, 2, 1), buy=0.5, sell=4500, sell_curr="EUR", exchange="Kraken",
+        )
+        series = reports_service.build_report_series(backend, date_range="all")
+    finally:
+        backend.close()
+    assert series.valuation is not None
+    assert series.valuation.current_value_usd == pytest.approx(0.5 * series.price.latest.close_usd)
+    assert series.valuation.position_cost_usd is None
+    assert series.valuation.unrealized_gain_usd is None
+
+
 def test_series_trade_without_usd_price(
     client: TestClient, seeded_accounts: BitcoinAccounts
 ) -> None:

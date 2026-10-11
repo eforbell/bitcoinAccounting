@@ -2812,9 +2812,12 @@ function renderOrangeChart(data) {
   const accumulation = data.accumulation;
   const accent = reportColor('--accent');
   const datasets = [];
+  // Against labelled USD ticks the basis line and trade markers would show the
+  // average cost and what was paid, so privacy mode leaves only the public price.
+  const hidePersonal = privacyOn();
 
   // Bubble area scales with the trade size, relative to the largest trade.
-  const placed = accumulation.trades.filter((t) => t.marker_price_usd != null);
+  const placed = hidePersonal ? [] : accumulation.trades.filter((t) => t.marker_price_usd != null);
   const maxBtc = placed.reduce((max, t) => Math.max(max, t.btc), 0);
   const frame = byId('report-frame-orange');
   const spread = frame && frame.clientWidth < 600 ? 4 : 9;
@@ -2836,7 +2839,7 @@ function renderOrangeChart(data) {
       order: side === 'sell' ? 0 : 1,
     });
   }
-  if (accumulation.basis.length) {
+  if (accumulation.basis.length && !hidePersonal) {
     datasets.push({
       kind: 'basis',
       label: 'Average cost',
@@ -2865,7 +2868,9 @@ function renderOrangeChart(data) {
 
   if (!datasets.length) {
     destroyReportChart('orange');
-    setReportFrame('orange', 'is-empty', 'No trades or price data for this range');
+    setReportFrame('orange', 'is-empty', hidePersonal
+      ? 'Trades and average cost are hidden in privacy mode'
+      : 'No trades or price data for this range');
     return;
   }
 
@@ -2873,6 +2878,11 @@ function renderOrangeChart(data) {
     title: 'USD',
     ticks: { callback: (value) => marketAxisFormat.format(value) },
   });
+  options.plugins.subtitle = {
+    display: hidePersonal,
+    text: 'Trades and average cost are hidden in privacy mode',
+    color: reportColor('--muted'),
+  };
   options.plugins.tooltip.callbacks.label = (ctx) => {
     if (ctx.dataset.kind === 'price') return `BTC-USD ${marketPriceFormat.format(ctx.parsed.y)}`;
     if (ctx.dataset.kind === 'basis') return `Average cost ${currency(ctx.parsed.y)}`;
@@ -2961,7 +2971,7 @@ function renderReportSummary(data) {
   setText('reports-avg-cost', summary.average_cost_usd != null ? currency(summary.average_cost_usd) : '-');
   setText('reports-value', valuation ? currency(valuation.current_value_usd) : '-');
   let gain = '-';
-  if (valuation) {
+  if (valuation && valuation.unrealized_gain_usd != null) {
     gain = currency(valuation.unrealized_gain_usd);
     // The percentage plus the public price would give away the average cost.
     if (valuation.unrealized_gain_pct != null && !privacyOn()) {
@@ -3024,6 +3034,17 @@ async function loadReports() {
   if (pdfLink) {
     pdfLink.href = reportsUrl('report.pdf', { range });
     pdfLink.setAttribute('download', `btc_report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
+  // Redraw whatever is on screen before fetching: privacy or denomination may
+  // have changed while another page was open, and the cards and canvases
+  // would otherwise show the old amounts until the response lands.
+  if (reports.data && reports.data.window.range === range) {
+    renderReports();
+  } else {
+    reports.data = null;
+    renderReports();
+    for (const chart of REPORT_CHARTS) destroyReportChart(chart);
   }
 
   const requestId = ++reports.requestId;

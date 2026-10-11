@@ -456,15 +456,22 @@ class TestOrangePlot:
         temp_output_dir: Path,
         sample_price_data: pd.DataFrame
     ) -> None:
-        """Current Value prices the position left after the 0.1 BTC sale."""
-        from src.python.viz.series import accumulation_series, price_series, resolve_window
+        """Current Value prices the holdings left after the 0.1 BTC sale."""
+        from src.python.viz.series import (
+            accumulation_series,
+            holdings_series,
+            price_series,
+            resolve_window,
+        )
 
         plot = OrangePlot(sample_backend, VizConfig(output_dir=temp_output_dir))
         with patch.object(plot.price_fetcher, 'fetch_btc_price_history') as mock_fetch:
             mock_fetch.return_value = sample_price_data
             window = resolve_window(sample_backend, 'all')
             prices = price_series(plot.price_fetcher, window)
-        fig = plot._create_plot(prices, accumulation_series(sample_backend, window))
+        holdings = holdings_series(sample_backend, window).latest.total
+        assert holdings == pytest.approx(0.7)
+        fig = plot._create_plot(prices, accumulation_series(sample_backend, window), holdings)
 
         latest_close = float(sample_price_data['close'].iloc[-1])
         title = fig.axes[0].get_title()

@@ -87,6 +87,14 @@ _PRICE_CACHE_TTL_SECONDS = int(os.getenv("REPORTS_PRICE_CACHE_TTL_SECONDS", "900
 _price_cache: dict[str, tuple[float, list[PricePoint]]] = {}
 _price_lock = threading.Lock()
 
+# A failed fetch is remembered briefly (key -> retry_after) so requests queued
+# behind the lock during an outage fail fast instead of each waiting out
+# another upstream timeout. ``refresh=True`` retries immediately.
+_PRICE_FAILURE_BACKOFF_SECONDS = int(os.getenv("REPORTS_PRICE_FAILURE_BACKOFF_SECONDS", "60"))
+_price_failures: dict[str, float] = {}
+
+_PRICE_FEED_ERRORS = (ImportError, OSError, RuntimeError, ValueError)
+
 
 class ReportError(RuntimeError):
     """Raised when the report cannot be generated (e.g. no data)."""
@@ -121,6 +129,7 @@ def clear_price_cache() -> None:
     """Drop cached BTC-USD price history."""
     with _price_lock:
         _price_cache.clear()
+        _price_failures.clear()
 
 
 def _config(output_dir: Path, date_range: str) -> VizConfig:
@@ -182,7 +191,15 @@ def _load_prices(date_range: str, window: DateWindow, refresh: bool) -> list[Pri
         entry = _price_cache.get(key)
         if entry is not None and not refresh and time.monotonic() < entry[0]:
             return entry[1]
-        points = price_series(_price_fetcher(), window)
+        if not refresh and time.monotonic() < _price_failures.get(key, 0.0):
+            raise RuntimeError("BTC-USD price feed failed recently; waiting before retrying")
+        try:
+            points = price_series(_price_fetcher(), window)
+        except _PRICE_FEED_ERRORS:
+            if _PRICE_FAILURE_BACKOFF_SECONDS > 0:
+                _price_failures[key] = time.monotonic() + _PRICE_FAILURE_BACKOFF_SECONDS
+            raise
+        _price_failures.pop(key, None)
         if _PRICE_CACHE_TTL_SECONDS > 0:
             _price_cache[key] = (time.monotonic() + _PRICE_CACHE_TTL_SECONDS, points)
         return points
@@ -227,7 +244,7 @@ def build_report_series(
     if holdings.has_transactions:
         try:
             prices = _load_prices(date_range, window, refresh)
-        except (ImportError, OSError, RuntimeError, ValueError):
+        except _PRICE_FEED_ERRORS:
             warnings.append(ReportWarningResource(
                 code="price_unavailable",
                 severity="warning",
@@ -287,8 +304,8 @@ def build_report_series(
             points=[PricePointResource(date=p.when, close_usd=p.close_usd) for p in prices],
             latest=PricePointResource(date=latest.when, close_usd=latest.close_usd),
         )
-        if accumulation.has_trades:
-            valuation = summary.valuation(latest.close_usd)
+        if holdings.has_transactions:
+            valuation = summary.valuation(latest.close_usd, holdings.latest.total)
             valuation_resource = ValuationResource(
                 as_of=latest.when,
                 price_usd=valuation.price_usd,

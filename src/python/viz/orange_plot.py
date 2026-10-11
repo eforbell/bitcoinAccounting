@@ -24,6 +24,7 @@ from viz.series import (
     PricePoint,
     TradePoint,
     accumulation_series,
+    holdings_series,
     nearest_price,
     price_series,
     resolve_window,
@@ -61,8 +62,9 @@ class OrangePlot:
             raise ValueError("No Bitcoin transactions found. Start stacking sats!")
 
         prices = price_series(self.price_fetcher, window)
+        holdings_btc = holdings_series(self.backend, window).latest.total
 
-        fig = self._create_plot(prices, series)
+        fig = self._create_plot(prices, series, holdings_btc)
 
         output_path = self._get_output_path()
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -98,8 +100,10 @@ class OrangePlot:
             zorder=5,
         )
 
-    def _create_plot(self, prices: list[PricePoint], series: AccumulationSeries) -> Figure:
-        """Create the orange plot figure."""
+    def _create_plot(
+        self, prices: list[PricePoint], series: AccumulationSeries, holdings_btc: float
+    ) -> Figure:
+        """Create the orange plot figure; ``holdings_btc`` is the balance it values."""
         fig, ax = plt.subplots(figsize=(10, 6))
 
         ax.plot(
@@ -134,7 +138,7 @@ class OrangePlot:
         ax.legend(loc="upper left", fontsize=10)
 
         summary = series.summary
-        valuation = summary.valuation(prices[-1].close_usd)
+        valuation = summary.valuation(prices[-1].close_usd, holdings_btc)
         if valuation.unrealized_gain_pct is None:
             gain_text = "n/a"
         else:

@@ -119,6 +119,17 @@ class TestResolveWindow:
         window = resolve_window(trades_backend, "all", now=self.NOW)
         assert window == DateWindow(datetime(2019, 11, 2, 8), self.NOW)
 
+    def test_all_starts_at_earliest_row_across_date_formats(self, backend: SqliteBackend) -> None:
+        # SQLite compares TEXT: "2024-01-01T09:00" sorts after "2024-01-01 10:00".
+        _ledger(
+            backend,
+            ("2024-01-01 10:00:00", "Trade", "BTC", 0.1, "USD", 4000.0, "Coinbase"),
+            ("2024-01-01T09:00:00", "Trade", "BTC", 0.1, "USD", 4000.0, "Coinbase"),
+        )
+        window = resolve_window(backend, "all", now=self.NOW)
+        assert window.start == datetime(2024, 1, 1, 9)
+        assert len(accumulation_series(backend, window).purchases) == 2
+
     def test_all_on_empty_ledger_falls_back_to_last_year(self, backend: SqliteBackend) -> None:
         window = resolve_window(backend, "all", now=self.NOW)
         assert window.start == datetime(2025, 1, 1)
@@ -291,20 +302,34 @@ class TestAccumulationSeries:
         assert (summary.purchase_count, summary.sale_count) == (2, 0)
         assert summary.net_btc == pytest.approx(0.8)
 
-    def test_valuation_subtracts_sales(self, trades_backend: SqliteBackend) -> None:
+    def test_valuation_prices_holdings(self, trades_backend: SqliteBackend) -> None:
         # Current Value used to price every BTC ever purchased, ignoring sales.
         summary = accumulation_series(trades_backend, ALL_TIME).summary
-        valuation = summary.valuation(20000.0)
-        assert summary.net_btc == pytest.approx(0.7)
+        holdings = holdings_series(trades_backend, ALL_TIME).latest.total
+        valuation = summary.valuation(20000.0, holdings)
+        assert holdings == pytest.approx(0.7)
         assert valuation.current_value_usd == pytest.approx(14000.0)
         assert valuation.position_cost_usd == pytest.approx(0.7 * 10750.0)
         assert valuation.unrealized_gain_usd == pytest.approx(14000.0 - 0.7 * 10750.0)
         assert valuation.unrealized_gain_pct == pytest.approx((20000.0 / 10750.0 - 1) * 100)
 
+    def test_valuation_follows_spends(self, trades_backend: SqliteBackend) -> None:
+        # A Spend isn't a trade, so net_btc misses it; the balance doesn't.
+        _ledger(trades_backend, ("2022-03-01 12:00:00", "Spend", "", 0.0, "BTC", 0.7, "Coinbase"))
+        summary = accumulation_series(trades_backend, ALL_TIME).summary
+        holdings = holdings_series(trades_backend, ALL_TIME).latest.total
+        assert summary.net_btc == pytest.approx(0.7)
+        valuation = summary.valuation(20000.0, holdings)
+        assert valuation.current_value_usd == pytest.approx(0.0)
+        assert valuation.position_cost_usd == pytest.approx(0.0)
+
     def test_valuation_without_known_cost(self, backend: SqliteBackend) -> None:
+        # No USD cost means the basis is unknown, not zero: no gain is invented.
         _ledger(backend, ("2020-01-15 10:00:00", "Trade", "BTC", 0.5, "EUR", 4500.0, "Kraken"))
-        valuation = accumulation_series(backend, ALL_TIME).summary.valuation(20000.0)
+        valuation = accumulation_series(backend, ALL_TIME).summary.valuation(20000.0, 0.5)
         assert valuation.current_value_usd == pytest.approx(10000.0)
+        assert valuation.position_cost_usd is None
+        assert valuation.unrealized_gain_usd is None
         assert valuation.unrealized_gain_pct is None
 
     def test_no_trades(self, backend: SqliteBackend) -> None:

@@ -29,11 +29,12 @@
 - Every number a report shows comes from `viz/series.py` (`resolve_window`, `holdings_series`, `accumulation_series`, `price_series`); `OrangePlot`/`BalanceChart`/`CustodyChart`/`PDFReport` only draw. Web native charts should read the same series so the browser and the PDF agree
 - Holdings count every non-deleted BTC ledger row except `Stake` buys, matching `BalanceCalculator.get_balance()`; the balance chart used to count `Trade` rows only and drifted from the real balance
 - Holdings are grouped per day so an exchange withdrawal and its wallet deposit don't draw a dip; rows before the window fold into the opening point
-- Cost basis is the running average of USD-priced purchases, seeded by purchases before the window; sales shrink the position (`summary.net_btc`) but not the average. `valuation(price)` values the net position, not everything ever bought
+- Cost basis is the running average of USD-priced purchases, seeded by purchases before the window; sales lower `summary.net_btc` but not the average. `valuation(price, holdings_btc)` values the actual balance (spends, mining and fees included) so Current Value agrees with Holdings; with no USD-priced purchase the cost and gain are `None`, never a gain measured against $0
 - Escape `$` in matplotlib titles (`\$`): two of them in one string switch on mathtext and mangle the text
 - The TUI keeps using the matplotlib classes and doesn't need feature parity with the web's native charts
 - `GET /api/reports/series?range=` (`build_report_series()`) serves those series as JSON for browser charts: holdings by custody, trades with `wallet_id`/`ledger_id`, basis, summary, BTC-USD closes, and valuation
-- Ledger data always loads; a price feed failure returns `price`/`valuation` as null plus a `price_unavailable` warning rather than an error. An empty ledger is a 200 with `has_transactions=false` and never calls the feed
+- `resolve_window('all')` takes the earliest BTC date after parsing: SQLite stores `createddate` as TEXT, and `MIN()` sorts `2024-01-01T09:00` after `2024-01-01 10:00`
+- Ledger data always loads; a price feed failure returns `price`/`valuation` as null plus a `price_unavailable` warning rather than an error. An empty ledger is a 200 with `has_transactions=false` and never calls the feed. A failed fetch is remembered for `REPORTS_PRICE_FAILURE_BACKOFF_SECONDS` (default 60) so requests queued behind the price lock fail fast during an outage; `refresh=true` retries at once
 - `PriceDataFetcher` goes back to Yahoo whenever its parquet cache doesn't reach "now" (nearly always), so the series keeps its own in-process price cache (`REPORTS_PRICE_CACHE_TTL_SECONDS`, default 900, `refresh=true` bypasses). Ledger writes don't clear it; prices don't depend on the ledger
 - Tests patch `web.services.reports._price_fetcher` (series) and `viz.orange_plot.PriceDataFetcher` (PDF) with an offline stub; never let route tests reach Yahoo
 - Trades without a USD price get `marker_price_usd` from the nearest close so the chart can still place them
@@ -41,6 +42,8 @@
 ### Web Native Charts
 - The Reports page draws all three charts with Chart.js 4.4.7 + `chartjs-adapter-date-fns` 3.0.0, served from `ui/static/vendor/` (never a CDN). `ui/static/vendor/*` must stay in `pyproject.toml` package-data or deploys ship without it
 - Personal numbers go through `denomFormat()` / `currency()` (tooltips, summary cards) and `holdingsTick()` (axes), so privacy mode and sats/BTC apply. The BTC-USD close is public and uses its own unredacted formatter. Privacy also hides the gain %, which together with the public price would reveal the average cost
+- Hidden numbers aren't enough when the geometry gives them away: in privacy mode the orange plot drops the average-cost line and trade markers (they sit against labelled USD ticks) and keeps only the public price line
+- `loadReports()` redraws cached data synchronously before fetching, because privacy or denomination may have changed on another page; a range switch clears the old range's cards and charts instead
 - Colors come from the CSS tokens at render time (`reportColor('--accent')`); `renderReports()` re-runs on `btc:theme-change`, `btc:denom-change` and `btc:privacy-change` from the cached `state.reportsState.data` without refetching
 - Chart.js `stepped: true` matches matplotlib `steps-post`; the PDF and the browser draw holdings and basis the same way
 - Lower dataset `order` draws on top; the legend sorts by `datasetIndex` so it isn't reordered by drawing order
