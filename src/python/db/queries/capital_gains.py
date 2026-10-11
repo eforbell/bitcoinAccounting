@@ -95,6 +95,36 @@ class CapitalGainCalculator:
         all_purchases.sort(key=lambda x: x[0])  # Sort by date
         return all_purchases
 
+    def get_open_lot_quantities(self, coin: str = 'BTC') -> dict[str, float]:
+        """Unsold acquisition quantity per wallet under wallet-scoped FIFO.
+
+        A wallet's open lots are what a sale there would draw basis from, even
+        when the coins themselves now sit in self-custody. FIFO matching here
+        consumes lots regardless of date, so the open quantity is simply what
+        the wallet acquired less what it sold.
+
+        Args:
+            coin: Cryptocurrency symbol
+
+        Returns:
+            dict: wallet name -> open lot quantity (> 0 only)
+        """
+        open_quantity: dict[str, float] = {}
+        for lot in self.get_purchase_lots(coin):
+            wallet, quantity = lot[4], float(lot[1])
+            # Mirror forecast_sale(): its queue never draws from non-positive lots.
+            if wallet and str(wallet).strip() and quantity > 0:
+                open_quantity[wallet] = open_quantity.get(wallet, 0.0) + quantity
+        for sale in self.trade_query.get_sales(coin):
+            wallet = sale['exchange']
+            if wallet in open_quantity:
+                open_quantity[wallet] -= float(sale['quantity'])
+        return {
+            wallet: quantity
+            for wallet, quantity in open_quantity.items()
+            if quantity > 0.00000001
+        }
+
     def get_1099b_data(
         self,
         coin: str = 'BTC',

@@ -67,7 +67,7 @@ def holdings(
     coin: str = Query("BTC", min_length=1),
     accounts: BitcoinAccounts = Depends(get_request_accounts),
 ) -> TaxHoldingsResponse:
-    """List wallets with a positive balance, for choosing a forecast source."""
+    """List wallets holding the coin or with open lots, for choosing a forecast source."""
     return build_holdings(accounts, coin=coin)
 
 

@@ -27,10 +27,16 @@
 ## Web Tax: Guided Year → Wallet Workflow
 
 ### Discovery Endpoints
-- `GET /api/tax/sales-index` lists non-fiat coins with Trade sales and their years; `GET /api/tax/overview?tax_year&coin` runs wallet-scoped FIFO for every wallet that sold that year; `GET /api/tax/holdings?coin` lists wallets with a positive balance for forecast selection
+- `GET /api/tax/sales-index` lists non-fiat coins with Trade sales and their years; `GET /api/tax/overview?tax_year&coin` runs wallet-scoped FIFO for every wallet that sold that year; `GET /api/tax/holdings?coin` lists forecast sources: wallets holding the coin plus wallets with open (unsold) lots, open lots first
 - Overview totals are the sum of wallet reports for 2025+ (`totals_method="wallet_fifo"`) and the global FIFO report before 2025 (`"global_fifo"`), so pre-2025 wallet rows may not sum to totals — say so in a warning
 - Discover sales with `TradeQuery.get_disposals()` and bucket by year in Python (`createddate` is TEXT on SQLite, timestamp on PostgreSQL); do not add DB-specific year extraction
 - Discovery endpoints do not write `web_tax_history`; only real gains/export/forecast runs do
+
+### Forecast Wallets Follow the Lots
+- Operators buy on exchanges, move coins tax-free to self-custody, and later send them back to sell; the sale's basis is that exchange's open lots, so an exchange with a zero balance must still be offered for forecasting
+- `CapitalGainCalculator.get_open_lot_quantities()` is acquired minus sold per wallet; the FIFO matcher consumes lots regardless of date, so no queue replay is needed for the quantity
+- Forecasting more than a wallet holds adds a `forecast_exceeds_wallet_balance` info warning rather than an error
+- Keep amounts out of warning text: warnings render as plain server strings, so numbers in them ignore privacy mode and the sats/BTC denomination
 
 ### Missing-Lot Sales
 - `CapitalGainCalculator.get_1099b_data()` used to return `[], []` when a wallet had no purchase lots, silently dropping sales of coins deposited into an exchange and sold there; it now emits them as `UNKNOWN`/$0-basis lots

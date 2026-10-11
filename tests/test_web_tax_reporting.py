@@ -312,8 +312,45 @@ def test_holdings_lists_wallets_with_positive_balance(client: TestClient) -> Non
     assert response.json() == {
         "coin": "BTC",
         "total_balance": 0.25,
-        "wallets": [{"wallet_id": "Vault", "balance": 0.25}],
+        "wallets": [{"wallet_id": "Vault", "balance": 0.25, "open_lot_quantity": 0.25}],
     }
+
+
+def test_holdings_include_exchanges_whose_coins_moved_to_self_custody(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    # Bought on Kraken, then withdrawn to a hardware wallet: Kraken holds
+    # nothing but still has the open lots a future sale there would use.
+    seeded_accounts.execute_trade(
+        trade_date=datetime(2023, 5, 1),
+        buy=1.0,
+        buy_curr="BTC",
+        sell=30000.0,
+        sell_curr="USD",
+        exchange="Kraken",
+    )
+    seeded_accounts.transfer_funds(
+        withdraw_date=datetime(2023, 5, 2),
+        from_account="Kraken",
+        tx_amount=1.0,
+        to_account="Coldcard",
+    )
+
+    body = client.get("/api/tax/holdings", params={"coin": "BTC"}).json()
+
+    assert body["wallets"] == [
+        {"wallet_id": "Kraken", "balance": 0.0, "open_lot_quantity": 1.0},
+        {"wallet_id": "Vault", "balance": 0.25, "open_lot_quantity": 0.25},
+        {"wallet_id": "Coldcard", "balance": 1.0, "open_lot_quantity": 0.0},
+    ]
+
+    forecast = client.get(
+        "/api/tax/forecast",
+        params={"coin": "BTC", "quantity": 0.4, "sale_price_usd": 100000, "wallet": "Kraken"},
+    ).json()
+    assert forecast["summary"]["total_cost_basis_usd"] == pytest.approx(12000.0)
+    assert forecast["summary"]["missing_basis_quantity"] == 0.0
+    assert "forecast_exceeds_wallet_balance" in [w["code"] for w in forecast["warnings"]]
 
 
 def test_overview_keeps_proceeds_of_same_timestamp_sales_in_separate_wallets(
@@ -410,3 +447,29 @@ def test_overview_keeps_spend_warning_in_year_without_sales(
     assert body["has_sales"] is False
     assert body["message"] == "No sales found for tax year 2023 with digital asset BTC."
     assert [w["code"] for w in body["warnings"]] == ["spends_not_included"]
+
+
+def test_holdings_ignore_blank_wallets_and_negative_income_rows(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    seeded_accounts.execute_trade(
+        trade_date=datetime(2023, 5, 1),
+        buy=2.0,
+        buy_curr="BTC",
+        sell=60000.0,
+        sell_curr="USD",
+        exchange="   ",
+    )
+    seeded_accounts.withdraw(
+        withdraw_date=datetime(2023, 5, 2), sell=2.0, sell_curr="BTC", exchange="   "
+    )
+    # A negative income row must not cancel Vault's purchase lot: the
+    # forecast's FIFO queue never draws from non-positive lots.
+    seeded_accounts.ledger_writer.interest_income(
+        datetime(2025, 12, 2), -0.25, "BTC", "Vault", "", "correction"
+    )
+
+    body = client.get("/api/tax/holdings", params={"coin": "BTC"}).json()
+
+    assert [w["wallet_id"] for w in body["wallets"]] == ["Vault"]
+    assert body["wallets"][0]["open_lot_quantity"] == pytest.approx(0.25)

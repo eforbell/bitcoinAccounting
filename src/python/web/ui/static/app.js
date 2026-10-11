@@ -1385,9 +1385,11 @@ function renderForecastWalletOptions() {
   const holdings = state.taxHoldings;
   if (!holdings) return;
   const select = byId('forecast-wallet');
+  // Wallets with open lots can be sold through even when their coins now sit in
+  // self-custody; label by the basis left (the balance shows once forecast).
   const options = holdings.wallets.map((w) => [
     w.wallet_id,
-    `${w.wallet_id} · ${taxQuantity(w.balance, holdings.coin)}`,
+    `${w.wallet_id} · ${w.open_lot_quantity > 0 ? `${taxQuantity(w.open_lot_quantity, holdings.coin)} open lots` : 'no open lots'}`,
   ]);
   // Planning-only view: 2025+ sales are matched within the selling wallet.
   options.push(['', `All wallets (global FIFO) · ${taxQuantity(holdings.total_balance, holdings.coin)}`]);
