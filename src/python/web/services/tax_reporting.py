@@ -337,8 +337,8 @@ def build_tax_year_overview(
                 code="missing_basis",
                 severity="warning",
                 message=(
-                    f"{totals.missing_basis_quantity:.8f} {coin} sold in {tax_year} has no "
-                    "matching acquisition lot in its wallet and is reported with $0 basis. "
+                    f"Some {coin} sold in {tax_year} has no matching acquisition lot in its "
+                    "wallet and is reported with $0 basis. "
                     "Record the original purchase or transfer-in basis before filing."
                 ),
             )
@@ -387,14 +387,30 @@ def build_tax_year_overview(
 
 
 def build_holdings(accounts: BitcoinAccounts, *, coin: str = "BTC") -> TaxHoldingsResponse:
-    """List wallets with a positive balance of a coin, largest first."""
-    balances = accounts.get_wallet_balance(coin, None)
+    """List wallets a sale could be planned from.
+
+    That is every wallet holding the coin plus every wallet with open
+    (unsold) acquisition lots. Coins bought on an exchange and moved to
+    self-custody are typically sent back and sold there, against that
+    exchange's lots.
+    """
+    balances = {
+        str(wallet_id): float(balance)
+        for wallet_id, balance in accounts.get_wallet_balance(coin, None).items()
+        if wallet_id is not None and str(wallet_id).strip()
+    }
+    open_lots = accounts.capital_gains_calc.get_open_lot_quantities(coin)
     wallets = [
-        TaxHoldingWalletResource(wallet_id=str(wallet_id), balance=float(balance))
-        for wallet_id, balance in balances.items()
-        if float(balance) > _DUST
+        TaxHoldingWalletResource(
+            wallet_id=wallet_id,
+            balance=max(balances.get(wallet_id, 0.0), 0.0),
+            open_lot_quantity=open_lots.get(wallet_id, 0.0),
+        )
+        for wallet_id in set(balances) | set(open_lots)
+        if balances.get(wallet_id, 0.0) > _DUST or open_lots.get(wallet_id, 0.0) > _DUST
     ]
-    wallets.sort(key=lambda w: (-w.balance, w.wallet_id))
+    # Open lots first: they decide the basis a planned sale would use.
+    wallets.sort(key=lambda w: (-w.open_lot_quantity, -w.balance, w.wallet_id))
     return TaxHoldingsResponse(
         coin=coin,
         total_balance=sum(w.balance for w in wallets),
@@ -423,6 +439,19 @@ def build_forecast_response(
         sale_price_usd,
         wallet=wallet,
     )
+
+    if wallet and float(quantity) > current_balance + _DUST:
+        warnings.append(
+            TaxPolicyWarningResource(
+                code="forecast_exceeds_wallet_balance",
+                severity="info",
+                message=(
+                    f"This sale is larger than what {wallet} holds now. The forecast assumes "
+                    f"the rest is moved into {wallet} before the sale; basis comes from "
+                    f"{wallet}'s open lots."
+                ),
+            )
+        )
 
     lots = [
         ForecastLotResource(

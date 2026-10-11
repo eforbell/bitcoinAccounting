@@ -302,14 +302,15 @@ class TaxYearOverviewResponse(APIModel):
 
 
 class TaxHoldingWalletResource(APIModel):
-    """A wallet currently holding a positive balance of a coin."""
+    """A wallet holding a coin or with open (unsold) acquisition lots of it."""
 
     wallet_id: str
     balance: float
+    open_lot_quantity: float = 0.0
 
 
 class TaxHoldingsResponse(APIModel):
-    """Wallets that could fund a hypothetical sale."""
+    """Wallets a hypothetical sale could be planned from."""
 
     coin: str
     total_balance: float
