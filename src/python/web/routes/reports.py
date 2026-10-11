@@ -1,8 +1,8 @@
 """Reports/visualization routes.
 
-Serves the chart data as JSON for browser-drawn charts, the resurrected ``viz``
-charts (orange plot, balance, custody) as PNGs, and the combined portfolio
-PDF, generated on demand from the request-scoped database backend.
+Serves the chart data as JSON for the charts the browser draws, and the
+combined portfolio PDF (drawn by the ``viz`` matplotlib charts), both built on
+demand from the request-scoped database backend.
 """
 
 from __future__ import annotations
@@ -16,11 +16,9 @@ from web.auth import require_authenticated_principal
 from web.dependencies import get_request_backend
 from web.models import ReportSeriesResponse
 from web.services.reports import (
-    VALID_CHARTS,
     VALID_RANGES,
     ReportError,
     build_report_series,
-    render_chart_png,
     render_report_pdf,
 )
 
@@ -30,9 +28,8 @@ router = APIRouter(
     dependencies=[Depends(require_authenticated_principal)],
 )
 
-# Short private cache header so a browser reuses report bytes within a page
-# load without pinning stale data across sessions. Applied to both the PNG and
-# PDF responses for consistent caching semantics.
+# Short private cache header so a browser reuses the PDF bytes briefly without
+# pinning stale data across sessions.
 _CACHE_CONTROL = "private, max-age=120"
 
 
@@ -49,33 +46,6 @@ def report_series(
     if range not in VALID_RANGES:
         raise HTTPException(status_code=400, detail=f"Unknown range '{range}'")
     return build_report_series(backend, date_range=range, refresh=refresh)
-
-
-@router.get("/chart/{chart_type}.png")
-def chart_png(
-    chart_type: str,
-    range: str = Query("all"),
-    refresh: bool = Query(False),
-    backend: DatabaseBackend = Depends(get_request_backend),
-) -> Response:
-    """Return a single chart as a PNG image."""
-    if chart_type not in VALID_CHARTS:
-        raise HTTPException(status_code=404, detail=f"Unknown chart '{chart_type}'")
-    if range not in VALID_RANGES:
-        raise HTTPException(status_code=400, detail=f"Unknown range '{range}'")
-
-    try:
-        png = render_chart_png(backend, chart_type, date_range=range, refresh=refresh)
-    except ReportError as exc:
-        # No data yet (e.g. empty ledger) — surface as 404 so the UI can show
-        # an empty state rather than a broken image.
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-    return Response(
-        content=png,
-        media_type="image/png",
-        headers={"Cache-Control": _CACHE_CONTROL},
-    )
 
 
 @router.get("/report.pdf")

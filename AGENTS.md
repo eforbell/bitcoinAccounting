@@ -35,7 +35,7 @@
 - `GET /api/reports/series?range=` (`build_report_series()`) serves those series as JSON for browser charts: holdings by custody, trades with `wallet_id`/`ledger_id`, basis, summary, BTC-USD closes, and valuation
 - Ledger data always loads; a price feed failure returns `price`/`valuation` as null plus a `price_unavailable` warning rather than an error. An empty ledger is a 200 with `has_transactions=false` and never calls the feed
 - `PriceDataFetcher` goes back to Yahoo whenever its parquet cache doesn't reach "now" (nearly always), so the series keeps its own in-process price cache (`REPORTS_PRICE_CACHE_TTL_SECONDS`, default 900, `refresh=true` bypasses). Ledger writes don't clear it; prices don't depend on the ledger
-- Tests patch `web.services.reports._price_fetcher` with an offline stub; never let route tests reach Yahoo
+- Tests patch `web.services.reports._price_fetcher` (series) and `viz.orange_plot.PriceDataFetcher` (PDF) with an offline stub; never let route tests reach Yahoo
 - Trades without a USD price get `marker_price_usd` from the nearest close so the chart can still place them
 
 ### Web Native Charts
@@ -45,6 +45,7 @@
 - Chart.js `stepped: true` matches matplotlib `steps-post`; the PDF and the browser draw holdings and basis the same way
 - Lower dataset `order` draws on top; the legend sorts by `datasetIndex` so it isn't reordered by drawing order
 - Changing range doesn't pass `refresh=true`, so the price cache holds across range clicks
+- The PNG chart endpoints (`/api/reports/chart/{type}.png`) were removed once the browser drew the charts; `/api/reports/report.pdf` is the only server-rendered output. The TUI and `btc_viz` still use the matplotlib classes directly
 
 ## Web Tax: Guided Year → Wallet Workflow
 

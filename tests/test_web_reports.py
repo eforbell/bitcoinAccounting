@@ -1,10 +1,10 @@
 """Tests for the Reports/visualization API routes and service.
 
-Covers the JSON series behind the browser charts, the network-free PNG charts
-(balance, custody), auth protection, error handling for an empty ledger, and
-report-cache invalidation on ledger writes. The orange plot PNG and PDF are
-intentionally not exercised here because they fetch BTC-USD prices over the
-network; the JSON series stubs the price fetcher instead.
+Covers the JSON series behind the browser charts, the PDF download, auth
+protection, error handling for an empty ledger, and report-cache invalidation
+on ledger writes. Both price paths are stubbed so no test reaches Yahoo: the
+series through ``_price_fetcher`` and the PDF's orange plot through
+``viz.orange_plot.PriceDataFetcher``.
 """
 
 from __future__ import annotations
@@ -21,9 +21,10 @@ from db import SqliteBackend
 from web.app import create_app
 from web.config import WebConfig
 from web.dependencies import get_request_accounts, get_request_backend
+import viz.orange_plot
 from web.services import reports as reports_service
 
-_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+_PDF_MAGIC = b"%PDF-"
 
 
 @pytest.fixture(autouse=True)
@@ -55,6 +56,7 @@ def stub_prices(monkeypatch: pytest.MonkeyPatch) -> type[_StubFetcher]:
     _StubFetcher.calls = 0
     _StubFetcher.fail = False
     monkeypatch.setattr(reports_service, "_price_fetcher", _StubFetcher)
+    monkeypatch.setattr(viz.orange_plot, "PriceDataFetcher", _StubFetcher)
     return _StubFetcher
 
 
@@ -90,21 +92,24 @@ def client(seeded_accounts: BitcoinAccounts) -> TestClient:
     return client
 
 
-@pytest.mark.parametrize("chart", ["balance", "custody"])
-def test_chart_png_renders(client: TestClient, chart: str) -> None:
-    resp = client.get(f"/api/reports/chart/{chart}.png?range=all")
+def test_report_pdf_downloads(client: TestClient, stub_prices) -> None:
+    resp = client.get("/api/reports/report.pdf?range=all")
     assert resp.status_code == 200
-    assert resp.headers["content-type"] == "image/png"
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.headers["content-disposition"].startswith('attachment; filename="btc_report_')
     assert resp.headers.get("cache-control") == "private, max-age=120"
-    assert resp.content[:8] == _PNG_MAGIC
+    assert resp.content[:5] == _PDF_MAGIC
+    assert stub_prices.calls > 0  # the orange plot drew from the offline stub
 
 
-def test_unknown_chart_is_404(client: TestClient) -> None:
-    assert client.get("/api/reports/chart/bogus.png?range=all").status_code == 404
+def test_report_pdf_bad_range_is_400(client: TestClient) -> None:
+    assert client.get("/api/reports/report.pdf?range=decade").status_code == 400
 
 
-def test_bad_range_is_400(client: TestClient) -> None:
-    assert client.get("/api/reports/chart/balance.png?range=decade").status_code == 400
+def test_png_chart_endpoints_are_gone(client: TestClient) -> None:
+    # The browser draws the charts from /series; only the PDF is rendered server-side.
+    for chart in ("orange", "balance", "custody"):
+        assert client.get(f"/api/reports/chart/{chart}.png?range=all").status_code == 404
 
 
 def test_reports_require_authentication(seeded_accounts: BitcoinAccounts) -> None:
@@ -113,7 +118,7 @@ def test_reports_require_authentication(seeded_accounts: BitcoinAccounts) -> Non
     )
     app.dependency_overrides[get_request_backend] = lambda: seeded_accounts.backend
     anon = TestClient(app)
-    assert anon.get("/api/reports/chart/balance.png?range=all").status_code in (401, 403)
+    assert anon.get("/api/reports/report.pdf?range=all").status_code in (401, 403)
     assert anon.get("/api/reports/series?range=all").status_code in (401, 403)
 
 
@@ -251,25 +256,23 @@ def test_series_empty_ledger_skips_price_feed(stub_prices) -> None:
     assert stub_prices.calls == 0
 
 
-def test_service_renders_png_bytes(seeded_accounts: BitcoinAccounts) -> None:
-    png = reports_service.render_chart_png(
-        seeded_accounts.backend, "balance", date_range="all"
-    )
-    assert png[:8] == _PNG_MAGIC
+def test_service_renders_pdf_bytes(seeded_accounts: BitcoinAccounts) -> None:
+    pdf = reports_service.render_report_pdf(seeded_accounts.backend, date_range="all")
+    assert pdf[:5] == _PDF_MAGIC
 
 
 def test_service_empty_ledger_raises_report_error() -> None:
     backend = SqliteBackend(":memory:", auto_create_tables=True)
     try:
         with pytest.raises(reports_service.ReportError):
-            reports_service.render_chart_png(backend, "balance", date_range="all")
+            reports_service.render_report_pdf(backend, date_range="all")
     finally:
         backend.close()
 
 
 def test_ledger_write_invalidates_report_cache(client: TestClient) -> None:
     # Seed a fake cached entry, then confirm a successful write clears it.
-    reports_service._cache["png:balance:all"] = (time.monotonic() + 999, b"stale")
+    reports_service._cache["pdf:all"] = (time.monotonic() + 999, b"stale")
     resp = client.post(
         "/api/ledger/buy",
         json={
@@ -281,4 +284,4 @@ def test_ledger_write_invalidates_report_cache(client: TestClient) -> None:
         },
     )
     assert resp.status_code == 200
-    assert "png:balance:all" not in reports_service._cache
+    assert "pdf:all" not in reports_service._cache
