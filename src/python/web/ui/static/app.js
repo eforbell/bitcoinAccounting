@@ -32,8 +32,16 @@ const state = {
   walletsList: [],
   currentPage: 'dashboard',
   currentWalletId: null,
-  gainsFilters: { taxYear: 2024, coin: 'BTC', wallet: '' },
-  forecastFilters: { coin: 'BTC', wallet: '', quantity: 0.1, salePriceUsd: 100000 },
+  gainsFilters: { taxYear: new Date().getFullYear(), coin: 'BTC', wallet: '' },
+  // wallet: null until the operator picks one, so the largest holding is preselected.
+  forecastFilters: { coin: 'BTC', wallet: null, quantity: 0.1, salePriceUsd: 100000 },
+  taxSalesIndex: null,
+  taxOverview: null,
+  taxOverviewRequestId: 0,
+  gainsReport: null,
+  taxHoldings: null,
+  forecastResult: null,
+  taxHistory: [],
   ledgerFilters: { coin: 'BTC', wallet: '', startDate: '', endDate: '', includeDeleted: false, page: 1, perPage: 50 },
   selectedTx: null,
   importState: { parsers: [], preview: null, duplicateIndices: [], step: 1, wallets: [] },
@@ -189,8 +197,7 @@ function navigateTo(page, replace = false) {
     loadWalletsList();
   }
   if (page === 'tax') {
-    loadGains();
-    loadForecast();
+    loadTaxPage();
   }
   if (page === 'record') {
     initRecordDates();
@@ -1157,57 +1164,236 @@ async function loadPolicy() {
   byId('policy-summary').textContent = policy.summary;
 }
 
-async function loadGains() {
-  const params = new URLSearchParams({
-    tax_year: String(state.gainsFilters.taxYear),
-    coin: state.gainsFilters.coin,
-  });
-  if (state.gainsFilters.wallet) {
-    params.set('wallet', state.gainsFilters.wallet);
+function taxQuantity(amount, coin) {
+  return coin === 'BTC' ? denomFormat(amount) : formatAmount(amount, coin);
+}
+
+function setOptions(select, options, selected) {
+  select.innerHTML = options.map(([value, label]) =>
+    `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(label)}</option>`
+  ).join('');
+}
+
+function renderTaxScopeOptions() {
+  const index = state.taxSalesIndex || { current_year: new Date().getFullYear(), coins: [] };
+  const coins = index.coins.map((entry) => entry.coin);
+  if (!coins.includes('BTC')) coins.unshift('BTC');
+  if (!coins.includes(state.gainsFilters.coin)) state.gainsFilters.coin = 'BTC';
+  setOptions(byId('gains-coin'), coins.map((coin) => [coin, coin]), state.gainsFilters.coin);
+
+  // Always offer the current year (the one an operator is usually closing out),
+  // plus every year that actually has sales for the chosen coin.
+  const entry = index.coins.find((c) => c.coin === state.gainsFilters.coin);
+  const salesYears = new Set(entry ? entry.years : []);
+  const years = [...new Set([index.current_year, state.gainsFilters.taxYear, ...salesYears])]
+    .sort((a, b) => b - a);
+  setOptions(
+    byId('gains-year'),
+    years.map((year) => [String(year), salesYears.has(year) ? `${year} · sales` : `${year} · no sales`]),
+    String(state.gainsFilters.taxYear),
+  );
+}
+
+async function loadTaxPage() {
+  try {
+    state.taxSalesIndex = await api('api/tax/sales-index');
+  } catch (_) {
+    state.taxSalesIndex = null;
   }
+  renderTaxScopeOptions();
+  await Promise.all([loadTaxOverview(), loadForecastWallets()]);
+}
+
+async function loadTaxOverview() {
+  const requestId = ++state.taxOverviewRequestId;
+  const { taxYear, coin } = state.gainsFilters;
+  const message = byId('tax-overview-message');
+  message.textContent = `Looking for ${coin} sales in ${taxYear}…`;
+  message.style.color = '';
+  byId('tax-overview-body').classList.add('hidden');
+  byId('gains-detail-panel').classList.add('hidden');
+  state.gainsReport = null;
+  showGainsStatus('');
 
   try {
-    const report = await api(`api/tax/gains?${params.toString()}`);
-    byId('gains-proceeds').textContent = currency(report.summary.proceeds_usd);
-    byId('gains-cost').textContent = currency(report.summary.cost_basis_usd);
-    byId('gains-net').textContent = currency(report.summary.gain_loss_usd);
-    byId('gains-lots').textContent = String(report.summary.lot_count);
-    renderWarnings('gains-warnings', report.warnings);
-
-    const rows = report.worksheet.length
-      ? report.worksheet.map((row) => `
-          <tr>
-            <td>${escapeHtml(row.sale_date)}</td>
-            <td>${denomFormat(row.lot_quantity)}</td>
-            <td>${escapeHtml(row.acquire_date)}</td>
-            <td>${escapeHtml(row.term)}</td>
-            <td>${currency(row.gain_loss_usd)}</td>
-          </tr>
-        `).join('')
-      : '<tr><td colspan="5" class="empty-row">No gains found for the selected filters.</td></tr>';
-    byId('gains-table').innerHTML = rows;
-    renderDataCards('gains-cards', report.worksheet.map((row) => dataCard(
-      row.sale_date,
-      `${row.term} term`,
-      [
-        ['Lot quantity', denomFormat(row.lot_quantity)],
-        ['Acquired', row.acquire_date],
-        ['Gain/loss', currency(row.gain_loss_usd)],
-      ],
-    )), 'No gains found for the selected filters.');
-
-    const showPolicy = report.warnings.some((warning) => warning.code === 'wallet_required_2025');
-    const banner = byId('policy-warning');
-    if (showPolicy) {
-      banner.textContent = 'For tax year 2025 and later, exports require an explicit wallet filter.';
-      banner.classList.remove('hidden');
-    } else {
-      banner.classList.add('hidden');
-    }
+    const params = new URLSearchParams({ tax_year: String(taxYear), coin });
+    const overview = await api(`api/tax/overview?${params.toString()}`);
+    if (requestId !== state.taxOverviewRequestId) return;
+    state.taxOverview = overview;
   } catch (error) {
+    if (requestId !== state.taxOverviewRequestId) return;
+    state.taxOverview = null;
+    message.textContent = error.message;
+    message.style.color = 'var(--bad)';
+    return;
+  }
+  renderTaxOverview();
+  populateGainsWalletSelect();
+  renderGains();
+}
+
+// Lot detail needs a wallet to drill into, or the pre-2025 global FIFO lens.
+function gainsDetailAvailable(overview) {
+  if (!overview || !overview.has_sales) return false;
+  return overview.wallets.length > 0 || !overview.wallet_separation_required;
+}
+
+function renderTaxOverview() {
+  const overview = state.taxOverview;
+  if (!overview) return;
+  byId('tax-overview-message').textContent = overview.message;
+  // Warnings (e.g. Spends in a year with no sales) show even when there is nothing to total.
+  byId('tax-overview-body').classList.toggle('hidden', !overview.has_sales && !overview.warnings.length);
+  byId('overview-summary').classList.toggle('hidden', !overview.has_sales);
+  byId('overview-wallets').classList.toggle('hidden', !overview.wallets.length);
+  byId('gains-detail-panel').classList.toggle('hidden', !gainsDetailAvailable(overview));
+  renderWarnings('overview-warnings', overview.warnings);
+  if (!overview.has_sales) return;
+
+  const { totals, coin } = overview;
+  byId('overview-sales').textContent = String(totals.sale_count);
+  byId('overview-proceeds').textContent = currency(totals.proceeds_usd);
+  byId('overview-cost').textContent = currency(totals.cost_basis_usd);
+  byId('overview-net').textContent = currency(totals.gain_loss_usd);
+  byId('overview-term-split').textContent =
+    `Short ${currency(totals.short_term_gain_usd)} · Long ${currency(totals.long_term_gain_usd)}`;
+
+  const viewButton = (walletId) =>
+    `<button class="button button-ghost button-inline" type="button" data-gains-wallet="${escapeHtml(walletId)}">View lots</button>`;
+  byId('overview-table').innerHTML = overview.wallets.map((w) => `
+    <tr>
+      <td>${escapeHtml(w.wallet_id)}</td>
+      <td>${w.sale_count}</td>
+      <td>${taxQuantity(w.quantity_sold, coin)}</td>
+      <td>${currency(w.proceeds_usd)}</td>
+      <td>${currency(w.cost_basis_usd)}${w.missing_basis_quantity > 0 ? ' ⚠' : ''}</td>
+      <td>${currency(w.gain_loss_usd)}</td>
+      <td>${viewButton(w.wallet_id)}</td>
+    </tr>
+  `).join('');
+  renderDataCards('overview-cards', overview.wallets.map((w) => dataCard(
+    w.wallet_id,
+    `${w.sale_count} sale${w.sale_count === 1 ? '' : 's'} · ${w.first_sale_date}${w.last_sale_date !== w.first_sale_date ? ` – ${w.last_sale_date}` : ''}`,
+    [
+      ['Sold', taxQuantity(w.quantity_sold, coin)],
+      ['Proceeds', currency(w.proceeds_usd)],
+      ['Net gain/loss', currency(w.gain_loss_usd)],
+    ],
+    viewButton(w.wallet_id),
+  )), overview.message);
+
+  for (const button of document.querySelectorAll('[data-gains-wallet]')) {
+    button.addEventListener('click', async () => {
+      byId('gains-wallet').value = button.dataset.gainsWallet;
+      state.gainsFilters.wallet = button.dataset.gainsWallet;
+      await loadGains();
+      byId('gains-detail-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+}
+
+function populateGainsWalletSelect() {
+  const overview = state.taxOverview;
+  const select = byId('gains-wallet');
+  if (!gainsDetailAvailable(overview)) {
+    select.innerHTML = '';
+    state.gainsFilters.wallet = '';
+    return;
+  }
+  const options = overview.wallets.map((w) => [
+    w.wallet_id,
+    `${w.wallet_id} · ${w.sale_count} sale${w.sale_count === 1 ? '' : 's'}`,
+  ]);
+  // Global FIFO is only a valid lens before wallet separation took effect.
+  if (!overview.wallet_separation_required) {
+    options.unshift(['', 'All wallets (global FIFO)']);
+  }
+  const values = options.map(([value]) => value);
+  if (!values.includes(state.gainsFilters.wallet)) state.gainsFilters.wallet = values[0];
+  setOptions(select, options, state.gainsFilters.wallet);
+}
+
+async function loadGains() {
+  const { taxYear, coin, wallet } = state.gainsFilters;
+  const params = new URLSearchParams({ tax_year: String(taxYear), coin });
+  if (wallet) params.set('wallet', wallet);
+  showGainsStatus('');
+
+  try {
+    state.gainsReport =await api(`api/tax/gains?${params.toString()}`);
+    renderGains();
+  } catch (error) {
+    state.gainsReport = null;
     byId('gains-table').innerHTML = `<tr><td colspan="5" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
     renderDataCards('gains-cards', [], error.message);
   }
+  await loadHistory();
+}
+
+function renderGains() {
+  const report = state.gainsReport;
+  if (!report) {
+    for (const id of ['gains-proceeds', 'gains-cost', 'gains-net']) byId(id).textContent = currency(0);
+    byId('gains-lots').textContent = '0';
+    renderWarnings('gains-warnings', []);
+    byId('gains-table').innerHTML = '<tr><td colspan="5" class="empty-row">Choose a wallet and load gains.</td></tr>';
+    renderDataCards('gains-cards', [], 'Choose a wallet and load gains.');
+    return;
+  }
+
+  const coin = report.summary.coin;
+  byId('gains-proceeds').textContent = currency(report.summary.proceeds_usd);
+  byId('gains-cost').textContent = currency(report.summary.cost_basis_usd);
+  byId('gains-net').textContent = currency(report.summary.gain_loss_usd);
+  byId('gains-lots').textContent = String(report.summary.lot_count);
+  renderWarnings('gains-warnings', report.warnings);
+
+  const rows = report.worksheet.length
+    ? report.worksheet.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.sale_date)}</td>
+          <td>${taxQuantity(row.lot_quantity, coin)}</td>
+          <td>${escapeHtml(row.acquire_date)}</td>
+          <td>${escapeHtml(row.term)}</td>
+          <td>${currency(row.gain_loss_usd)}</td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="5" class="empty-row">No gains found for the selected filters.</td></tr>';
+  byId('gains-table').innerHTML = rows;
+  renderDataCards('gains-cards', report.worksheet.map((row) => dataCard(
+    row.sale_date,
+    `${row.term} term`,
+    [
+      ['Lot quantity', taxQuantity(row.lot_quantity, coin)],
+      ['Acquired', row.acquire_date],
+      ['Gain/loss', currency(row.gain_loss_usd)],
+    ],
+  )), 'No gains found for the selected filters.');
+}
+
+async function loadForecastWallets() {
+  const coin = state.forecastFilters.coin;
+  try {
+    state.taxHoldings = await api(`api/tax/holdings?${new URLSearchParams({ coin }).toString()}`);
+  } catch (_) {
+    state.taxHoldings = { coin, total_balance: 0, wallets: [] };
+  }
+  renderForecastWalletOptions();
+}
+
+function renderForecastWalletOptions() {
+  const holdings = state.taxHoldings;
+  if (!holdings) return;
+  const select = byId('forecast-wallet');
+  const options = holdings.wallets.map((w) => [
+    w.wallet_id,
+    `${w.wallet_id} · ${taxQuantity(w.balance, holdings.coin)}`,
+  ]);
+  // Planning-only view: 2025+ sales are matched within the selling wallet.
+  options.push(['', `All wallets (global FIFO) · ${taxQuantity(holdings.total_balance, holdings.coin)}`]);
+  const values = options.map(([value]) => value);
+  if (!values.includes(state.forecastFilters.wallet)) state.forecastFilters.wallet = values[0];
+  setOptions(select, options, state.forecastFilters.wallet);
 }
 
 async function loadForecast() {
@@ -1219,100 +1405,183 @@ async function loadForecast() {
   if (state.forecastFilters.wallet) {
     params.set('wallet', state.forecastFilters.wallet);
   }
+  showForecastStatus('');
 
   try {
-    const forecast = await api(`api/tax/forecast?${params.toString()}`);
-    byId('forecast-balance').textContent = denomFormat(forecast.current_balance);
-    byId('forecast-proceeds').textContent = currency(forecast.summary.total_proceeds_usd);
-    byId('forecast-cost').textContent = currency(forecast.summary.total_cost_basis_usd);
-    byId('forecast-missing').textContent = denomFormat(forecast.summary.missing_basis_quantity);
-    renderWarnings('forecast-warnings', forecast.warnings);
-
-    const rows = forecast.lots.length
-      ? forecast.lots.map((lot) => `
-          <tr>
-            <td>${escapeHtml(lot.acquire_date || 'UNKNOWN')}</td>
-            <td>${denomFormat(lot.quantity)}</td>
-            <td>${currency(lot.unit_cost_usd)}</td>
-            <td>${escapeHtml(lot.term)}</td>
-            <td>${currency(lot.cost_basis_usd)}</td>
-          </tr>
-        `).join('')
-      : '<tr><td colspan="5" class="empty-row">No forecast lots available.</td></tr>';
-    byId('forecast-table').innerHTML = rows;
-    renderDataCards('forecast-cards', forecast.lots.map((lot) => dataCard(
-      lot.acquire_date || 'Unknown acquisition date',
-      `${lot.term} term`,
-      [
-        ['Quantity', denomFormat(lot.quantity)],
-        ['Unit cost', currency(lot.unit_cost_usd)],
-        ['Basis', currency(lot.cost_basis_usd)],
-      ],
-    )), 'No forecast lots available.');
+    state.forecastResult = await api(`api/tax/forecast?${params.toString()}`);
+    renderForecast();
   } catch (error) {
+    state.forecastResult = null;
     byId('forecast-table').innerHTML = `<tr><td colspan="5" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
     renderDataCards('forecast-cards', [], error.message);
   }
 }
 
-async function loadPresets() {
-  const presets = await api('api/tax/presets');
-  byId('presets-list').innerHTML = presets.length
-    ? presets.map((preset) => `
-        <div class="list-item">
-          <div class="wallet-main">
-            <strong>${escapeHtml(preset.name)}</strong>
-            <div class="list-item-meta">${escapeHtml(preset.preset_type.toUpperCase())} · ${escapeHtml(preset.coin)}${preset.tax_year ? ` · ${preset.tax_year}` : ''}${preset.wallet_id ? ` · ${escapeHtml(preset.wallet_id)}` : ''}</div>
-          </div>
-          <button class="button button-ghost" type="button" data-preset-id="${escapeHtml(preset.preset_id)}">Delete</button>
-        </div>
-      `).join('')
-    : '<div class="list-item"><div class="list-item-meta">No saved presets yet.</div></div>';
+function renderForecast() {
+  const forecast = state.forecastResult;
+  if (!forecast) return;
+  const coin = forecast.summary.coin;
+  byId('forecast-balance').textContent = taxQuantity(forecast.current_balance, coin);
+  byId('forecast-proceeds').textContent = currency(forecast.summary.total_proceeds_usd);
+  byId('forecast-cost').textContent = currency(forecast.summary.total_cost_basis_usd);
+  byId('forecast-missing').textContent = taxQuantity(forecast.summary.missing_basis_quantity, coin);
+  renderWarnings('forecast-warnings', forecast.warnings);
 
-  for (const button of byId('presets-list').querySelectorAll('[data-preset-id]')) {
-    button.addEventListener('click', async () => {
-      await api(`api/tax/presets/${button.dataset.presetId}`, { method: 'DELETE' });
-      await loadPresets();
-    });
+  const rows = forecast.lots.length
+    ? forecast.lots.map((lot) => `
+        <tr>
+          <td>${escapeHtml(lot.acquire_date || 'UNKNOWN')}</td>
+          <td>${taxQuantity(lot.quantity, coin)}</td>
+          <td>${currency(lot.unit_cost_usd)}</td>
+          <td>${escapeHtml(lot.term)}</td>
+          <td>${currency(lot.cost_basis_usd)}</td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="5" class="empty-row">No forecast lots available.</td></tr>';
+  byId('forecast-table').innerHTML = rows;
+  renderDataCards('forecast-cards', forecast.lots.map((lot) => dataCard(
+    lot.acquire_date || 'Unknown acquisition date',
+    `${lot.term} term`,
+    [
+      ['Quantity', taxQuantity(lot.quantity, coin)],
+      ['Unit cost', currency(lot.unit_cost_usd)],
+      ['Basis', currency(lot.cost_basis_usd)],
+    ],
+  )), 'No forecast lots available.');
+}
+
+function rerenderTaxPage() {
+  renderHistory();
+  renderTaxOverview();
+  renderGains();
+  renderForecastWalletOptions();
+  renderForecast();
+}
+
+const TAX_RUN_LABELS = {
+  gains_report: 'Gains report',
+  preview_1099b: '1099-B preview',
+  export_1099b: '1099-B export (CSV)',
+  export_worksheet: 'Worksheet export (CSV)',
+  forecast: 'Sale forecast',
+};
+
+const TAX_RUN_EXPORTS = {
+  export_1099b: '1099b/export',
+  export_worksheet: '1099b/worksheet',
+};
+
+function taxRunMeta(entry) {
+  if (entry.action === 'forecast') {
+    const amount = entry.quantity != null ? taxQuantity(entry.quantity, entry.coin) : entry.coin;
+    const price = entry.sale_price_usd != null ? ` @ ${currency(entry.sale_price_usd)}` : '';
+    return `${amount}${price} · ${entry.wallet_id || 'All wallets'}`;
   }
+  return [entry.coin, entry.tax_year, entry.wallet_id || 'All wallets'].filter(Boolean).join(' · ');
 }
 
 async function loadHistory() {
   const history = await api('api/tax/history?limit=8');
-  byId('history-list').innerHTML = history.length
-    ? history.map((entry) => `
-        <div class="list-item">
-          <div class="wallet-main">
-            <strong>${escapeHtml(entry.action)}</strong>
-            <div class="list-item-meta">${escapeHtml(entry.coin)}${entry.tax_year ? ` · ${entry.tax_year}` : ''}${entry.wallet_id ? ` · ${escapeHtml(entry.wallet_id)}` : ''}</div>
-          </div>
-          <div class="list-item-meta">${new Date(entry.created_at).toLocaleString()}</div>
-        </div>
-      `).join('')
-    : '<div class="list-item"><div class="list-item-meta">No web history yet.</div></div>';
+  state.taxHistory = history;
+  renderHistory();
 }
 
-function currentPresetPayload() {
-  const presetType = byId('preset-type').value;
-  const payload = {
-    name: byId('preset-name').value.trim(),
-    preset_type: presetType,
-    coin: presetType === 'forecast' ? state.forecastFilters.coin : state.gainsFilters.coin,
-  };
+function renderHistory() {
+  const history = state.taxHistory || [];
+  const list = byId('history-list');
+  list.innerHTML = history.length
+    ? history.map((entry, index) => {
+        const label = TAX_RUN_LABELS[entry.action] || entry.action;
+        const hint = TAX_RUN_EXPORTS[entry.action] ? 'Download again' : 'Run again';
+        return `
+          <button class="list-item list-item-link tax-run" type="button" data-history-index="${index}"
+            aria-label="${escapeHtml(`${hint}: ${label}`)}">
+            <div class="wallet-main">
+              <strong>${escapeHtml(label)}</strong>
+              <div class="list-item-meta">${escapeHtml(taxRunMeta(entry))}</div>
+            </div>
+            <div class="tax-run-side">
+              <div class="list-item-meta">${new Date(entry.created_at).toLocaleString()}</div>
+              <div class="tax-run-hint">${hint} →</div>
+            </div>
+          </button>
+        `;
+      }).join('')
+    : '<div class="list-item"><div class="list-item-meta">No web history yet.</div></div>';
 
-  if (presetType === 'forecast') {
-    payload.wallet_id = state.forecastFilters.wallet || null;
-    payload.quantity = Number(state.forecastFilters.quantity);
-    payload.sale_price_usd = Number(state.forecastFilters.salePriceUsd);
-  } else {
-    payload.tax_year = Number(state.gainsFilters.taxYear);
-    payload.wallet_id = state.gainsFilters.wallet || null;
+  for (const button of list.querySelectorAll('[data-history-index]')) {
+    button.addEventListener('click', () => rerunTaxHistory(history[Number(button.dataset.historyIndex)]));
+  }
+}
+
+async function rerunTaxHistory(entry) {
+  if (!entry) return;
+
+  if (entry.action === 'forecast') {
+    state.forecastFilters = {
+      coin: entry.coin,
+      wallet: entry.wallet_id || '',
+      quantity: entry.quantity ?? state.forecastFilters.quantity,
+      salePriceUsd: entry.sale_price_usd ?? state.forecastFilters.salePriceUsd,
+    };
+    byId('forecast-coin').value = entry.coin;
+    byId('forecast-quantity').value = String(state.forecastFilters.quantity);
+    byId('forecast-price').value = String(state.forecastFilters.salePriceUsd);
+    await loadForecastWallets();
+    byId('forecast-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (state.forecastFilters.wallet !== (entry.wallet_id || '')) {
+      showForecastStatus(
+        `${entry.wallet_id} no longer holds ${entry.coin}, so this forecast can't be repeated. Choose a wallet above.`,
+        true,
+      );
+      return;
+    }
+    await loadForecast();
+    await loadHistory();
+    return;
   }
 
-  return payload;
+  if (entry.tax_year == null) return;
+  const recordedWallet = entry.wallet_id || '';
+  state.gainsFilters = { taxYear: entry.tax_year, coin: entry.coin, wallet: recordedWallet };
+  renderTaxScopeOptions();
+  await loadTaxOverview();
+  if (!gainsDetailAvailable(state.taxOverview)) return;
+
+  byId('gains-detail-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // The wallet dropdown falls back to another wallet when the recorded one no
+  // longer has sales (renamed, merged, edited); never run or export that one instead.
+  if (state.gainsFilters.wallet !== recordedWallet) {
+    showGainsStatus(
+      `${recordedWallet || 'All wallets'} no longer has ${entry.coin} sales in ${entry.tax_year}, so this run can't be repeated. Choose a wallet above.`,
+      true,
+    );
+    return;
+  }
+  const exportKind = TAX_RUN_EXPORTS[entry.action];
+  if (exportKind) {
+    await downloadTaxArtifact(exportKind);
+  } else {
+    await loadGains();
+  }
 }
 
-function downloadTaxArtifact(kind) {
+function showStatusLine(id, message, isError = false) {
+  const el = byId(id);
+  el.textContent = message;
+  el.style.color = isError ? 'var(--bad)' : '';
+  el.classList.toggle('hidden', !message);
+}
+
+function showGainsStatus(message, isError = false) {
+  showStatusLine('gains-status', message, isError);
+}
+
+function showForecastStatus(message, isError = false) {
+  showStatusLine('forecast-status', message, isError);
+}
+
+async function downloadTaxArtifact(kind) {
   const params = new URLSearchParams({
     tax_year: String(state.gainsFilters.taxYear),
     coin: state.gainsFilters.coin,
@@ -1320,7 +1589,34 @@ function downloadTaxArtifact(kind) {
   if (state.gainsFilters.wallet) {
     params.set('wallet', state.gainsFilters.wallet);
   }
-  window.location.href = `${appBase()}api/tax/${kind}?${params.toString()}`;
+  showGainsStatus('');
+
+  // Fetch rather than navigate so policy errors show inline and Recent Runs refreshes.
+  try {
+    const url = new URL(`api/tax/${kind}?${params.toString()}`, new URL(appBase(), window.location.origin)).href;
+    const response = await fetch(url, { credentials: 'same-origin' });
+    if (!response.ok) {
+      if (response.status === 401 && state.session) {
+        state.session = null;
+        showLoggedOut();
+      }
+      let detail = `Export failed (${response.status})`;
+      try { detail = (await response.json()).detail || detail; } catch (_) {}
+      throw new Error(detail);
+    }
+    const disposition = response.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(await response.blob());
+    link.download = match ? match[1] : `${kind.replace('/', '_')}.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  } catch (error) {
+    showGainsStatus(error.message, true);
+  }
+  await loadHistory();
 }
 
 async function populateLedgerWalletDropdown() {
@@ -1477,6 +1773,8 @@ function loadPageData(page) {
       return loadTradesPage();
     case 'wallets':
       return loadWalletsList();
+    case 'tax':
+      return loadTaxPage();
     case 'reports':
       loadReports();
       return Promise.resolve();
@@ -1493,7 +1791,7 @@ async function refreshSession() {
     const session = await api('api/auth/me');
     state.session = session;
     showLoggedIn(session.username);
-    const loaders = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast(), populateLedgerWalletDropdown()];
+    const loaders = [loadDashboard(), loadPolicy(), loadHistory(), populateLedgerWalletDropdown()];
     loaders.push(loadPageData(state.currentPage));
     await Promise.all(loaders);
   } catch (_) {
@@ -1549,7 +1847,7 @@ function bindEvents() {
       state.session = session;
       setAuthStatus('Authenticated.');
       showLoggedIn(session.username);
-      const postLogin = [loadDashboard(), loadPolicy(), loadGains(), loadHistory(), loadPresets(), loadForecast(), populateLedgerWalletDropdown()];
+      const postLogin = [loadDashboard(), loadPolicy(), loadHistory(), populateLedgerWalletDropdown()];
       postLogin.push(loadPageData(state.currentPage));
       await Promise.all(postLogin);
     } catch (error) {
@@ -1967,37 +2265,41 @@ function bindEvents() {
     await loadLedger();
   });
 
+  byId('tax-scope-form').addEventListener('submit', (event) => event.preventDefault());
+  byId('gains-year').addEventListener('change', async () => {
+    state.gainsFilters.taxYear = Number(byId('gains-year').value);
+    await loadTaxOverview();
+  });
+  byId('gains-coin').addEventListener('change', async () => {
+    state.gainsFilters.coin = byId('gains-coin').value;
+    renderTaxScopeOptions();
+    await loadTaxOverview();
+  });
+  byId('gains-wallet').addEventListener('change', () => {
+    state.gainsFilters.wallet = byId('gains-wallet').value;
+  });
+
   byId('gains-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    state.gainsFilters = {
-      taxYear: Number(byId('gains-year').value),
-      coin: byId('gains-coin').value.trim() || 'BTC',
-      wallet: byId('gains-wallet').value.trim(),
-    };
+    state.gainsFilters.wallet = byId('gains-wallet').value;
     await loadGains();
-    await loadHistory();
+  });
+
+  byId('forecast-coin').addEventListener('change', async () => {
+    state.forecastFilters.coin = byId('forecast-coin').value.trim().toUpperCase() || 'BTC';
+    await loadForecastWallets();
   });
 
   byId('forecast-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     state.forecastFilters = {
-      coin: byId('forecast-coin').value.trim() || 'BTC',
-      wallet: byId('forecast-wallet').value.trim(),
+      coin: byId('forecast-coin').value.trim().toUpperCase() || 'BTC',
+      wallet: byId('forecast-wallet').value,
       quantity: Number(byId('forecast-quantity').value),
       salePriceUsd: Number(byId('forecast-price').value),
     };
     await loadForecast();
     await loadHistory();
-  });
-
-  byId('preset-form').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    await api('api/tax/presets', {
-      method: 'POST',
-      body: JSON.stringify(currentPresetPayload()),
-    });
-    byId('preset-name').value = '';
-    await Promise.all([loadPresets(), loadHistory()]);
   });
 
   byId('export-1099b').addEventListener('click', () => downloadTaxArtifact('1099b/export'));
@@ -2687,7 +2989,7 @@ window.addEventListener('btc:denom-change', function () {
   if (page === 'wallet' && state.currentWalletId) loadWalletDetail(state.currentWalletId);
   if (page === 'wallets') renderWalletsList(state.walletsList);
   if (page === 'trades') loadTradesPage();
-  if (page === 'tax') { loadGains(); loadForecast(); }
+  if (page === 'tax') rerenderTaxPage();
   if (page === 'settings') initSettingsPage();
 });
 
@@ -2703,6 +3005,6 @@ window.addEventListener('btc:privacy-change', function () {
   }
   if (page === 'wallets') renderWalletsList(state.walletsList);
   if (page === 'trades') loadTradesPage();
-  if (page === 'tax') { loadGains(); loadForecast(); }
+  if (page === 'tax') rerenderTaxPage();
   if (page === 'settings') initSettingsPage();
 });

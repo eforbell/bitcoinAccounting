@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import os
 import socket
+import sqlite3
 import threading
 import time
 from collections.abc import Iterator
@@ -155,6 +156,14 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
     playwright = pytest.importorskip("playwright.sync_api")
     db_path = str(tmp_path / "smoke.sqlite3")
     _seed_smoke_database(db_path)
+    # A gift in the current tax year (the page's default) and no sales in it.
+    spend_accounts = BitcoinAccounts(backend=SqliteBackend(db_path))
+    try:
+        spend_accounts.ledger_writer.spend(
+            datetime(datetime.now().year, 1, 2), 0.01, "BTC", 0.0, "", "Strike", "", "gift"
+        )
+    finally:
+        spend_accounts.close()
 
     with _run_smoke_server(
         db_path,
@@ -203,21 +212,61 @@ def test_tax_dashboard_smoke_flow(tmp_path: Path) -> None:
             playwright.expect(page.locator('#tax-view h1')).to_have_text("Tax")
             playwright.expect(page.locator("#policy-summary")).to_contain_text("Wallet-separated FIFO")
 
+            # A year with only a Spend still surfaces the Spend warning.
+            playwright.expect(page.locator("#tax-overview-message")).to_contain_text("No sales found")
+            playwright.expect(page.locator("#overview-warnings")).to_contain_text("Spend transaction")
+            playwright.expect(page.locator("#overview-summary")).to_be_hidden()
+            playwright.expect(page.locator("#gains-detail-panel")).to_be_hidden()
+
+            # Choosing a year discovers the wallets that sold in it.
+            page.locator("#gains-year").select_option("2024")
+            playwright.expect(page.locator("#tax-overview-message")).to_contain_text(
+                "1 sale of BTC across 1 wallet in tax year 2024"
+            )
+            playwright.expect(page.locator("#overview-table")).to_contain_text("Strike")
+            playwright.expect(page.locator("#gains-wallet")).to_contain_text("Strike")
             page.get_by_role("button", name="Load Gains").click()
             playwright.expect(page.locator("#gains-lots")).to_have_text("1")
             playwright.expect(page.locator("#gains-table")).to_contain_text("12/01/2024")
 
-            page.locator("#forecast-wallet").fill("Vault")
+            page.locator("#forecast-wallet").select_option("Vault")
             page.locator("#forecast-quantity").fill("0.2")
             page.get_by_role("button", name="Forecast Sale").click()
             playwright.expect(page.locator("#forecast-balance")).to_have_text("0.25000000 BTC")
             playwright.expect(page.locator("#forecast-table")).to_contain_text("2025-12-01")
 
-            page.locator("#preset-name").fill("Vault Forecast")
-            page.locator("#preset-type").select_option("forecast")
-            page.get_by_role("button", name="Save Current Filters").click()
-            playwright.expect(page.locator("#presets-list")).to_contain_text("Vault Forecast")
-            playwright.expect(page.locator("#history-list")).to_contain_text("forecast")
+            playwright.expect(page.locator("#history-list")).to_contain_text("Sale forecast")
+
+            # Recent Runs rows rerun their workflow with the recorded filters.
+            page.locator("#forecast-quantity").fill("0.05")
+            page.locator("#history-list").get_by_role("button", name="Run again: Sale forecast").click()
+            playwright.expect(page.locator("#forecast-quantity")).to_have_value("0.2")
+            playwright.expect(page.locator("#forecast-wallet")).to_have_value("Vault")
+            page.locator("#history-list").get_by_role("button", name="Run again: Gains report").click()
+            playwright.expect(page.locator("#gains-year")).to_have_value("2024")
+            playwright.expect(page.locator("#gains-table")).to_contain_text("12/01/2024")
+            with page.expect_download() as download_info:
+                page.get_by_role("button", name="Export 1099-B CSV").click()
+            assert download_info.value.suggested_filename == "1099b_2024.csv"
+            playwright.expect(page.locator("#history-list")).to_contain_text("1099-B export (CSV)")
+
+            # Replaying a run whose wallet no longer has sales must not quietly
+            # fall back to another wallet (here, pre-2025 "All wallets").
+            page.locator("#gains-wallet").select_option("Strike")
+            page.get_by_role("button", name="Load Gains").click()
+            playwright.expect(page.locator("#history-list .tax-run").first).to_contain_text("2024 · Strike")
+            with contextlib.closing(sqlite3.connect(db_path)) as conn:
+                conn.execute("UPDATE ledger SET exchange = 'Vault' WHERE sell_curr = 'BTC' AND trans_type = 'Trade'")
+                conn.commit()
+            page.locator("#history-list").get_by_role("button", name="Run again: Gains report").first.click()
+            playwright.expect(page.locator("#gains-status")).to_contain_text(
+                "Strike no longer has BTC sales in 2024"
+            )
+            playwright.expect(page.locator("#gains-wallet")).to_have_value("")
+            playwright.expect(page.locator("#gains-table")).to_contain_text("Choose a wallet and load gains.")
+            with contextlib.closing(sqlite3.connect(db_path)) as conn:
+                conn.execute("UPDATE ledger SET exchange = 'Strike' WHERE sell_curr = 'BTC' AND trans_type = 'Trade'")
+                conn.commit()
 
             # Navigate back to dashboard and click into wallet detail
             page.locator('.app-sidebar .nav-item[data-route="dashboard"]').click()
@@ -537,11 +586,13 @@ def test_mobile_data_views_stay_within_the_viewport(tmp_path: Path) -> None:
             assert_viewport_contained()
 
             page.goto(base_url + "tax", wait_until="networkidle")
-            playwright.expect(page.locator("#gains-cards")).to_be_visible()
+            page.locator("#gains-year").select_option("2024")
+            playwright.expect(page.locator("#overview-cards")).to_be_visible()
+            playwright.expect(page.locator("#overview-cards")).to_contain_text("Strike")
             playwright.expect(page.locator("#forecast-cards")).to_be_visible()
             page.get_by_role("button", name="Load Gains").click()
             playwright.expect(page.locator("#gains-cards")).to_contain_text("12/01/2024")
-            page.locator("#forecast-wallet").fill("Vault")
+            page.locator("#forecast-wallet").select_option("Vault")
             page.locator("#forecast-quantity").fill("0.2")
             page.get_by_role("button", name="Forecast Sale").click()
             playwright.expect(page.locator("#forecast-cards")).to_contain_text("2025-12-01")

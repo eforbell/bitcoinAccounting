@@ -12,26 +12,24 @@ from web.models import (
     ForecastResponse,
     GainsReportResponse,
     TaxHistoryEntryResource,
+    TaxHoldingsResponse,
     TaxPolicyResource,
-    TaxPresetCreateRequest,
-    TaxPresetResource,
+    TaxSalesIndexResponse,
+    TaxYearOverviewResponse,
 )
 from web.services.tax_reporting import (
     TaxPolicyError,
     build_forecast_response,
     build_gains_report,
+    build_holdings,
+    build_sales_index,
+    build_tax_year_overview,
     get_tax_policy,
     policy_http_error,
     serialize_1099b_csv,
     serialize_worksheet_csv,
 )
-from web.services.tax_state import (
-    create_tax_preset,
-    delete_tax_preset,
-    list_tax_history,
-    list_tax_presets,
-    record_tax_history,
-)
+from web.services.tax_state import list_tax_history, record_tax_history
 
 router = APIRouter(
     prefix="/api/tax",
@@ -40,34 +38,37 @@ router = APIRouter(
 )
 
 
-def _validate_preset_request(payload: TaxPresetCreateRequest) -> None:
-    if not payload.name.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Preset name is required.",
-        )
-    if payload.preset_type not in {"gains", "1099b", "forecast"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="preset_type must be one of: gains, 1099b, forecast.",
-        )
-    if payload.preset_type in {"gains", "1099b"} and payload.tax_year is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="tax_year is required for gains and 1099b presets.",
-        )
-    if payload.preset_type == "forecast":
-        if payload.quantity is None or payload.sale_price_usd is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="quantity and sale_price_usd are required for forecast presets.",
-            )
-
-
 @router.get("/policy", response_model=TaxPolicyResource)
 def tax_policy() -> TaxPolicyResource:
     """Return static tax policy metadata."""
     return get_tax_policy()
+
+
+@router.get("/sales-index", response_model=TaxSalesIndexResponse)
+def sales_index(
+    accounts: BitcoinAccounts = Depends(get_request_accounts),
+) -> TaxSalesIndexResponse:
+    """List coins with sales and the tax years those sales fall in."""
+    return build_sales_index(accounts)
+
+
+@router.get("/overview", response_model=TaxYearOverviewResponse)
+def tax_year_overview(
+    tax_year: int = Query(..., ge=2009),
+    coin: str = Query("BTC", min_length=1),
+    accounts: BitcoinAccounts = Depends(get_request_accounts),
+) -> TaxYearOverviewResponse:
+    """Summarize realized gains for every wallet with sales in a tax year."""
+    return build_tax_year_overview(accounts, tax_year=tax_year, coin=coin)
+
+
+@router.get("/holdings", response_model=TaxHoldingsResponse)
+def holdings(
+    coin: str = Query("BTC", min_length=1),
+    accounts: BitcoinAccounts = Depends(get_request_accounts),
+) -> TaxHoldingsResponse:
+    """List wallets with a positive balance, for choosing a forecast source."""
+    return build_holdings(accounts, coin=coin)
 
 
 @router.get("/gains", response_model=GainsReportResponse)
@@ -228,48 +229,6 @@ def forecast(
         artifact_type="json",
     )
     return response
-
-
-@router.get("/presets", response_model=list[TaxPresetResource])
-def presets(
-    backend: DatabaseBackend = Depends(get_request_backend),
-) -> list[TaxPresetResource]:
-    """List saved tax presets."""
-    return list_tax_presets(backend)
-
-
-@router.post("/presets", response_model=TaxPresetResource, status_code=status.HTTP_201_CREATED)
-def create_preset(
-    payload: TaxPresetCreateRequest,
-    backend: DatabaseBackend = Depends(get_request_backend),
-) -> TaxPresetResource:
-    """Create a saved tax preset."""
-    _validate_preset_request(payload)
-    try:
-        return create_tax_preset(backend, payload)
-    except Exception as exc:
-        detail = str(exc)
-        if "UNIQUE" in detail or "unique" in detail:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="A preset with that name already exists.",
-            ) from exc
-        raise
-
-
-@router.delete("/presets/{preset_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_preset(
-    preset_id: str,
-    backend: DatabaseBackend = Depends(get_request_backend),
-) -> Response:
-    """Delete a saved tax preset."""
-    deleted = delete_tax_preset(backend, preset_id)
-    if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Preset not found.",
-        )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/history", response_model=list[TaxHistoryEntryResource])

@@ -926,27 +926,79 @@
             </div>
           </div>
 
-          <div id="policy-warning" class="policy-banner hidden"></div>
-
           <section class="panel subpanel">
             <div class="panel-heading">
               <div>
                 <h3>Realized Gains</h3>
-                <p>Summary-first on phone, lot detail below when needed.</p>
+                <p>Pick a tax year and coin. Every wallet with sales that year is found for you.</p>
+              </div>
+            </div>
+            <form id="tax-scope-form" class="filters">
+              <label class="field">
+                <span>Tax Year</span>
+                <select id="gains-year"></select>
+              </label>
+              <label class="field">
+                <span>Coin</span>
+                <select id="gains-coin"><option value="BTC">BTC</option></select>
+              </label>
+            </form>
+
+            <p id="tax-overview-message" class="status-line">Loading sales for the selected year…</p>
+            <div id="tax-overview-body" class="hidden">
+              <div id="overview-summary" class="summary-grid">
+                <article class="summary-card">
+                  <span class="summary-label">Sales</span>
+                  <strong id="overview-sales">0</strong>
+                </article>
+                <article class="summary-card">
+                  <span class="summary-label">Proceeds</span>
+                  <strong id="overview-proceeds">$0.00</strong>
+                </article>
+                <article class="summary-card">
+                  <span class="summary-label">Cost Basis</span>
+                  <strong id="overview-cost">$0.00</strong>
+                </article>
+                <article class="summary-card">
+                  <span class="summary-label">Net Gain/Loss</span>
+                  <strong id="overview-net">$0.00</strong>
+                  <div id="overview-term-split" class="v-sub"></div>
+                </article>
+              </div>
+              <div id="overview-warnings" class="warning-stack"></div>
+              <div id="overview-wallets">
+                <div class="table-shell gains">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Wallet</th>
+                        <th>Sales</th>
+                        <th>Sold</th>
+                        <th>Proceeds</th>
+                        <th>Cost Basis</th>
+                        <th>Net Gain/Loss</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="overview-table"></tbody>
+                  </table>
+                </div>
+                <div id="overview-cards" class="data-cards"></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="gains-detail-panel" class="panel subpanel hidden">
+            <div class="panel-heading">
+              <div>
+                <h3>Wallet Lot Detail</h3>
+                <p>Lot-by-lot FIFO for one wallet, plus the 1099-B and worksheet exports.</p>
               </div>
             </div>
             <form id="gains-form" class="filters">
               <label class="field">
-                <span>Tax Year</span>
-                <input id="gains-year" type="number" min="2009" step="1" value="2024" required>
-              </label>
-              <label class="field">
-                <span>Coin</span>
-                <input id="gains-coin" type="text" value="BTC" required>
-              </label>
-              <label class="field">
                 <span>Wallet</span>
-                <input id="gains-wallet" type="text" placeholder="Optional unless 2025+">
+                <select id="gains-wallet"></select>
               </label>
               <div class="actions-row">
                 <button class="button" type="submit">Load Gains</button>
@@ -954,6 +1006,7 @@
                 <button id="export-worksheet" class="button button-ghost" type="button">Export Worksheet CSV</button>
               </div>
             </form>
+            <p id="gains-status" class="status-line hidden"></p>
 
             <div class="summary-grid">
               <article class="summary-card">
@@ -987,7 +1040,7 @@
                   </tr>
                 </thead>
                 <tbody id="gains-table">
-                  <tr><td colspan="5" class="empty-row">No gains loaded yet.</td></tr>
+                  <tr><td colspan="5" class="empty-row">Choose a wallet and load gains.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1008,7 +1061,7 @@
               </label>
               <label class="field">
                 <span>Wallet</span>
-                <input id="forecast-wallet" type="text" placeholder="Optional">
+                <select id="forecast-wallet"><option value="">Loading wallets…</option></select>
               </label>
               <label class="field">
                 <span>Quantity</span>
@@ -1022,6 +1075,7 @@
                 <button class="button" type="submit">Forecast Sale</button>
               </div>
             </form>
+            <p id="forecast-status" class="status-line hidden"></p>
 
             <div class="summary-grid">
               <article class="summary-card">
@@ -1062,40 +1116,14 @@
             <div id="forecast-cards" class="data-cards"></div>
           </section>
 
-          <section class="panel subpanel dual-column">
-            <div>
-              <div class="panel-heading">
-                <div>
-                  <h3>Saved Presets</h3>
-                  <p>Fast recall for repeated tax workflows.</p>
-                </div>
+          <section class="panel subpanel">
+            <div class="panel-heading">
+              <div>
+                <h3>Recent Runs</h3>
+                <p>Latest gains, exports, and forecasts. Select one to run it again with the same filters.</p>
               </div>
-              <form id="preset-form" class="filters compact">
-                <label class="field">
-                  <span>Name</span>
-                  <input id="preset-name" type="text" placeholder="Coldcard 2025 Export" required>
-                </label>
-                <label class="field">
-                  <span>Type</span>
-                  <select id="preset-type">
-                    <option value="gains">Gains</option>
-                    <option value="1099b">1099-B</option>
-                    <option value="forecast">Forecast</option>
-                  </select>
-                </label>
-                <button class="button" type="submit">Save Current Filters</button>
-              </form>
-              <div id="presets-list" class="list-shell"></div>
             </div>
-            <div>
-              <div class="panel-heading">
-                <div>
-                  <h3>Recent Runs</h3>
-                  <p>Latest gains, exports, and forecasts from this web app.</p>
-                </div>
-              </div>
-              <div id="history-list" class="list-shell"></div>
-            </div>
+            <div id="history-list" class="list-shell"></div>
           </section>
         </section>
       </section>

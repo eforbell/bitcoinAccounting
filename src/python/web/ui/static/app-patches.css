@@ -24,3 +24,32 @@ html {
 .empty-row {
   color: var(--muted);
 }
+
+/* 4. Recent Runs rows are buttons that rerun a tax workflow. Reset native
+      button chrome so they read as list rows, not form controls.            */
+.tax-run {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tax-run .wallet-main {
+  justify-items: start;
+  text-align: left;
+}
+.tax-run .wallet-main strong {
+  width: 100%;
+  text-align: left;
+}
+.tax-run-side {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: end;
+  text-align: right;
+  flex-shrink: 0;
+}
+.tax-run .tax-run-hint {
+  font-size: var(--text-sm, 0.8rem);
+  color: var(--accent);
+}

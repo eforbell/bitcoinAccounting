@@ -182,37 +182,6 @@ def test_forecast_endpoint_returns_fifo_lots_and_balance(client: TestClient) -> 
     assert body["lots"][0]["term"] == "Short"
 
 
-def test_presets_round_trip_through_web_state_store(client: TestClient) -> None:
-    create_response = client.post(
-        "/api/tax/presets",
-        json={
-            "name": "Coldcard 2025 Export",
-            "preset_type": "1099b",
-            "coin": "BTC",
-            "tax_year": 2025,
-            "wallet_id": "Coldcard",
-        },
-    )
-
-    assert create_response.status_code == 201
-    created = create_response.json()
-    assert created["name"] == "Coldcard 2025 Export"
-    assert created["preset_type"] == "1099b"
-    assert created["wallet_id"] == "Coldcard"
-
-    list_response = client.get("/api/tax/presets")
-
-    assert list_response.status_code == 200
-    presets = list_response.json()
-    assert len(presets) == 1
-    assert presets[0]["preset_id"] == created["preset_id"]
-
-    delete_response = client.delete(f"/api/tax/presets/{created['preset_id']}")
-
-    assert delete_response.status_code == 204
-    assert client.get("/api/tax/presets").json() == []
-
-
 def test_history_endpoint_lists_recent_tax_runs(client: TestClient) -> None:
     client.get("/api/tax/gains", params={"tax_year": 2024, "coin": "BTC"})
     client.get(
@@ -238,3 +207,206 @@ def test_history_endpoint_lists_recent_tax_runs(client: TestClient) -> None:
     assert "gains_report" in actions
     assert "forecast" in actions
     assert "export_1099b" in actions
+
+
+def test_sales_index_lists_coins_and_years_with_sales(client: TestClient) -> None:
+    response = client.get("/api/tax/sales-index")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body["current_year"], int)
+    # USD is "sold" when buying BTC, but fiat is never a tax-reportable coin here.
+    assert body["coins"] == [{"coin": "BTC", "years": [2025, 2024]}]
+
+
+def test_overview_lists_only_wallets_with_sales_for_2025(client: TestClient) -> None:
+    response = client.get("/api/tax/overview", params={"tax_year": 2025, "coin": "BTC"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["has_sales"] is True
+    assert body["wallet_separation_required"] is True
+    assert body["totals_method"] == "wallet_fifo"
+    assert [w["wallet_id"] for w in body["wallets"]] == ["Coldcard"]
+    coldcard = body["wallets"][0]
+    assert coldcard["sale_count"] == 1
+    assert coldcard["quantity_sold"] == 0.5
+    assert coldcard["first_sale_date"] == "2025-12-15"
+    assert coldcard["gain_loss_usd"] == pytest.approx(20000.0)
+    assert coldcard["short_term_gain_usd"] == pytest.approx(20000.0)
+    assert body["totals"]["wallet_count"] == 1
+    assert body["totals"]["proceeds_usd"] == pytest.approx(45000.0)
+    assert body["totals"]["gain_loss_usd"] == pytest.approx(20000.0)
+    assert body["warnings"] == []
+
+
+def test_overview_reports_no_sales_for_empty_year(client: TestClient) -> None:
+    response = client.get("/api/tax/overview", params={"tax_year": 2023, "coin": "BTC"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["has_sales"] is False
+    assert body["wallets"] == []
+    assert body["totals"]["sale_count"] == 0
+    assert body["message"] == "No sales found for tax year 2023 with digital asset BTC."
+
+
+def test_overview_uses_global_fifo_totals_before_2025(client: TestClient) -> None:
+    response = client.get("/api/tax/overview", params={"tax_year": 2024, "coin": "BTC"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["wallet_separation_required"] is False
+    assert body["totals_method"] == "global_fifo"
+    assert [w["wallet_id"] for w in body["wallets"]] == ["Strike"]
+    assert body["totals"]["gain_loss_usd"] == pytest.approx(10000.0)
+    assert body["warnings"][0]["code"] == "global_fifo_historical"
+
+
+def test_overview_reports_sales_from_wallet_without_purchase_lots(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    # Coins transferred into an exchange and sold there have no purchase lot in
+    # that wallet; the sale must still be reported (with missing basis).
+    seeded_accounts.deposit(
+        deposit_date=datetime(2025, 3, 1), buy=0.1, buy_curr="BTC", exchange="Kraken"
+    )
+    seeded_accounts.execute_trade(
+        trade_date=datetime(2025, 6, 1),
+        buy=9000.0,
+        buy_curr="USD",
+        sell=0.1,
+        sell_curr="BTC",
+        exchange="Kraken",
+    )
+
+    response = client.get("/api/tax/overview", params={"tax_year": 2025, "coin": "BTC"})
+
+    body = response.json()
+    assert [w["wallet_id"] for w in body["wallets"]] == ["Coldcard", "Kraken"]
+    kraken = body["wallets"][1]
+    assert kraken["proceeds_usd"] == pytest.approx(9000.0)
+    assert kraken["cost_basis_usd"] == 0.0
+    assert kraken["missing_basis_quantity"] == pytest.approx(0.1)
+    assert body["totals"]["proceeds_usd"] == pytest.approx(54000.0)
+    assert "missing_basis" in [w["code"] for w in body["warnings"]]
+
+
+def test_overview_flags_spends_not_included_in_gains(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    seeded_accounts.ledger_writer.spend(
+        datetime(2025, 7, 4), 0.01, "BTC", 0.0, "", "Vault", "", "coffee"
+    )
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2025, "coin": "BTC"}).json()
+
+    assert body["spend_count"] == 1
+    assert "spends_not_included" in [w["code"] for w in body["warnings"]]
+
+
+def test_holdings_lists_wallets_with_positive_balance(client: TestClient) -> None:
+    response = client.get("/api/tax/holdings", params={"coin": "BTC"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "coin": "BTC",
+        "total_balance": 0.25,
+        "wallets": [{"wallet_id": "Vault", "balance": 0.25}],
+    }
+
+
+def test_overview_keeps_proceeds_of_same_timestamp_sales_in_separate_wallets(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    # Vault sells at the exact timestamp of Coldcard's sale; each sale must keep
+    # its own proceeds rather than the first trade found at that time.
+    seeded_accounts.execute_trade(
+        trade_date=datetime(2025, 12, 15),
+        buy=12000.0,
+        buy_curr="USD",
+        sell=0.1,
+        sell_curr="BTC",
+        exchange="Vault",
+    )
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2025, "coin": "BTC"}).json()
+
+    proceeds = {w["wallet_id"]: w["proceeds_usd"] for w in body["wallets"]}
+    assert proceeds == {
+        "Coldcard": pytest.approx(45000.0),
+        "Vault": pytest.approx(12000.0),
+    }
+
+
+def _add_sales_without_wallet(accounts: BitcoinAccounts, year: int) -> None:
+    for day, wallet in ((1, ""), (2, None)):
+        accounts.execute_trade(
+            trade_date=datetime(year, 8, day),
+            buy=1000.0,
+            buy_curr="USD",
+            sell=0.01,
+            sell_curr="BTC",
+            exchange=wallet or "",
+        )
+    accounts.backend.execute(
+        "UPDATE ledger SET exchange = NULL WHERE createddate LIKE :day",
+        {"day": f"{year}-08-02%"},
+    )
+    accounts.backend.commit()
+
+
+def test_overview_separates_2025_sales_with_no_wallet(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    _add_sales_without_wallet(seeded_accounts, 2025)
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2025, "coin": "BTC"}).json()
+
+    assert [w["wallet_id"] for w in body["wallets"]] == ["Coldcard"]
+    assert body["unassigned_sale_count"] == 2
+    assert body["totals"]["sale_count"] == 1
+    assert body["totals"]["proceeds_usd"] == pytest.approx(45000.0)
+    warning = next(w for w in body["warnings"] if w["code"] == "unassigned_wallet_sales")
+    assert "not included in these totals" in warning["message"]
+
+
+def test_overview_counts_pre_2025_sales_with_no_wallet_in_global_totals(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    _add_sales_without_wallet(seeded_accounts, 2024)
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2024, "coin": "BTC"}).json()
+
+    assert body["totals_method"] == "global_fifo"
+    assert [w["wallet_id"] for w in body["wallets"]] == ["Strike"]
+    assert body["totals"]["sale_count"] == 3
+    assert body["totals"]["proceeds_usd"] == pytest.approx(62000.0)
+    assert "unassigned_wallet_sales" in [w["code"] for w in body["warnings"]]
+
+
+def test_overview_reports_year_whose_only_sales_have_no_wallet(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    _add_sales_without_wallet(seeded_accounts, 2026)
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2026, "coin": "BTC"}).json()
+
+    assert body["has_sales"] is True
+    assert body["wallets"] == []
+    assert body["unassigned_sale_count"] == 2
+    assert "none has a wallet recorded" in body["message"]
+
+
+def test_overview_keeps_spend_warning_in_year_without_sales(
+    seeded_accounts: BitcoinAccounts, client: TestClient
+) -> None:
+    seeded_accounts.ledger_writer.spend(
+        datetime(2023, 7, 4), 0.01, "BTC", 0.0, "", "Vault", "", "gift"
+    )
+
+    body = client.get("/api/tax/overview", params={"tax_year": 2023, "coin": "BTC"}).json()
+
+    assert body["has_sales"] is False
+    assert body["message"] == "No sales found for tax year 2023 with digital asset BTC."
+    assert [w["code"] for w in body["warnings"]] == ["spends_not_included"]
