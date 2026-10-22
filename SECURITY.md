@@ -44,8 +44,8 @@ Before any package-index access, `scripts/ensure-safe-pip.sh <venv>/bin/python`
 installs the announcement's SHA-256-verified pip wheel when needed. Then install
 `requirements.lock` and the project editable with `--no-deps` (see
 `GETTING_STARTED.md`). The lock includes runtime and development dependencies,
-resolved for Linux / CPython 3.13; validate and regenerate it for other Python or
-platform targets. Version pins are **not** artifact hashes and do not protect
+resolved for Linux / CPython 3.10 and tested on 3.13; validate and regenerate
+it for other Python or platform targets. Version pins are **not** artifact hashes and do not protect
 against a malicious artifact uploaded under a pinned version. Hash-enforced
 installs and an artifact mirror remain follow-up hardening.
 

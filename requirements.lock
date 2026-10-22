@@ -1,20 +1,22 @@
-# Resolved on Linux / CPython 3.13 from pyproject.toml[dev], 2026-10-22.
-# Includes runtime and dev dependencies. Regenerate and validate for other Python/platform targets.
+# Resolved for Linux / CPython 3.10 from pyproject.toml[dev], 2026-10-22.
+# Includes runtime and dev dependencies; validated on CPython 3.10 and 3.13.
 # Version pins do not verify artifact hashes; upgrade pip safely before installing this file.
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.14.2
 attrs==26.1.0
+backports-asyncio-runner==1.2.0; python_version < "3.11"
 beautifulsoup4==4.15.0
 certifi==2026.10.19
 cffi==2.1.1
 charset-normalizer==3.5.1
 click==8.4.2
-contourpy==1.3.3
+contourpy==1.3.2
 cryptography==50.0.0
 curl-cffi==0.16.1
 cycler==0.12.1
 et-xmlfile==2.0.0
+exceptiongroup==1.3.1
 fastapi==0.141.1
 fonttools==4.63.0
 greenlet==3.5.5
@@ -31,17 +33,17 @@ kiwisolver==1.5.0
 linkify-it-py==2.1.0
 lxml==6.1.2
 markdown-it-py==4.2.0
-matplotlib==3.11.1
+matplotlib==3.10.9
 mcp==2.0.0
 mcp-types==2.0.0
 mdit-py-plugins==0.6.1
 mdurl==0.1.2
 multitasking==0.0.13
-numpy==2.5.2
+numpy==2.2.6
 openpyxl==3.1.5
 opentelemetry-api==1.44.0
 packaging==26.3
-pandas==3.0.5
+pandas==2.3.3
 peewee==4.3.0
 pillow==12.3.0
 platformdirs==4.11.3
@@ -68,18 +70,20 @@ referencing==0.37.0
 reportlab==5.0.1
 requests==2.34.2
 rich==15.0.0
-rpds-py==2026.6.3
+rpds-py==0.30.0
 six==1.17.0
 soupsieve==2.9.2
 sse-starlette==3.4.8
 starlette==1.6.0
 textual==7.5.0
+tomli==2.5.0
 truststore==0.10.4
 typing-extensions==4.16.0
 typing-inspection==0.4.4
+tzdata==2026.5
 uc-micro-py==2.0.0
 urllib3==2.7.0
 uvicorn==0.52.4
 wcwidth==0.8.2
-websockets==17.0.1
+websockets==16.1.1
 yfinance==1.6.0

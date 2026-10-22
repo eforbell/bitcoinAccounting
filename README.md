@@ -23,7 +23,7 @@ ledger and producing balance, cost-basis reports, and visualizations.
 **New here?** The fastest way to get started is the interactive **Terminal UI (TUI)** -- install dependencies, run one command, and you're in. Fully keyboard-driven with excellent mouse support:
 
 ```bash
-python3.13 -m venv .venv  # lockfile was resolved and tested on CPython 3.13/Linux
+python3 -m venv .venv  # use Python 3.10 or 3.13 on Linux with this lockfile
 bash scripts/ensure-safe-pip.sh .venv/bin/python
 .venv/bin/python -m pip install -r requirements.lock
 .venv/bin/python -m pip install -e . --no-deps
@@ -60,7 +60,7 @@ The repo also includes a FastAPI web app with a bundled frontend shell under `sr
 For local development on this machine, prefer the repo-local virtualenv:
 
 ```bash
-python3.13 -m venv .venv
+python3 -m venv .venv  # use Python 3.10 or 3.13 on Linux with this lockfile
 bash scripts/ensure-safe-pip.sh .venv/bin/python
 .venv/bin/python -m pip install -r requirements.lock
 .venv/bin/python -m pip install -e . --no-deps
