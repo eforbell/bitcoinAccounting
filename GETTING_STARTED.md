@@ -9,9 +9,11 @@ The fastest way to use Bitcoin Accounting is through the interactive **Terminal 
 git clone https://github.com/eforbell/bitcoinAccounting.git
 cd bitcoinAccounting
 
-# Install dependencies
-python -m pip install -r requirements.txt
-python -m pip install -e .
+# Install into an isolated environment (bootstrap pip before index access)
+python3.13 -m venv .venv  # lockfile was resolved and tested on CPython 3.13/Linux
+bash scripts/ensure-safe-pip.sh .venv/bin/python
+.venv/bin/python -m pip install -r requirements.lock
+.venv/bin/python -m pip install -e . --no-deps
 ```
 
 No database setup required. A SQLite database is created automatically on first use at `~/.bitcoinaccounting/ledger.db`.

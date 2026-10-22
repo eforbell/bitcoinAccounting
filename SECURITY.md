@@ -30,6 +30,34 @@ If a credential appears in a commit, issue, PR, chat, screenshot, log, or report
 
 Disabling application auth is a local-development convenience, not a safe production posture.
 
+## Python CA trust and dependency installs (October 2026)
+
+The eMudhra/emSign CA key incident affects TLS trust in Python package installs and
+application HTTP clients. A forged certificate could enable a network attacker to
+intercept trusted HTTPS traffic; it does not, by itself, mean this application was
+compromised. The [Python security announcement](https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576)
+calls for `pip>=26.2.2` and `certifi>=2026.10.19`. Updating the OS CA store or
+installing a newer `certifi` package does **not** repair an older pip's vendored CA
+bundle. Each existing virtualenv needs its own pip remediation.
+
+Before any package-index access, `scripts/ensure-safe-pip.sh <venv>/bin/python`
+installs the announcement's SHA-256-verified pip wheel when needed. Then install
+`requirements.lock` and the project editable with `--no-deps` (see
+`GETTING_STARTED.md`). The lock includes runtime and development dependencies,
+resolved for Linux / CPython 3.13; validate and regenerate it for other Python or
+platform targets. Version pins are **not** artifact hashes and do not protect
+against a malicious artifact uploaded under a pinned version. Hash-enforced
+installs and an artifact mirror remain follow-up hardening.
+
+The repository's deploy script follows this sequence, but homeBase-managed
+installs do **not** invoke that script. Until homeBase's catalog and installer
+are changed, its bitcoinAccounting deployments continue to resolve unpinned
+dependencies and may use an affected pip before upgrading. Neither a source
+change nor the lockfile automatically remediates already-running virtualenvs.
+Check the target venv with `<venv>/bin/python -m pip --version` and
+`<venv>/bin/python -m pip show certifi`; inspect the installed environment,
+OS CA store, and any container images separately.
+
 ## Imports, exports, and MCP
 
 - Validate import type and size, handle parser failures safely, and remove temporary files.

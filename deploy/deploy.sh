@@ -88,8 +88,9 @@ echo "==> Syncing Python environment"
 if [ ! -d .venv ]; then
   python3 -m venv .venv
 fi
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e .
+bash scripts/ensure-safe-pip.sh .venv/bin/python
+.venv/bin/python -m pip install -r requirements.lock
+.venv/bin/python -m pip install -e . --no-deps
 
 echo "==> Validating runtime and initializing web-owned tables"
 .venv/bin/bitcoin-accounting-web-init

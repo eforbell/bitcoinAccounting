@@ -23,16 +23,17 @@ ledger and producing balance, cost-basis reports, and visualizations.
 **New here?** The fastest way to get started is the interactive **Terminal UI (TUI)** -- install dependencies, run one command, and you're in. Fully keyboard-driven with excellent mouse support:
 
 ```bash
-python -m pip install -r requirements.txt
-python -m pip install .
-bitcoin-accounting
+python3.13 -m venv .venv  # lockfile was resolved and tested on CPython 3.13/Linux
+bash scripts/ensure-safe-pip.sh .venv/bin/python
+.venv/bin/python -m pip install -r requirements.lock
+.venv/bin/python -m pip install -e . --no-deps
+.venv/bin/bitcoin-accounting
 ```
 
 Editable install option (recommended for users who pull updates):
 
-```bash
-python -m pip install -e .
-```
+The editable install is part of the setup above. `requirements.txt` remains a
+development compatibility entry point, but bootstrap pip before using it.
 
 With `-e`, pulling new commits usually updates behavior immediately without reinstalling.
 
@@ -59,9 +60,10 @@ The repo also includes a FastAPI web app with a bundled frontend shell under `sr
 For local development on this machine, prefer the repo-local virtualenv:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m pip install -e .
+python3.13 -m venv .venv
+bash scripts/ensure-safe-pip.sh .venv/bin/python
+.venv/bin/python -m pip install -r requirements.lock
+.venv/bin/python -m pip install -e . --no-deps
 ```
 
 The web app reads `.env` from the repository root via the database package import. For a simple local SQLite run, this is enough:
@@ -158,7 +160,8 @@ Prefer individual command-line scripts? Everything the TUI does is also availabl
 1. Install Python dependencies:
 
 ```bash
-python -m pip install -r requirements.txt
+bash scripts/ensure-safe-pip.sh .venv/bin/python
+.venv/bin/python -m pip install -r requirements.lock
 ```
 
 2. Start using the scripts immediately:
@@ -208,7 +211,8 @@ All query logic is implemented in Python for database-agnostic support (works wi
 3. Install Python dependencies:
 
 ```bash
-python -m pip install -r requirements.txt
+bash scripts/ensure-safe-pip.sh .venv/bin/python
+.venv/bin/python -m pip install -r requirements.lock
 ```
 
 4. Configure PostgreSQL connection:
