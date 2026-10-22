@@ -1,1 +1,3 @@
+# Development compatibility entry point; bootstrap pip first (see GETTING_STARTED.md).
+-r requirements.lock
 -e .[dev]
