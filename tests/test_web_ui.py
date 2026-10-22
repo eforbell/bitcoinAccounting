@@ -25,7 +25,10 @@ def test_static_assets_are_served_from_relative_paths() -> None:
     assert ".page-shell" in css_response.text
 
     assert js_response.status_code == 200
-    assert js_response.headers["content-type"].startswith("text/javascript")
+    assert js_response.headers["content-type"].split(";", 1)[0] in {
+        "text/javascript",
+        "application/javascript",
+    }
     assert "api/tax/gains" in js_response.text
     assert "api/auth/login" in js_response.text
     assert "api/chain/status" in js_response.text
@@ -100,7 +103,10 @@ def test_reports_page_draws_native_charts_from_vendored_chartjs() -> None:
     for asset in ("chart.umd.min.js", "chartjs-adapter-date-fns.bundle.min.js"):
         response = client.get(f"/static/vendor/{asset}")
         assert response.status_code == 200
-        assert response.headers["content-type"].startswith("text/javascript")
+        assert response.headers["content-type"].split(";", 1)[0] in {
+            "text/javascript",
+            "application/javascript",
+        }
 
     js = client.get("/static/app.js").text
     assert "api/reports/series" in js

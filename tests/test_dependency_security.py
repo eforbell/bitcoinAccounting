@@ -2,7 +2,10 @@
 
 from pathlib import Path
 import re
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +18,10 @@ def test_lock_pins_project_dependencies_and_safe_certifi() -> None:
     for line in lock.splitlines():
         if line.startswith("#") or not line:
             continue
-        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+!-]+)", line)
+        pin, *marker = line.split(";", 1)
+        if marker:
+            assert marker[0].strip() == 'python_version < "3.11"'
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+!-]+)", pin.strip())
         assert match, f"unversioned or unsupported lock entry: {line}"
         pins[match[1].lower().replace("_", "-")] = match[2]
 
