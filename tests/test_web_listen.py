@@ -69,10 +69,18 @@ def test_the_socket_is_0660_replaces_a_stale_one_and_never_another_file(short_di
     assert other.read_text() == "data"
 
 
-def test_reload_is_refused_with_the_socket(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SOVEREIGN_LISTEN", "unix:/run/sovereign-apps/bitcoin-accounting/app.sock")
+def test_the_socket_comes_from_the_checkouts_env_file_and_reload_is_refused_with_it(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Home Base's units have no EnvironmentFile=: the launcher reads .env itself, before choosing where to listen."""
+    import web.server
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("SOVEREIGN_LISTEN=unix:/run/sovereign-apps/bitcoin-accounting/app.sock\n")
+    monkeypatch.setattr(web.server, "ENV_FILE", env_file)
+    monkeypatch.delenv("SOVEREIGN_LISTEN", raising=False)
     with pytest.raises(SystemExit):
         main(["--reload"])
+    assert os.environ["SOVEREIGN_LISTEN"] == "unix:/run/sovereign-apps/bitcoin-accounting/app.sock"
+    monkeypatch.delenv("SOVEREIGN_LISTEN")
 
 
 def test_the_app_serves_its_mount_path_unchanged_over_the_socket(short_dir: Path) -> None:
