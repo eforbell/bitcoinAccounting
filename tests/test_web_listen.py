@@ -44,7 +44,7 @@ def _get(path: str, url: str) -> bytes:
 def test_host_and_port_by_default_and_the_socket_when_home_base_names_one() -> None:
     assert listen_target({}, host="127.0.0.1", port=3010) == ListenTarget(host="127.0.0.1", port=3010)
     assert listen_target({"SOVEREIGN_LISTEN": "unix:/run/sovereign-apps/bitcoin-accounting/app.sock"}, host="127.0.0.1", port=3010) == ListenTarget(socket_path="/run/sovereign-apps/bitcoin-accounting/app.sock")
-    for bad in ["tcp:0.0.0.0:3010", "unix:relative.sock", "unix:/run/x/app", "/run/x/app.sock"]:
+    for bad in ["tcp:0.0.0.0:3010", "unix:relative.sock", "unix:/run/x/app", "/run/x/app.sock", "", "   "]:
         with pytest.raises(ValueError, match="must look like unix:"):
             listen_target({"SOVEREIGN_LISTEN": bad}, host="127.0.0.1", port=3010)
 
