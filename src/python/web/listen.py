@@ -14,7 +14,7 @@ import stat
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-_UNIX = re.compile(r"^unix:(/[^\0]+\.sock)$")
+_UNIX = re.compile(r"unix:(/[^\0]+\.sock)")
 
 
 @dataclass(frozen=True)
@@ -25,10 +25,12 @@ class ListenTarget:
 
 
 def listen_target(env: Mapping[str, str], *, host: str, port: int) -> ListenTarget:
-    value = (env.get("SOVEREIGN_LISTEN") or "").strip()
-    if not value:
+    # Set at all, even blank, SOVEREIGN_LISTEN must name a socket: a blank value is a broken .env, and
+    # quietly falling back to TCP would put the app back where anything on the host can reach it.
+    if "SOVEREIGN_LISTEN" not in env:
         return ListenTarget(host=host, port=port)
-    match = _UNIX.match(value)
+    value = (env.get("SOVEREIGN_LISTEN") or "").strip()
+    match = _UNIX.fullmatch(value)
     if not match:
         raise ValueError(f"SOVEREIGN_LISTEN must look like unix:/path/app.sock, not {value}")
     return ListenTarget(socket_path=match.group(1))
