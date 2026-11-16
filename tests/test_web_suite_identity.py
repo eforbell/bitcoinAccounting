@@ -3,20 +3,28 @@ Bitcoin Accounting, and Home Base's directory replaces the passphrase. Startup r
 local mode stays exactly as it was."""
 from __future__ import annotations
 
+import base64
 import json
 import re
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from fastapi.testclient import TestClient
-from sovereign_auth import SnapshotState, parse_snapshot
+from sovereign_auth import SnapshotState, parse_snapshot, sign_token
 
 from web.app import create_app
 from web.config import WebConfig
 from web.suite_identity import create_suite_identity, home_base_uid, public_address
 
-ORIGIN = "https://smith-bitcoin-accounting.example-tailnet.ts.net"
+HOST = "smith-bitcoin-accounting.example-tailnet.ts.net"
+ORIGIN = f"https://{HOST}"
+# Home Base's signing key, as the snapshot publishes it: made here, for these tests only.
+KEY = Ed25519PrivateKey.generate()
+PUBLIC_KEY = base64.urlsafe_b64encode(KEY.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)).rstrip(b"=").decode()
 BASE = "/bitcoin-accounting"
 TAILNET_ENV = {
     "SOVEREIGN_AUTH_MODE": "tailnet",
@@ -35,7 +43,7 @@ def _member(user_id, name, role, apps, status="active"):
 
 SNAPSHOT = parse_snapshot({
     "format": 1, "household": "smith", "generation": 3, "written_at": "2026-11-14T12:00:00.000Z", "global_epoch": 1,
-    "keys": [{"kid": "k1", "public_key": "9P6JucSH8HNTjvYBvf546IIUEJo8CimO034-4ug6DcI"}],
+    "keys": [{"kid": "k1", "public_key": PUBLIC_KEY}],
     "members": [
         _member("1001", "Pat", "parent", ["bitcoin-accounting", "family-pulse"]),
         _member("1002", "Kit <b>", "kid", ["bitcoin-accounting"]),
@@ -59,10 +67,23 @@ def who(user_id):
     return {"x-sovereign-user-id": user_id, "x-sovereign-login": f"{user_id}@example.com"}
 
 
+def passkey_cookie(user_id="1001", *, checked_ago=0, **claims):
+    """The cookie Home Base's step-up helper sets on this hostname after a passkey check."""
+    now = int(time.time())
+    payload = {
+        "typ": "assurance", "kid": "k1", "household": "smith", "aud": HOST, "sub": user_id, "sid": "s_1",
+        "cred": "c_1", "kind": "synced", "epoch": 1, "global_epoch": 1,
+        "auth_time": now - checked_ago, "iat": now - checked_ago, "exp": now + 3600, **claims,
+    }
+    return f"__Host-sv_assurance={sign_token(payload, KEY)}"
+
+
 NAVIGATE = {"sec-fetch-site": "none", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document"}
 SAME_ORIGIN = {"sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty"}
 WRITE = {**SAME_ORIGIN, "origin": ORIGIN, "content-type": "application/json"}
-PARENT, KID, NO_ACCESS, DISABLED = who("1001"), who("1002"), who("1003"), who("1004")
+KID, NO_ACCESS, DISABLED = who("1002"), who("1003"), who("1004")
+# A parent who checked with a passkey an hour ago: enough to open the app (passkeys: test_web_passkeys.py).
+PARENT = {**who("1001"), "cookie": passkey_cookie(checked_ago=3600)}
 # Bitcoin Accounting as Home Base installs it today: the passphrase on and configured.
 INSTALLED = WebConfig(web_base_path=BASE, auth_enabled=True, auth_passphrase="orange-hodl", session_secret="test-secret")
 
@@ -334,7 +355,9 @@ const fetch = async (url, init) => {{ sent.push([init.method || 'GET', init.head
 def test_every_download_goes_through_api_and_no_link_points_into_it():
     for name in ("downloadReportPdf", "downloadTaxArtifact", "saveDownload"):
         assert "fetch(" not in _function(name), name
-    assert len(re.findall(r"(?<![\w.])fetch\(", APP_JS)) == 2, "api() and apiUpload() are the only raw fetches"
+    # api() and apiUpload() send everything, through the passkey retry when the page has it (static/passkey.js).
+    assert len(re.findall(r"(?<![\w.])fetch\(", APP_JS)) == 0
+    assert APP_JS.count("const send = window.BtcPasskey ? window.BtcPasskey.fetch : fetch;") == 2
     assert "byId('reports-pdf-link').addEventListener('click', downloadReportPdf)" in APP_JS
 
 
