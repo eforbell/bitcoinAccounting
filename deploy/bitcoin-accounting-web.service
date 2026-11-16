@@ -8,7 +8,9 @@ User=bitcoin-accounting
 WorkingDirectory=/data/apps/bitcoinAccounting
 EnvironmentFile=/data/apps/bitcoinAccounting/.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/data/apps/bitcoinAccounting/.venv/bin/uvicorn web.app:create_app --factory --host 127.0.0.1 --port 3010
+# The launcher, not uvicorn directly: it binds the socket SOVEREIGN_LISTEN names (Home Base), else this host and port.
+# Tailnet mode trusts identity headers only because nothing but nginx can reach that socket.
+ExecStart=/data/apps/bitcoinAccounting/.venv/bin/bitcoin-accounting-web --host 127.0.0.1 --port 3010
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM
