@@ -12,8 +12,9 @@ In tailnet mode SuiteIdentityMiddleware runs before anything reads the request:
   1. the request guard (wire contract, section 4): resource isolation, because the app has its own hostname, and
      the write check (exact Origin; JSON, or a form upload on the import route that takes a file). It reads only
      the method and headers;
-  2. the member gate: a parent with access to Bitcoin Accounting, or a page a person can act on.
-Only Home Base's health and readiness probes pass without either, and the page assets without a member.
+  2. the member gate: a parent with access to Bitcoin Accounting, or a page a person can act on;
+  3. passkeys (wire contract, section 8): a check to open the app, and a fresh one to download an export.
+Only Home Base's health and readiness probes pass without any of them, and the page assets without a member.
 """
 from __future__ import annotations
 
@@ -27,9 +28,11 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from sovereign_auth import (
+    AssuranceRequest,
     GuardMiddleware,
     Identity,
     auth_mode,
+    create_assurance,
     create_identity,
     create_request_guard,
     create_snapshot_reader,
@@ -54,6 +57,12 @@ ASSET_PATH = re.compile(
 UPLOAD_PATH = "/api/import/parse"
 UPLOAD_TYPES = ("application/json", "multipart/form-data")
 _API_PATH = re.compile(r"/api(?:/|$)", re.IGNORECASE)
+
+# Passkeys (sovereignAuth's policy matrix names the level and window). A parent opens Bitcoin Accounting with a check
+# that lasts open-operator's window (a day on that device). The files it hands out, the 1099-B export and worksheet
+# and the PDF report, also need one in the last five minutes: any case, with or without a trailing slash.
+OPEN_POLICY = "open-operator"
+_EXPORT = re.compile(r"/api/(?:tax/1099b/(?:export|worksheet)|reports/report\.pdf)/?", re.IGNORECASE)
 _UID = re.compile(r"[1-9][0-9]{0,9}", re.ASCII)
 # Plain path segments only (and no dot segments), so a path built on it stays on this host and under the mount.
 _PLAIN_PATH = re.compile(r"/(?:[A-Za-z0-9._~-]+/)*(?:[A-Za-z0-9._~-]+)?", re.ASCII)
@@ -71,6 +80,11 @@ def route_path(scope) -> str:
         if path[len(root)] == "/":
             return path[len(root):]
     return path
+
+
+def recent_policy(path: str) -> str | None:
+    """The fresh-check policy a request needs on top of opening the app, if any."""
+    return "export-data" if _EXPORT.fullmatch(path) else None
 
 
 def is_api_path(path: str) -> bool:
@@ -156,6 +170,30 @@ def refusal_page(refusal: Refusal, name: str | None = None) -> str:
     return _PAGE.format(style="", body=f"<main><h1>{html.escape(title)}</h1><p>{html.escape(refusal.text)}</p></main>")
 
 
+# What a parent sees when a page needs a passkey check first. static/passkey.js asks Home Base's step-up helper on this
+# hostname for the check, then reloads. Only opening the app answers with a page: the exports are fetched.
+PASSKEY_TEXT = {
+    OPEN_POLICY: (f"Parents open {NAME} with a passkey, about once a day on each device.", f"Check with your passkey to open {NAME}."),
+}
+
+_PASSKEY_STYLE = """  #passkey-status:not(:empty) { margin-top: 1rem; }
+  button { margin-top: 1rem; min-height: 44px; padding: 0 1.25rem; border: 0; border-radius: 9px; font: inherit;
+    font-weight: 600; color: #1a1205; background: #f7931a; cursor: pointer; }
+"""
+
+
+def passkey_page(step_up: dict, name: str | None, base_path: str) -> str:
+    text, message = PASSKEY_TEXT[step_up["policy"]]
+    title = f"Check with your passkey, {name}" if name else "Check with your passkey"
+    data = html.escape(json.dumps({**step_up, "message": message}), quote=True)
+    body = (
+        f'<main id="passkey-check" data-step-up="{data}"><h1>{html.escape(title)}</h1><p>{html.escape(text)}</p>'
+        '<p id="passkey-status" role="status"></p><button id="passkey-retry" type="button" hidden>Use passkey</button>'
+        f'</main>\n<script src="{html.escape(base_path, quote=True)}static/passkey.js"></script>'
+    )
+    return _PAGE.format(style=_PASSKEY_STYLE, body=body)
+
+
 async def _send(send, status: int, body: bytes, content_type: str) -> None:
     await send({
         "type": "http.response.start",
@@ -185,7 +223,7 @@ class SuiteIdentity:
             app_id=APP_ID, mode=mode, listen=env.get("SOVEREIGN_LISTEN"), reader=self.reader
         )
         self.origin = self.base_path = self.hostname = None
-        self.guard = self.upload_guard = None
+        self.guard = self.upload_guard = self.assurance = None
         if self.tailnet:
             self.origin, self.base_path = public_address(env.get("APP_PUBLIC_URL"))
             self.hostname = urlsplit(self.origin).hostname
@@ -195,6 +233,7 @@ class SuiteIdentity:
             # Its own hostname: isolation and the write check.
             self.guard = create_request_guard(self.origin)
             self.upload_guard = create_request_guard(self.origin, content_types=UPLOAD_TYPES)
+            self.assurance = create_assurance(app_id=APP_ID, hostname=self.hostname, identity=self.identity, log=log.info)
 
 
 def create_suite_identity(env: Mapping[str, str], *, reader: Any = None) -> SuiteIdentity:
@@ -261,8 +300,29 @@ class SuiteIdentityMiddleware:
         if member.role != "parent":
             await self._refuse(send, "parents_only", api, member.name)
             return
+        if await self._passkey_refused(scope, send, headers, path, method, api, member):
+            return
         scope.setdefault("state", {})["suite_member"] = member
         await self.app(scope, receive, send)
+
+    async def _passkey_refused(self, scope, send, headers, path, method, api, member) -> bool:
+        """Runs the passkey checks a parent's request needs: True once it has answered with a refusal."""
+        query = scope.get("query_string", b"").decode("latin-1")
+        url = f"{scope.get('root_path', '')}{route_path(scope)}" + (f"?{query}" if query else "")
+        request = AssuranceRequest(method=method, url=url, headers=headers)
+        for policy in (OPEN_POLICY, recent_policy(path)):
+            if policy is None:
+                continue
+            decision = await self.suite.assurance.check(policy, request)
+            if decision.allowed:
+                continue
+            if not api and method in ("GET", "HEAD") and decision.status == 401 and policy in PASSKEY_TEXT:
+                page = passkey_page(decision.body, member.name, self.suite.base_path)
+                await _send(send, 401, page.encode("utf-8"), "text/html; charset=utf-8")
+            else:
+                await _send(send, decision.status, json.dumps(decision.body).encode("utf-8"), "application/json")
+            return True
+        return False
 
     async def _refuse(self, send, code: str, api: bool, name: str | None = None) -> None:
         refusal = REFUSALS[code]

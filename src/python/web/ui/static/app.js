@@ -320,7 +320,9 @@ async function api(path, options = {}) {
 
   const url = new URL(path, new URL(appBase(), window.location.origin)).href;
 
-  const response = await fetch(url, {
+  // In tailnet mode an answer may ask for a passkey check first (static/passkey.js): it runs one, then sends this again.
+  const send = window.BtcPasskey ? window.BtcPasskey.fetch : fetch;
+  const response = await send(url, {
     credentials: 'same-origin',
     headers,
     ...options,
@@ -2469,7 +2471,8 @@ function bindEvents() {
 
 async function apiUpload(path, formData) {
   const url = new URL(path, new URL(appBase(), window.location.origin)).href;
-  const response = await fetch(url, { method: 'POST', credentials: 'same-origin', body: formData });
+  const send = window.BtcPasskey ? window.BtcPasskey.fetch : fetch;
+  const response = await send(url, { method: 'POST', credentials: 'same-origin', body: formData });
   if (!response.ok) {
     let detail = `Request failed (${response.status})`;
     try { const err = await response.json(); detail = err.detail || detail; } catch {}
