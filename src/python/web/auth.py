@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, Request, Response, status
 
 from web.config import WebConfig, normalized_base_path
+from web.suite_identity import in_tailnet_mode, suite_member
 
 
 class AuthConfigurationError(RuntimeError):
@@ -125,6 +126,11 @@ def verify_session_token(token: str, config: WebConfig) -> SessionPrincipal | No
 
 def get_current_principal(request: Request) -> SessionPrincipal | None:
     """Read current principal from request cookie or dev-mode bypass."""
+    # In tailnet mode the member gate (web/suite_identity.py) has already run: it admits only a parent with access
+    # to the app, and the directory replaces the passphrase. No member here means the gate didn't run, so no one.
+    if in_tailnet_mode(request):
+        member = suite_member(request)
+        return SessionPrincipal(username=member.name or "operator") if member else None
     config: WebConfig = request.app.state.web_config
     if not config.auth_enabled:
         return SessionPrincipal(username="operator")

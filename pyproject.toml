@@ -25,6 +25,9 @@ dependencies = [
     "textual>=0.47.0",
     "python-multipart",
     "mcp>=2,<3",
+    # Home Base's suite identity (tailnet mode): request guards, the directory snapshot, member resolution.
+    # Pinned to a commit: hosts install it from the public repo with no credentials. Move the pin deliberately.
+    "sovereign-auth @ git+https://github.com/eforbell/sovereignAuth@433a477648632062fc5102d91dadb29e9d5d373f#subdirectory=python",
 ]
 
 [project.optional-dependencies]

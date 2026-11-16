@@ -310,8 +310,11 @@ function navigateToWallet(walletId) {
 }
 
 async function api(path, options = {}) {
+  // Every write is JSON, even one with no body: in tailnet mode the request guard refuses any other kind.
+  const method = (options.method || 'GET').toUpperCase();
+  const writes = method !== 'GET' && method !== 'HEAD';
   const headers = {
-    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(options.body || writes ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers || {}),
   };
 
@@ -377,7 +380,43 @@ function showLoggedIn(username) {
   byId('login-panel').classList.add('hidden');
   if (byId('operator-chip')) byId('operator-chip').textContent = username;
   setSessionGlyph(true);
+  showSessionControls(!(state.session && state.session.tailnet));
   renderPageState();
+}
+
+// In tailnet mode Home Base signs the member in on every request: there is no session here to end.
+function showSessionControls(visible) {
+  const mobile = byId('mobile-session-action');
+  const divider = mobile.previousElementSibling;
+  for (const el of [byId('session-action'), mobile, divider && divider.tagName === 'HR' ? divider : null]) {
+    if (el) el.classList.toggle('hidden', !visible);
+  }
+}
+
+// Saves a download fetched through api(), named by the answer's Content-Disposition when it gives one.
+async function saveDownload(response, fallbackName) {
+  const disposition = response.headers.get('content-disposition') || '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(await response.blob());
+  link.download = match ? match[1] : fallbackName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+// The PDF is fetched rather than followed as a link: no /api route answers a navigation in tailnet mode, and a
+// failure shows on the page instead of as a download error.
+async function downloadReportPdf(event) {
+  event.preventDefault();
+  const link = event.currentTarget;
+  const status = byId('reports-status');
+  try {
+    await saveDownload(await api(link.href), link.getAttribute('download') || 'btc_report.pdf');
+  } catch (error) {
+    if (status) status.textContent = error.message;
+  }
 }
 
 function clearChainStatusRefresh() {
@@ -1595,26 +1634,7 @@ async function downloadTaxArtifact(kind) {
 
   // Fetch rather than navigate so policy errors show inline and Recent Runs refreshes.
   try {
-    const url = new URL(`api/tax/${kind}?${params.toString()}`, new URL(appBase(), window.location.origin)).href;
-    const response = await fetch(url, { credentials: 'same-origin' });
-    if (!response.ok) {
-      if (response.status === 401 && state.session) {
-        state.session = null;
-        showLoggedOut();
-      }
-      let detail = `Export failed (${response.status})`;
-      try { detail = (await response.json()).detail || detail; } catch (_) {}
-      throw new Error(detail);
-    }
-    const disposition = response.headers.get('content-disposition') || '';
-    const match = disposition.match(/filename="([^"]+)"/);
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(await response.blob());
-    link.download = match ? match[1] : `${kind.replace('/', '_')}.csv`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    await saveDownload(await api(`api/tax/${kind}?${params.toString()}`), `${kind.replace('/', '_')}.csv`);
   } catch (error) {
     showGainsStatus(error.message, true);
   }
@@ -1869,6 +1889,7 @@ function bindEvents() {
   }
 
   byId('session-action').addEventListener('click', handleSessionAction);
+  byId('reports-pdf-link').addEventListener('click', downloadReportPdf);
   byId('mobile-session-action').addEventListener('click', handleSessionAction);
 
   // More-menu slide-up sheet

@@ -537,6 +537,8 @@ class SessionResponse(APIModel):
 
     authenticated: bool
     username: str
+    # Set only in tailnet mode: Home Base's directory signs people in, so the page offers no sign-in or sign-out.
+    tailnet: bool | None = None
 
 
 class ReportWarningResource(APIModel):

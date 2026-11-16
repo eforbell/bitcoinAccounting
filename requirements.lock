@@ -77,6 +77,7 @@ rich==15.0.0
 rpds-py==0.30.0
 six==1.17.0
 soupsieve==2.9.2
+sovereign-auth @ git+https://github.com/eforbell/sovereignAuth@433a477648632062fc5102d91dadb29e9d5d373f#subdirectory=python
 sse-starlette==3.4.8
 starlette==1.6.0
 textual==7.5.0

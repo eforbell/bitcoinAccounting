@@ -22,7 +22,10 @@ def test_lock_pins_project_dependencies_and_safe_certifi() -> None:
         pin, *marker = line.split(";", 1)
         condition = marker[0].strip() if marker else None
         assert condition in (None, below, from_311), f"unsupported marker: {line}"
-        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+!-]+)", pin.strip())
+        # A version, or a git URL pinned to a whole commit (sovereign-auth): never a branch or tag that can move.
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+!-]+)", pin.strip()) or re.fullmatch(
+            r"([A-Za-z0-9_.-]+) @ git\+https://github\.com/[\w.-]+/[\w.-]+@([0-9a-f]{40})(?:#subdirectory=[\w/-]+)?", pin.strip()
+        )
         assert match, f"unversioned or unsupported lock entry: {line}"
         pins.setdefault(match[1].lower().replace("_", "-"), {})[condition] = match[2]
 
@@ -32,7 +35,7 @@ def test_lock_pins_project_dependencies_and_safe_certifi() -> None:
         if from_311 in versions:
             assert set(versions) == {below, from_311}, f"{name} must be pinned for both sides of 3.11"
     for requirement in project["dependencies"] + project["optional-dependencies"]["dev"]:
-        name = re.split(r"[<>=!~\[]", requirement, maxsplit=1)[0]
+        name = re.split(r"[<>=!~\[@ ]", requirement, maxsplit=1)[0]
         assert name.lower().replace("_", "-") in pins
     assert "certifi>=2026.10.19" in project["dependencies"]
     assert tuple(map(int, pins["certifi"][None].split("."))) >= (2026, 10, 19)
